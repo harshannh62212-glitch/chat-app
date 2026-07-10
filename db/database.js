@@ -133,6 +133,49 @@ async function createTables() {
       );
     `);
 
+    // Seed/Ensure default "General" server exists
+    const serverCheck = await client.query("SELECT id FROM servers WHERE name = 'General' LIMIT 1");
+    let generalServerId;
+    if (serverCheck.rows.length === 0) {
+      // Find a suitable owner ID (prefer Nxghtmare3621, fallback to first user or default to 1)
+      let ownerId = 1;
+      const adminCheck = await client.query("SELECT id FROM users WHERE username = 'Nxghtmare3621' LIMIT 1");
+      if (adminCheck.rows.length > 0) {
+        ownerId = adminCheck.rows[0].id;
+      } else {
+        const firstUser = await client.query("SELECT id FROM users LIMIT 1");
+        if (firstUser.rows.length > 0) {
+          ownerId = firstUser.rows[0].id;
+        }
+      }
+
+      // Insert "General" server
+      const createServer = await client.query(
+        "INSERT INTO servers (name, description, owner_id, is_public) VALUES ('General', 'Default server for all members', $1, true) RETURNING id",
+        [ownerId]
+      );
+      generalServerId = createServer.rows[0].id;
+
+      // Create default general chatroom inside the General server
+      await client.query(
+        "INSERT INTO chatrooms (server_id, name) VALUES ($1, 'general')",
+        [generalServerId]
+      );
+      console.log('Seeded "General" server and chatroom.');
+    } else {
+      generalServerId = serverCheck.rows[0].id;
+    }
+
+    // Auto-join all existing users to General server if they are not members
+    await client.query(`
+      INSERT INTO server_members (user_id, server_id)
+      SELECT id, $1 FROM users u
+      WHERE NOT EXISTS (
+        SELECT 1 FROM server_members sm 
+        WHERE sm.user_id = u.id AND sm.server_id = $1
+      )
+    `, [generalServerId]);
+
     console.log('Tables created successfully');
   } catch (err) {
     console.error('Error creating tables:', err);

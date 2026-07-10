@@ -24,6 +24,20 @@ router.post('/register', async (req, res) => {
     const user = result.rows[0];
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);
 
+    // Auto-join General server on registration
+    try {
+      const generalServerResult = await query("SELECT id FROM servers WHERE name = 'General' LIMIT 1");
+      if (generalServerResult.rows.length > 0) {
+        const generalServerId = generalServerResult.rows[0].id;
+        await query(
+          "INSERT INTO server_members (user_id, server_id) VALUES ($1, $2)",
+          [user.id, generalServerId]
+        );
+      }
+    } catch (err) {
+      console.error('Failed to auto-join General server on registration:', err);
+    }
+
     res.status(201).json({ 
       user: { 
         id: user.id, 
