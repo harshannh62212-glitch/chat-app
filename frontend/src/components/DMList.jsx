@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-function DMList({ onSelectDM, selectedDM }) {
+function DMList({ onSelectDM, selectedDM, socket }) {
   const [conversations, setConversations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -12,6 +12,20 @@ function DMList({ onSelectDM, selectedDM }) {
     const interval = setInterval(fetchConversations, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (socket) {
+      const handleRefresh = () => {
+        fetchConversations();
+      };
+      socket.on('new-dm', handleRefresh);
+      socket.on('dm-sent', handleRefresh);
+      return () => {
+        socket.off('new-dm', handleRefresh);
+        socket.off('dm-sent', handleRefresh);
+      };
+    }
+  }, [socket]);
 
   useEffect(() => {
     if (showSearch) {
@@ -93,9 +107,17 @@ function DMList({ onSelectDM, selectedDM }) {
               key={conv.other_user_id}
               className={`conversation-item ${(selectedDM?.id || selectedDM?.other_user_id) === conv.other_user_id ? 'active' : ''}`}
               onClick={() => onSelectDM(conv)}
+              style={{ position: 'relative' }}
             >
-              <h4>{conv.username}</h4>
-              <p className="last-message">Last: {new Date(conv.last_message_at).toLocaleDateString()}</p>
+              <div className="conversation-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h4 style={{ margin: 0 }}>{conv.username}</h4>
+                <span className="last-message-time" style={{ fontSize: '0.75em', color: '#72767d' }}>
+                  {new Date(conv.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+              <p className="last-message" style={{ margin: '4px 0 0 0' }}>
+                {conv.last_message_content || 'No messages yet'}
+              </p>
             </div>
           ))
         )}

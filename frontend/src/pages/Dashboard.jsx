@@ -153,6 +153,7 @@ function Dashboard({ user, socket, onLogout }) {
           <DMList 
             onSelectDM={setSelectedDM}
             selectedDM={selectedDM}
+            socket={socket}
           />
         )}
 

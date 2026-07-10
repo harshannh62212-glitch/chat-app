@@ -58,23 +58,37 @@ router.get('/dm-conversations/list', authMiddleware, async (req, res) => {
     const userId = req.userId;
 
     const result = await query(
-      `SELECT DISTINCT 
-         CASE 
-           WHEN sender_id = $1 THEN recipient_id 
-           ELSE sender_id 
-         END as other_user_id,
-         u.username,
-         u.avatar_url,
-         MAX(created_at) as last_message_at
-       FROM direct_messages dm
-       INNER JOIN users u ON (
-         CASE 
-           WHEN sender_id = $1 THEN recipient_id = u.id
-           ELSE sender_id = u.id
-         END
+      `WITH latest_messages AS (
+         SELECT DISTINCT ON (
+           CASE 
+             WHEN dm.sender_id = $1 THEN dm.recipient_id 
+             ELSE dm.sender_id 
+           END
+         )
+           CASE 
+             WHEN dm.sender_id = $1 THEN dm.recipient_id 
+             ELSE dm.sender_id 
+           END as other_user_id,
+           u.username,
+           u.avatar_url,
+           dm.content as last_message_content,
+           dm.created_at as last_message_at
+         FROM direct_messages dm
+         INNER JOIN users u ON (
+           CASE 
+             WHEN dm.sender_id = $1 THEN dm.recipient_id = u.id
+             ELSE dm.sender_id = u.id
+           END
+         )
+         WHERE dm.sender_id = $1 OR dm.recipient_id = $1
+         ORDER BY 
+           CASE 
+             WHEN dm.sender_id = $1 THEN dm.recipient_id 
+             ELSE dm.sender_id 
+           END,
+           dm.created_at DESC
        )
-       WHERE sender_id = $1 OR recipient_id = $1
-       GROUP BY other_user_id, u.username, u.avatar_url
+       SELECT * FROM latest_messages
        ORDER BY last_message_at DESC`,
       [userId]
     );
