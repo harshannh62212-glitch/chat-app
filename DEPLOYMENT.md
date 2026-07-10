@@ -35,39 +35,40 @@ CLIENT_URL=https://your-railway-domain.up.railway.app
 
 ---
 
-## Option 2: Deploy Backend to Vercel + Database to Supabase
+## Option 2: Deploy Frontend to Vercel + Backend to Render + Database to Supabase (Recommended Hybrid Setup)
+
+This is the best architecture for this app. It hosts the frontend on Vercel's global static CDN for fast loading, while running the backend on Render as a persistent Node server (enabling Socket.io WebSockets), and utilizing Supabase for a free, persistent PostgreSQL database.
 
 ### Step 1: Set Up Supabase Database
 
-1. Go to [supabase.com](https://supabase.com)
-2. Create a new project
-3. Copy the `Connection String` (PostgreSQL)
-4. Keep this secret!
+1. Go to [supabase.com](https://supabase.com).
+2. Create a new project.
+3. Once created, click the **Connect** button at the top of the dashboard.
+4. Copy the connection string (PostgreSQL URI) under the **Transaction Connection String** section.
+5. Save this URL, replacing `[YOUR-PASSWORD]` with the database password you chose during project setup.
 
-### Step 2: Deploy Backend to Vercel
+### Step 2: Deploy Backend to Render
 
-1. Go to [vercel.com](https://vercel.com)
-2. Click "Import Project"
-3. Connect your GitHub repository
-4. Select the chat-app repository
-5. Click "Import"
-
-### Step 3: Add Environment Variables
-
-In Vercel dashboard:
-1. Go to Settings → Environment Variables
-2. Add these variables:
-   - `DATABASE_URL`: Your Supabase connection string
-   - `JWT_SECRET`: Generate a random string (use `openssl rand -hex 32`)
-   - `CLIENT_URL`: Your frontend URL (e.g., `https://your-domain.vercel.app`)
+1. Go to [render.com](https://render.com) and create a new **Web Service**.
+2. Connect your GitHub repository.
+3. Configure the following build settings:
+   - **Runtime**: `Node`
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+4. In the **Environment Variables** section, add:
+   - `DATABASE_URL`: Your Supabase connection string.
+   - `JWT_SECRET`: A random secure string (e.g., generate with `openssl rand -hex 32` in your local terminal).
+   - `CLIENT_URL`: Your Vercel frontend URL (e.g., `https://your-app-frontend.vercel.app` — you can update this on Render once Vercel finishes deploying).
    - `NODE_ENV`: `production`
 
-### Step 4: Deploy Frontend to Vercel
+### Step 3: Deploy Frontend to Vercel
 
-1. In Vercel dashboard, click "Add New..." → "Project"
-2. Import your repository again (or same repo if monorepo)
-3. Set "Root Directory" to `frontend`
-4. Click "Deploy"
+1. Go to [vercel.com](https://vercel.com) and import your repository.
+2. Under **Project Settings**, configure:
+   - **Root Directory**: `frontend`
+3. Add the following **Environment Variable**:
+   - `VITE_API_URL`: Your Render backend URL (e.g., `https://your-backend.onrender.com`).
+4. Click **Deploy**.
 
 ---
 

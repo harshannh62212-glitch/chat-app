@@ -6,7 +6,6 @@ function Auth({ onLogin }) {
   const [isRegister, setIsRegister] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
-    email: '',
     password: ''
   });
   const [error, setError] = useState('');
@@ -42,21 +41,11 @@ function Auth({ onLogin }) {
         {error && <div className="error-message">{error}</div>}
 
         <form onSubmit={handleSubmit}>
-          {isRegister && (
-            <input
-              type="text"
-              name="username"
-              placeholder="Username"
-              value={formData.username}
-              onChange={handleChange}
-              required
-            />
-          )}
           <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={formData.email}
+            type="text"
+            name="username"
+            placeholder="Username"
+            value={formData.username}
             onChange={handleChange}
             required
           />
@@ -80,7 +69,7 @@ function Auth({ onLogin }) {
             onClick={() => {
               setIsRegister(!isRegister);
               setError('');
-              setFormData({ username: '', email: '', password: '' });
+              setFormData({ username: '', password: '' });
             }}
           >
             {isRegister ? 'Login' : 'Register'}

@@ -92,7 +92,7 @@ io.on('connection', (socket) => {
 });
 
 module.exports = { io };
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8000;
 
 (async () => {
   try {

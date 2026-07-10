@@ -3,7 +3,12 @@ import axios from 'axios';
 import io from 'socket.io-client';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
-import '../styles/App.css';
+import './styles/App.css';
+
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+if (import.meta.env.VITE_API_URL) {
+  axios.defaults.baseURL = import.meta.env.VITE_API_URL;
+}
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -19,7 +24,7 @@ function App() {
 
   useEffect(() => {
     if (currentUser) {
-      const newSocket = io('http://localhost:5000', {
+      const newSocket = io(BACKEND_URL, {
         auth: { userId: currentUser.id }
       });
       setSocket(newSocket);

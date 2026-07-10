@@ -8,17 +8,17 @@ const router = express.Router();
 
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, password } = req.body;
 
-    if (!username || !email || !password) {
+    if (!username || !password) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     
     const result = await query(
-      'INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username, email',
-      [username, email, hashedPassword]
+      'INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username',
+      [username, `${username}@chat.local`, hashedPassword]
     );
 
     const user = result.rows[0];
@@ -27,7 +27,7 @@ router.post('/register', async (req, res) => {
     res.status(201).json({ user, token });
   } catch (err) {
     if (err.code === '23505') {
-      return res.status(400).json({ error: 'Username or email already exists' });
+      return res.status(400).json({ error: 'Username already exists' });
     }
     console.error(err);
     res.status(500).json({ error: 'Registration failed' });
@@ -36,13 +36,13 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { username, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password required' });
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
     }
 
-    const result = await query('SELECT * FROM users WHERE email = $1', [email]);
+    const result = await query('SELECT * FROM users WHERE username = $1', [username]);
     const user = result.rows[0];
 
     if (!user) {
@@ -55,7 +55,7 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);
-    res.json({ user: { id: user.id, username: user.username, email: user.email }, token });
+    res.json({ user: { id: user.id, username: user.username }, token });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Login failed' });
