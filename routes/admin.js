@@ -50,11 +50,13 @@ router.post('/users/:id/ban', authMiddleware, adminCheck, async (req, res) => {
     const { id } = req.params;
     const { reason } = req.body;
     
+    // Remove any existing global ban first to avoid duplicates
+    await query('DELETE FROM bans WHERE user_id = $1 AND server_id IS NULL', [id]);
+
     // Insert into bans (global ban has server_id = null)
     await query(
       `INSERT INTO bans (user_id, server_id, reason) 
-       VALUES ($1, NULL, $2) 
-       ON CONFLICT DO NOTHING`,
+       VALUES ($1, NULL, $2)`,
       [id, reason || 'Global ban by Administrator']
     );
     
