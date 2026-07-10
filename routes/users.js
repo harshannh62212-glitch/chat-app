@@ -59,4 +59,19 @@ router.get('/:userId', async (req, res) => {
   }
 });
 
+// Update user profile avatar URL
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    const { avatarUrl } = req.body;
+    await query(
+      'UPDATE users SET avatar_url = $1 WHERE id = $2',
+      [avatarUrl || null, req.userId]
+    );
+    res.json({ message: 'Profile updated successfully', avatar_url: avatarUrl });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
 module.exports = router;

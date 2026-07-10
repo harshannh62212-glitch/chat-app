@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
-function ServerChat({ server, socket, currentUser }) {
+function ServerChat({ server, socket, currentUser, onOpenSettings, onLogout }) {
   const [chatrooms, setChatrooms] = useState([]);
   const [selectedChatroom, setSelectedChatroom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -88,7 +88,7 @@ function ServerChat({ server, socket, currentUser }) {
   return (
     <div className="server-chat">
       <div className="chat-header">
-        <h2>{server.name}</h2>
+        <h2>{server.name} {selectedChatroom && <span className="channel-hash"># {selectedChatroom.name}</span>}</h2>
         <div className="header-info">
           <span>{members.length} members</span>
           <button 
@@ -98,22 +98,53 @@ function ServerChat({ server, socket, currentUser }) {
           >
             👥
           </button>
+          <button 
+            className="header-settings-btn"
+            onClick={onOpenSettings}
+            title="Settings"
+          >
+            ⚙️
+          </button>
         </div>
       </div>
 
       <div className="chat-container">
         <div className="chatroom-selector">
-          <h4>Chatrooms</h4>
-          {chatrooms.map(room => (
-            <button
-              key={room.id}
-              className={`chatroom-btn ${selectedChatroom?.id === room.id ? 'active' : ''}`}
-              onClick={() => setSelectedChatroom(room)}
-            >
-              # {room.name}
-              {room.is_general && ' (general)'}
-            </button>
-          ))}
+          <div className="chatroom-list-wrapper">
+            <h4>Chatrooms</h4>
+            {chatrooms.map(room => (
+              <button
+                key={room.id}
+                className={`chatroom-btn ${selectedChatroom?.id === room.id ? 'active' : ''}`}
+                onClick={() => setSelectedChatroom(room)}
+              >
+                # {room.name}
+                {room.is_general && ' (general)'}
+              </button>
+            ))}
+          </div>
+
+          {/* User profile details at the bottom of the column */}
+          <div className="discord-user-bar">
+            <div className="user-bar-profile">
+              <div className="user-bar-avatar">
+                {currentUser.avatar_url ? (
+                  <img src={currentUser.avatar_url} alt={currentUser.username} />
+                ) : (
+                  <div className="avatar-placeholder">{currentUser.username[0].toUpperCase()}</div>
+                )}
+                <span className="status-indicator online"></span>
+              </div>
+              <div className="user-bar-info">
+                <span className="user-bar-name">{currentUser.username}</span>
+                <span className="user-bar-tag">#0001</span>
+              </div>
+            </div>
+            <div className="user-bar-actions">
+              <button className="user-bar-btn" onClick={onOpenSettings} title="Settings">⚙️</button>
+              <button className="user-bar-btn" onClick={onLogout} title="Logout">🚪</button>
+            </div>
+          </div>
         </div>
 
         <div className="chat-main">

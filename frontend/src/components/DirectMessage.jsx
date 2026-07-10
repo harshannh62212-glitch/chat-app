@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
-function DirectMessage({ dmWith, socket, currentUser }) {
+function DirectMessage({ dmWith, socket, currentUser, onOpenSettings }) {
   const [messages, setMessages] = useState([]);
   const [messageInput, setMessageInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -76,6 +76,15 @@ function DirectMessage({ dmWith, socket, currentUser }) {
     <div className="direct-message">
       <div className="chat-header">
         <h2>💬 {dmUsername}</h2>
+        <div className="header-info">
+          <button 
+            className="header-settings-btn"
+            onClick={onOpenSettings}
+            title="Settings"
+          >
+            ⚙️
+          </button>
+        </div>
       </div>
 
       <div className="messages">

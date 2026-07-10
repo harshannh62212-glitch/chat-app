@@ -8,11 +8,12 @@ import DirectMessage from '../components/DirectMessage';
 import AdminPanel from '../components/AdminPanel';
 import '../styles/Dashboard.css';
 
-function Dashboard({ user, socket, onLogout }) {
+function Dashboard({ user, setUser, socket, onLogout }) {
   const [activeTab, setActiveTab] = useState('servers');
   const [selectedServer, setSelectedServer] = useState(null);
   const [selectedDM, setSelectedDM] = useState(null);
   const [showNewServerModal, setShowNewServerModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [servers, setServers] = useState([]);
   const [notifications, setNotifications] = useState([]);
 
@@ -97,77 +98,112 @@ function Dashboard({ user, socket, onLogout }) {
   };
 
   return (
-    <div className="dashboard">
-      <div className="sidebar">
-        <div className="user-info">
-          <h3>{user.username}</h3>
-          <button onClick={onLogout} className="logout-btn">Logout</button>
+    <div className="dashboard discord-layout">
+      {/* 1. Leftmost Server Rail (Narrow Icon Column) */}
+      <div className="discord-server-rail">
+        <div 
+          className={`rail-icon home-icon ${activeTab === 'dms' && !selectedServer ? 'active' : ''}`}
+          onClick={() => { setActiveTab('dms'); setSelectedServer(null); setSelectedDM(null); }}
+          title="Direct Messages"
+        >
+          💬
+        </div>
+        
+        <div className="rail-separator"></div>
+
+        <div className="rail-servers">
+          {servers.map(srv => (
+            <div 
+              key={srv.id}
+              className={`rail-icon server-icon ${selectedServer?.id === srv.id ? 'active' : ''}`}
+              onClick={() => { setSelectedServer(srv); setSelectedDM(null); setActiveTab('servers'); }}
+              title={srv.name}
+            >
+              {srv.name.substring(0, 2).toUpperCase()}
+            </div>
+          ))}
         </div>
 
-        <div className="tabs">
-          <button 
-            className={`tab ${activeTab === 'servers' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('servers'); setSelectedServer(null); setSelectedDM(null); }}
-          >
-            Servers
-          </button>
-          <button 
-            className={`tab ${activeTab === 'dms' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('dms'); setSelectedServer(null); setSelectedDM(null); }}
-          >
-            DMs
-          </button>
-          <button 
-            className={`tab ${activeTab === 'discovery' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('discovery'); setSelectedServer(null); setSelectedDM(null); }}
-          >
-            Discover
-          </button>
-          {user.is_admin && (
-            <button 
-              className={`tab ${activeTab === 'admin' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('admin'); setSelectedServer(null); setSelectedDM(null); }}
-            >
-              Admin
-            </button>
-          )}
+        <div 
+          className="rail-icon add-server-icon"
+          onClick={() => setShowNewServerModal(true)}
+          title="Create a Server"
+        >
+          +
         </div>
 
-        {activeTab === 'servers' && (
-          <>
-            <button 
-              className="create-server-btn"
-              onClick={() => setShowNewServerModal(true)}
-            >
-              + New Server
-            </button>
-            <ServerList 
-              servers={servers}
-              onSelectServer={setSelectedServer}
-              selectedServer={selectedServer}
-            />
-          </>
-        )}
+        <div 
+          className={`rail-icon discover-icon ${activeTab === 'discovery' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('discovery'); setSelectedServer(null); setSelectedDM(null); }}
+          title="Explore Public Servers"
+        >
+          🧭
+        </div>
 
-        {activeTab === 'dms' && (
-          <DMList 
-            onSelectDM={setSelectedDM}
-            selectedDM={selectedDM}
-            socket={socket}
-          />
-        )}
-
-        {activeTab === 'discovery' && (
-          <Discovery onServerJoined={fetchServers} />
+        {user.is_admin && (
+          <div 
+            className={`rail-icon admin-icon ${activeTab === 'admin' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('admin'); setSelectedServer(null); setSelectedDM(null); }}
+            title="Admin Moderation"
+          >
+            🛡️
+          </div>
         )}
       </div>
 
+      {/* 2. Sub-Sidebar Column (List for selected tab/view) */}
+      {!selectedServer && (
+        <div className="discord-sub-sidebar">
+          <div className="sub-sidebar-header">
+            {activeTab === 'dms' ? (
+              <h3>Direct Messages</h3>
+            ) : activeTab === 'discovery' ? (
+              <h3>Server Discovery</h3>
+            ) : activeTab === 'admin' ? (
+              <h3>Admin Panel</h3>
+            ) : (
+              <h3>Chat App</h3>
+            )}
+          </div>
+
+          <div className="sub-sidebar-content">
+            {activeTab === 'dms' && (
+              <DMList 
+                onSelectDM={setSelectedDM}
+                selectedDM={selectedDM}
+                socket={socket}
+              />
+            )}
+
+            {activeTab === 'discovery' && (
+              <Discovery onServerJoined={fetchServers} />
+            )}
+
+            {activeTab === 'admin' && (
+              <div className="admin-menu-placeholder">
+                <p>Welcome to Moderation Console. Use the main screen to moderate users, servers, and word filters.</p>
+              </div>
+            )}
+          </div>
+
+          {/* User Profile Bar at the bottom of sub-sidebar */}
+          <UserProfileBar 
+            user={user} 
+            onLogout={onLogout} 
+            onOpenSettings={() => setShowSettingsModal(true)} 
+          />
+        </div>
+      )}
+
+      {/* 3. Main Chat Content Area */}
       <div className="main-content">
         {selectedServer && (
           <ServerChat 
             server={selectedServer}
             socket={socket}
             currentUser={user}
+            onOpenSettings={() => setShowSettingsModal(true)}
+            onLogout={onLogout}
           />
         )}
 
@@ -176,6 +212,7 @@ function Dashboard({ user, socket, onLogout }) {
             dmWith={selectedDM}
             socket={socket}
             currentUser={user}
+            onOpenSettings={() => setShowSettingsModal(true)}
           />
         )}
 
@@ -184,9 +221,9 @@ function Dashboard({ user, socket, onLogout }) {
             socket={socket}
             currentUser={user}
             onSelectServer={(srv) => {
-              // Helper to allow admin to jump directly into a server chat room
-              setActiveTab('servers');
               setSelectedServer(srv);
+              setSelectedDM(null);
+              setActiveTab('servers');
             }}
           />
         )}
@@ -194,7 +231,7 @@ function Dashboard({ user, socket, onLogout }) {
         {!selectedServer && !selectedDM && activeTab !== 'admin' && (
           <div className="welcome">
             <h2>Welcome to Chat App! 👋</h2>
-            <p>Select a server or DM to start chatting</p>
+            <p>Select a server on the left rail or open DMs to start chatting</p>
           </div>
         )}
       </div>
@@ -203,6 +240,16 @@ function Dashboard({ user, socket, onLogout }) {
         <CreateServerModal 
           onClose={() => setShowNewServerModal(false)}
           onServerCreated={handleServerCreated}
+        />
+      )}
+
+      {showSettingsModal && (
+        <SettingsModal 
+          user={user}
+          onClose={() => setShowSettingsModal(false)}
+          onUpdateAvatar={(newUrl) => {
+            setUser({ ...user, avatar_url: newUrl });
+          }}
         />
       )}
 
@@ -316,6 +363,238 @@ function CreateServerModal({ onClose, onServerCreated }) {
             <button type="button" onClick={onClose}>Cancel</button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function UserProfileBar({ user, onLogout, onOpenSettings }) {
+  return (
+    <div className="discord-user-bar">
+      <div className="user-bar-profile">
+        <div className="user-bar-avatar">
+          {user.avatar_url ? (
+            <img src={user.avatar_url} alt={user.username} />
+          ) : (
+            <div className="avatar-placeholder">{user.username[0].toUpperCase()}</div>
+          )}
+          <span className="status-indicator online"></span>
+        </div>
+        <div className="user-bar-info">
+          <span className="user-bar-name">{user.username}</span>
+          <span className="user-bar-tag">#0001</span>
+        </div>
+      </div>
+      <div className="user-bar-actions">
+        <button className="user-bar-btn" onClick={onOpenSettings} title="Settings">⚙️</button>
+        <button className="user-bar-btn" onClick={onLogout} title="Logout">🚪</button>
+      </div>
+    </div>
+  );
+}
+
+function SettingsModal({ user, onClose, onUpdateAvatar }) {
+  const [activeSettingsTab, setActiveSettingsTab] = useState('profile');
+  const [avatarUrl, setAvatarUrl] = useState(user.avatar_url || '');
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'cosmic-dark');
+  const [font, setFont] = useState(localStorage.getItem('font') || 'Outfit');
+  const [fontSize, setFontSize] = useState(localStorage.getItem('font-size') || '15px');
+  const [letterSpacing, setLetterSpacing] = useState(localStorage.getItem('letter-spacing') || 'normal');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const presets = [
+    `https://robohash.org/${user.username}?set=set1`,
+    `https://robohash.org/${user.username}?set=set2`,
+    `https://robohash.org/${user.username}?set=set4`,
+    `https://robohash.org/${user.username}?set=set3`
+  ];
+
+  useEffect(() => {
+    localStorage.setItem('theme', theme);
+    document.body.className = `theme-${theme}`;
+  }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('font', font);
+    document.documentElement.style.setProperty('--font-family', font);
+  }, [font]);
+
+  useEffect(() => {
+    localStorage.setItem('font-size', fontSize);
+    document.documentElement.style.setProperty('--font-size', fontSize);
+  }, [fontSize]);
+
+  useEffect(() => {
+    localStorage.setItem('letter-spacing', letterSpacing);
+    document.documentElement.style.setProperty('--letter-spacing', letterSpacing);
+  }, [letterSpacing]);
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      await axios.put('/api/users/profile', { avatarUrl });
+      onUpdateAvatar(avatarUrl);
+      setSuccess('Profile updated successfully!');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal settings-modal" onClick={e => e.stopPropagation()}>
+        <div className="settings-container">
+          <div className="settings-sidebar-menu">
+            <h3>Settings</h3>
+            <button 
+              className={`settings-tab-btn ${activeSettingsTab === 'profile' ? 'active' : ''}`}
+              onClick={() => setActiveSettingsTab('profile')}
+            >
+              👤 My Profile
+            </button>
+            <button 
+              className={`settings-tab-btn ${activeSettingsTab === 'appearance' ? 'active' : ''}`}
+              onClick={() => setActiveSettingsTab('appearance')}
+            >
+              🎨 Appearance
+            </button>
+            <button className="settings-close-btn-bottom" onClick={onClose}>Close</button>
+          </div>
+
+          <div className="settings-content">
+            <div className="settings-header">
+              <h2>{activeSettingsTab === 'profile' ? 'My Profile Settings' : 'Appearance Settings'}</h2>
+              <button className="settings-close-x" onClick={onClose}>&times;</button>
+            </div>
+
+            {error && <div className="error-message">{error}</div>}
+            {success && <div className="success-message">{success}</div>}
+
+            {activeSettingsTab === 'profile' && (
+              <form onSubmit={handleSaveProfile} className="settings-form">
+                <div className="avatar-preview-section">
+                  <div className="avatar-large">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="Preview" />
+                    ) : (
+                      <div className="avatar-placeholder-large">{user.username[0].toUpperCase()}</div>
+                    )}
+                  </div>
+                  <div className="presets-container">
+                    <h4>Choose a Preset Avatar:</h4>
+                    <div className="presets-list">
+                      {presets.map((preset, idx) => (
+                        <img 
+                          key={idx}
+                          src={preset} 
+                          alt={`Preset ${idx + 1}`}
+                          className={`preset-avatar-img ${avatarUrl === preset ? 'active' : ''}`}
+                          onClick={() => setAvatarUrl(preset)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="input-group">
+                  <label htmlFor="avatar-url-input">Custom Avatar Image URL</label>
+                  <input
+                    id="avatar-url-input"
+                    type="url"
+                    placeholder="https://example.com/avatar.png"
+                    value={avatarUrl}
+                    onChange={(e) => setAvatarUrl(e.target.value)}
+                  />
+                </div>
+
+                <button type="submit" className="save-settings-btn" disabled={loading}>
+                  {loading ? 'Saving...' : 'Save Profile Changes'}
+                </button>
+              </form>
+            )}
+
+            {activeSettingsTab === 'appearance' && (
+              <div className="settings-form">
+                <div className="input-group">
+                  <label>Select Theme</label>
+                  <div className="theme-grid">
+                    <button 
+                      className={`theme-select-card cosmic ${theme === 'cosmic-dark' ? 'active' : ''}`}
+                      onClick={() => setTheme('cosmic-dark')}
+                    >
+                      🔮 Cosmic Dark
+                    </button>
+                    <button 
+                      className={`theme-select-card discord ${theme === 'discord-classic' ? 'active' : ''}`}
+                      onClick={() => setTheme('discord-classic')}
+                    >
+                      💬 Discord Classic
+                    </button>
+                    <button 
+                      className={`theme-select-card obsidian ${theme === 'midnight-obsidian' ? 'active' : ''}`}
+                      onClick={() => setTheme('midnight-obsidian')}
+                    >
+                      🌑 Midnight Obsidian
+                    </button>
+                    <button 
+                      className={`theme-select-card cyberpunk ${theme === 'cyberpunk-neon' ? 'active' : ''}`}
+                      onClick={() => setTheme('cyberpunk-neon')}
+                    >
+                      ⚡ Cyberpunk Neon
+                    </button>
+                  </div>
+                </div>
+
+                <div className="input-group">
+                  <label htmlFor="font-family-select">Font Style</label>
+                  <select 
+                    id="font-family-select"
+                    value={font} 
+                    onChange={(e) => setFont(e.target.value)}
+                  >
+                    <option value="Outfit">Outfit (Modern Rounded)</option>
+                    <option value="'Segoe UI', sans-serif">Segoe UI (Classic clean)</option>
+                    <option value="Courier New">Monospace (Code style)</option>
+                    <option value="Comic Sans MS">Comic Sans (Funny)</option>
+                  </select>
+                </div>
+
+                <div className="input-group">
+                  <label htmlFor="font-size-slider">Font Size: {fontSize}</label>
+                  <input 
+                    id="font-size-slider"
+                    type="range" 
+                    min="13" 
+                    max="19" 
+                    step="1"
+                    value={parseInt(fontSize)} 
+                    onChange={(e) => setFontSize(`${e.target.value}px`)}
+                  />
+                </div>
+
+                <div className="input-group">
+                  <label htmlFor="letter-spacing-slider">Letter Spacing: {letterSpacing}</label>
+                  <input 
+                    id="letter-spacing-slider"
+                    type="range" 
+                    min="-1" 
+                    max="4" 
+                    step="0.5"
+                    value={letterSpacing === 'normal' ? 0 : parseFloat(letterSpacing)} 
+                    onChange={(e) => setLetterSpacing(e.target.value == 0 ? 'normal' : `${e.target.value}px`)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

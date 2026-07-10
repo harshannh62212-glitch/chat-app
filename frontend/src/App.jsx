@@ -15,6 +15,17 @@ function App() {
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
+    // Load custom theme, typography, and letter spacing variables on mount
+    const savedTheme = localStorage.getItem('theme') || 'cosmic-dark';
+    const savedFont = localStorage.getItem('font') || 'Outfit';
+    const savedSize = localStorage.getItem('font-size') || '15px';
+    const savedSpacing = localStorage.getItem('letter-spacing') || 'normal';
+
+    document.body.className = `theme-${savedTheme}`;
+    document.documentElement.style.setProperty('--font-family', savedFont);
+    document.documentElement.style.setProperty('--font-size', savedSize);
+    document.documentElement.style.setProperty('--letter-spacing', savedSpacing);
+
     const token = localStorage.getItem('authToken');
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -61,7 +72,12 @@ function App() {
   return (
     <div className="app">
       {currentUser ? (
-        <Dashboard user={currentUser} socket={socket} onLogout={handleLogout} />
+        <Dashboard 
+          user={currentUser} 
+          setUser={setCurrentUser} 
+          socket={socket} 
+          onLogout={handleLogout} 
+        />
       ) : (
         <Auth onLogin={handleLogin} />
       )}
