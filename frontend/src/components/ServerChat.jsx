@@ -7,6 +7,7 @@ function ServerChat({ server, socket, currentUser }) {
   const [messages, setMessages] = useState([]);
   const [messageInput, setMessageInput] = useState('');
   const [members, setMembers] = useState([]);
+  const [showMembers, setShowMembers] = useState(true);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -90,6 +91,13 @@ function ServerChat({ server, socket, currentUser }) {
         <h2>{server.name}</h2>
         <div className="header-info">
           <span>{members.length} members</span>
+          <button 
+            className="toggle-members-btn"
+            onClick={() => setShowMembers(!showMembers)}
+            title="Toggle Members List"
+          >
+            👥
+          </button>
         </div>
       </div>
 
@@ -138,16 +146,18 @@ function ServerChat({ server, socket, currentUser }) {
           </form>
         </div>
 
-        <div className="members-sidebar">
-          <h4>Members ({members.length})</h4>
-          <div className="members-list">
-            {members.map(member => (
-              <div key={member.id} className="member-item">
-                <span>{member.username}</span>
-              </div>
-            ))}
+        {showMembers && (
+          <div className="members-sidebar">
+            <h4>Members ({members.length})</h4>
+            <div className="members-list">
+              {members.map(member => (
+                <div key={member.id} className="member-item">
+                  <span>{member.username}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
