@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import GiphyPanel from './GiphyPanel';
 
 function ServerChat({ server, socket, currentUser, onOpenSettings, onLogout }) {
   const [chatrooms, setChatrooms] = useState([]);
@@ -8,6 +9,7 @@ function ServerChat({ server, socket, currentUser, onOpenSettings, onLogout }) {
   const [messageInput, setMessageInput] = useState('');
   const [members, setMembers] = useState([]);
   const [showMembers, setShowMembers] = useState(true);
+  const [showGiphy, setShowGiphy] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -155,7 +157,11 @@ function ServerChat({ server, socket, currentUser, onOpenSettings, onLogout }) {
               messages.map((msg, idx) => (
                 <div key={idx} className="message">
                   <strong>{msg.username}</strong>
-                  <p>{msg.content}</p>
+                  {msg.content.startsWith('http') && msg.content.includes('giphy.com') ? (
+                    <img src={msg.content} className="message-gif" alt="GIF" />
+                  ) : (
+                    <p>{msg.content}</p>
+                  )}
                   <span className="timestamp">
                     {new Date(msg.created_at).toLocaleTimeString()}
                   </span>
@@ -165,15 +171,40 @@ function ServerChat({ server, socket, currentUser, onOpenSettings, onLogout }) {
             <div ref={messagesEndRef} />
           </div>
 
-          <form onSubmit={handleSendMessage} className="message-input">
-            <input
-              type="text"
-              placeholder="Type a message..."
-              value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
-              disabled={!selectedChatroom}
-            />
-            <button type="submit" disabled={!selectedChatroom}>Send</button>
+          <form onSubmit={handleSendMessage} className="message-input-form-wrapper">
+            {showGiphy && (
+              <GiphyPanel 
+                onSelectGif={(gifUrl) => {
+                  socket.emit('send-message', {
+                    senderId: currentUser.id,
+                    content: gifUrl,
+                    serverId: server.id,
+                    chatroomId: selectedChatroom.id
+                  });
+                  setShowGiphy(false);
+                }}
+                onClose={() => setShowGiphy(false)}
+              />
+            )}
+            <div className="message-input">
+              <button 
+                type="button" 
+                className="giphy-toggle-btn"
+                onClick={() => setShowGiphy(!showGiphy)}
+                disabled={!selectedChatroom}
+                title="Send a GIF"
+              >
+                GIF
+              </button>
+              <input
+                type="text"
+                placeholder="Type a message..."
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                disabled={!selectedChatroom}
+              />
+              <button type="submit" disabled={!selectedChatroom}>Send</button>
+            </div>
           </form>
         </div>
 

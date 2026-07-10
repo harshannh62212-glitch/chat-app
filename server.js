@@ -76,6 +76,30 @@ io.on('connection', (socket) => {
       console.error('Socket timeout check failed:', err);
     }
 
+    // Enforce 20 Giphy GIFs daily limit for standard users (unlimited for admins)
+    if (content.includes('giphy.com') && !isAdmin) {
+      try {
+        const serverGiphs = await query(
+          "SELECT COUNT(*) FROM server_messages WHERE sender_id = $1 AND content LIKE '%giphy.com%' AND created_at > NOW() - INTERVAL '1 day'",
+          [senderId]
+        );
+        const dmGiphs = await query(
+          "SELECT COUNT(*) FROM direct_messages WHERE sender_id = $1 AND content LIKE '%giphy.com%' AND created_at > NOW() - INTERVAL '1 day'",
+          [senderId]
+        );
+        const totalGiphs = parseInt(serverGiphs.rows[0].count) + parseInt(dmGiphs.rows[0].count);
+
+        if (totalGiphs >= 20) {
+          socket.emit('timeout-error', { 
+            message: 'You have reached your daily limit of 20 Giphy GIFs. Admins get unlimited access!' 
+          });
+          return; // Block message from being sent!
+        }
+      } catch (err) {
+        console.error('Failed to verify Giphy daily limit:', err);
+      }
+    }
+
     // Auto-timeout user for 30 seconds if message contains profanity or slurs, EXCEPT if they are admin
     if (containsBannedWords(content) && !isAdmin) {
       try {

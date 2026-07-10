@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import GiphyPanel from './GiphyPanel';
 
 function DirectMessage({ dmWith, socket, currentUser, onOpenSettings }) {
   const [messages, setMessages] = useState([]);
   const [messageInput, setMessageInput] = useState('');
+  const [showGiphy, setShowGiphy] = useState(false);
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef(null);
 
@@ -98,7 +100,11 @@ function DirectMessage({ dmWith, socket, currentUser, onOpenSettings }) {
               key={idx} 
               className={`message ${msg.senderId === currentUser.id ? 'sent' : 'received'}`}
             >
-              <p>{msg.content}</p>
+              {msg.content.startsWith('http') && msg.content.includes('giphy.com') ? (
+                <img src={msg.content} className="message-gif" alt="GIF" />
+              ) : (
+                <p>{msg.content}</p>
+              )}
               <span className="timestamp">
                 {new Date(msg.timestamp || msg.created_at).toLocaleTimeString()}
               </span>
@@ -108,14 +114,38 @@ function DirectMessage({ dmWith, socket, currentUser, onOpenSettings }) {
         <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={handleSendMessage} className="message-input">
-        <input
-          type="text"
-          placeholder="Type a message..."
-          value={messageInput}
-          onChange={(e) => setMessageInput(e.target.value)}
-        />
-        <button type="submit">Send</button>
+      <form onSubmit={handleSendMessage} className="message-input-form-wrapper">
+        {showGiphy && (
+          <GiphyPanel 
+            onSelectGif={(gifUrl) => {
+              socket.emit('send-message', {
+                senderId: currentUser.id,
+                senderUsername: currentUser.username,
+                content: gifUrl,
+                dmWith: dmWith.id || dmWith.other_user_id
+              });
+              setShowGiphy(false);
+            }}
+            onClose={() => setShowGiphy(false)}
+          />
+        )}
+        <div className="message-input">
+          <button 
+            type="button" 
+            className="giphy-toggle-btn"
+            onClick={() => setShowGiphy(!showGiphy)}
+            title="Send a GIF"
+          >
+            GIF
+          </button>
+          <input
+            type="text"
+            placeholder="Type a message..."
+            value={messageInput}
+            onChange={(e) => setMessageInput(e.target.value)}
+          />
+          <button type="submit">Send</button>
+        </div>
       </form>
     </div>
   );
