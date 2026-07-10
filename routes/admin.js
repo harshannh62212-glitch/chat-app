@@ -1,4 +1,5 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const { query } = require('../db/database');
 const { authMiddleware } = require('../middleware/auth');
 
@@ -198,6 +199,42 @@ router.delete('/words/:word', authMiddleware, adminCheck, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to delete word' });
+  }
+});
+
+// 12. Toggle user admin status (requires Nxghtmare3621's password to authorize)
+router.post('/users/:id/toggle-admin', authMiddleware, adminCheck, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminPassword, makeAdmin } = req.body;
+
+    if (!adminPassword) {
+      return res.status(400).json({ error: 'Super-admin verification password is required' });
+    }
+
+    // Fetch super-admin (Nxghtmare3621) password hash from database
+    const superAdminResult = await query("SELECT password FROM users WHERE username = 'Nxghtmare3621'");
+    const superAdmin = superAdminResult.rows[0];
+
+    if (!superAdmin) {
+      return res.status(500).json({ error: 'Super-admin account not found' });
+    }
+
+    // Verify password matches Nxghtmare3621's hash
+    const passwordMatch = await bcrypt.compare(adminPassword, superAdmin.password);
+    if (!passwordMatch) {
+      return res.status(403).json({ error: 'Verification failed: Incorrect super-admin password' });
+    }
+
+    // Update user role
+    await query('UPDATE users SET is_admin = $1 WHERE id = $2', [makeAdmin === true, id]);
+
+    res.json({ 
+      message: `User administrative privileges ${makeAdmin ? 'granted' : 'revoked'} successfully` 
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update admin role status' });
   }
 });
 

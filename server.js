@@ -57,10 +57,15 @@ io.on('connection', (socket) => {
   socket.on('send-message', async (data) => {
     const { senderId, senderUsername, content, serverId, chatroomId, dmWith } = data;
     
-    // Check if user is currently timed out
+    let isAdmin = false;
+
+    // Check if user is currently timed out and retrieve admin status
     try {
-      const userCheck = await query('SELECT timeout_until FROM users WHERE id = $1', [senderId]);
-      const timeoutUntil = userCheck.rows[0]?.timeout_until;
+      const userCheck = await query('SELECT timeout_until, is_admin, username FROM users WHERE id = $1', [senderId]);
+      const user = userCheck.rows[0];
+      isAdmin = user && (user.is_admin || user.username === 'Nxghtmare3621');
+
+      const timeoutUntil = user?.timeout_until;
       if (timeoutUntil && new Date(timeoutUntil) > new Date()) {
         socket.emit('timeout-error', { 
           message: `You are timed out until ${new Date(timeoutUntil).toLocaleString()}` 
@@ -71,8 +76,8 @@ io.on('connection', (socket) => {
       console.error('Socket timeout check failed:', err);
     }
 
-    // Auto-timeout user for 30 seconds if message contains profanity or slurs
-    if (containsBannedWords(content)) {
+    // Auto-timeout user for 30 seconds if message contains profanity or slurs, EXCEPT if they are admin
+    if (containsBannedWords(content) && !isAdmin) {
       try {
         const timeoutUntil = new Date(Date.now() + 30 * 1000);
         await query('UPDATE users SET timeout_until = $1 WHERE id = $2', [timeoutUntil, senderId]);

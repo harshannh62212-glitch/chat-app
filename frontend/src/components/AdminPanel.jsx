@@ -95,6 +95,26 @@ function AdminPanel({ socket, currentUser, onSelectServer }) {
     }
   };
 
+  const handleToggleAdmin = async (userId, makeAdmin) => {
+    const password = window.prompt(`Enter super-admin password to authorize making this user ${makeAdmin ? 'an Admin' : 'a Regular User'}:`);
+    if (password === null) return;
+    if (!password.trim()) {
+      alert('Password is required to verify this action.');
+      return;
+    }
+
+    try {
+      const response = await axios.post(`/api/admin/users/${userId}/toggle-admin`, {
+        adminPassword: password,
+        makeAdmin
+      });
+      setMessage(response.data.message);
+      fetchData();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update administrative permissions');
+    }
+  };
+
   // Server Actions
   const handleJoinServer = async (server) => {
     try {
@@ -222,6 +242,14 @@ function AdminPanel({ socket, currentUser, onSelectServer }) {
 
                             {u.id !== currentUser.id && (
                               <button className="btn-orange" onClick={() => handleKickUser(u.id)}>Kick All</button>
+                            )}
+
+                            {u.id !== currentUser.id && (
+                              u.is_admin ? (
+                                <button className="btn-grey" onClick={() => handleToggleAdmin(u.id, false)}>Demote</button>
+                              ) : (
+                                <button className="btn-green" onClick={() => handleToggleAdmin(u.id, true)}>Promote</button>
+                              )
                             )}
 
                             {u.id !== currentUser.id && (
