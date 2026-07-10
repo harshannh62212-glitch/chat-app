@@ -5,6 +5,7 @@ import Discovery from '../components/Discovery';
 import ServerChat from '../components/ServerChat';
 import DMList from '../components/DMList';
 import DirectMessage from '../components/DirectMessage';
+import AdminPanel from '../components/AdminPanel';
 import '../styles/Dashboard.css';
 
 function Dashboard({ user, socket, onLogout }) {
@@ -18,6 +19,28 @@ function Dashboard({ user, socket, onLogout }) {
   useEffect(() => {
     fetchServers();
   }, []);
+
+  useEffect(() => {
+    if (socket) {
+      const handleTimeoutError = (data) => {
+        const newNotification = {
+          id: Date.now() + Math.random(),
+          senderUsername: 'System Notification',
+          content: data.message,
+          timestamp: new Date()
+        };
+        setNotifications(prev => [...prev, newNotification]);
+
+        setTimeout(() => {
+          setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
+        }, 5000);
+      };
+      socket.on('timeout-error', handleTimeoutError);
+      return () => {
+        socket.off('timeout-error', handleTimeoutError);
+      };
+    }
+  }, [socket]);
 
   useEffect(() => {
     if (socket) {
@@ -100,6 +123,14 @@ function Dashboard({ user, socket, onLogout }) {
           >
             Discover
           </button>
+          {user.is_admin && (
+            <button 
+              className={`tab ${activeTab === 'admin' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('admin'); setSelectedServer(null); setSelectedDM(null); }}
+            >
+              Admin
+            </button>
+          )}
         </div>
 
         {activeTab === 'servers' && (
@@ -147,7 +178,19 @@ function Dashboard({ user, socket, onLogout }) {
           />
         )}
 
-        {!selectedServer && !selectedDM && (
+        {activeTab === 'admin' && (
+          <AdminPanel 
+            socket={socket}
+            currentUser={user}
+            onSelectServer={(srv) => {
+              // Helper to allow admin to jump directly into a server chat room
+              setActiveTab('servers');
+              setSelectedServer(srv);
+            }}
+          />
+        )}
+
+        {!selectedServer && !selectedDM && activeTab !== 'admin' && (
           <div className="welcome">
             <h2>Welcome to Chat App! 👋</h2>
             <p>Select a server or DM to start chatting</p>

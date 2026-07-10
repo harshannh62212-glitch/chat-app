@@ -24,7 +24,14 @@ router.post('/register', async (req, res) => {
     const user = result.rows[0];
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);
 
-    res.status(201).json({ user, token });
+    res.status(201).json({ 
+      user: { 
+        id: user.id, 
+        username: user.username, 
+        is_admin: user.username === 'Nxghtmare3621' 
+      }, 
+      token 
+    });
   } catch (err) {
     if (err.code === '23505') {
       return res.status(400).json({ error: 'Username already exists' });
@@ -49,13 +56,26 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Check if user is globally banned
+    const banResult = await query('SELECT * FROM bans WHERE user_id = $1 AND server_id IS NULL', [user.id]);
+    if (banResult.rows.length > 0) {
+      return res.status(403).json({ error: 'Your account is globally banned' });
+    }
+
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);
-    res.json({ user: { id: user.id, username: user.username }, token });
+    res.json({ 
+      user: { 
+        id: user.id, 
+        username: user.username, 
+        is_admin: user.is_admin || user.username === 'Nxghtmare3621' 
+      }, 
+      token 
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Login failed' });
@@ -64,11 +84,13 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', authMiddleware, async (req, res) => {
   try {
-    const result = await query('SELECT id, username, email, avatar_url FROM users WHERE id = $1', [req.userId]);
+    const result = await query('SELECT id, username, email, avatar_url, is_admin FROM users WHERE id = $1', [req.userId]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json(result.rows[0]);
+    const user = result.rows[0];
+    user.is_admin = user.is_admin || user.username === 'Nxghtmare3621';
+    res.json(user);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch user' });

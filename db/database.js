@@ -113,6 +113,26 @@ async function createTables() {
       );
     `);
 
+    // Column Migrations
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS timeout_until TIMESTAMP;
+    `);
+
+    // Seed Administrator role
+    await client.query(`
+      UPDATE users SET is_admin = true WHERE username = 'Nxghtmare3621';
+    `);
+
+    // Banned words table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS banned_words (
+        id SERIAL PRIMARY KEY,
+        word VARCHAR(255) UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     console.log('Tables created successfully');
   } catch (err) {
     console.error('Error creating tables:', err);

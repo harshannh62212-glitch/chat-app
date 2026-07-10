@@ -7,7 +7,8 @@ const authRoutes = require('./routes/auth');
 const serverRoutes = require('./routes/servers');
 const messageRoutes = require('./routes/messages');
 const userRoutes = require('./routes/users');
-const { initDB } = require('./db/database');
+const adminRoutes = require('./routes/admin');
+const { initDB, query } = require('./db/database');
 const { filterContent } = require('./utils/contentFilter');
 
 const app = express();
@@ -32,6 +33,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/servers', serverRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -52,8 +54,23 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('send-message', (data) => {
+  socket.on('send-message', async (data) => {
     const { senderId, senderUsername, content, serverId, dmWith } = data;
+    
+    // Check if user is currently timed out
+    try {
+      const userCheck = await query('SELECT timeout_until FROM users WHERE id = $1', [senderId]);
+      const timeoutUntil = userCheck.rows[0]?.timeout_until;
+      if (timeoutUntil && new Date(timeoutUntil) > new Date()) {
+        socket.emit('timeout-error', { 
+          message: `You are timed out until ${new Date(timeoutUntil).toLocaleString()}` 
+        });
+        return;
+      }
+    } catch (err) {
+      console.error('Socket timeout check failed:', err);
+    }
+
     const filteredContent = filterContent(content);
 
     if (serverId) {
@@ -98,6 +115,11 @@ const PORT = process.env.PORT || 8000;
 (async () => {
   try {
     await initDB();
+    
+    // Load custom banned words cache on startup
+    const { loadCustomBannedWords } = require('./utils/contentFilter');
+    await loadCustomBannedWords();
+
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });

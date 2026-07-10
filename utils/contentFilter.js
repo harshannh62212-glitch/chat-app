@@ -39,6 +39,22 @@ const BANNED_WORDS = [
   'stupid', 'idiotic'
 ];
 
+let customBannedWords = [];
+
+/**
+ * Load custom blacklisted words from PostgreSQL database
+ */
+async function loadCustomBannedWords() {
+  try {
+    const { query } = require('../db/database');
+    const result = await query('SELECT word FROM banned_words');
+    customBannedWords = result.rows.map(r => r.word.toLowerCase());
+    console.log(`[ContentFilter] Loaded ${customBannedWords.length} custom banned words.`);
+  } catch (err) {
+    console.error('[ContentFilter] Failed to load custom banned words:', err);
+  }
+}
+
 /**
  * Filter content and replace banned words
  * @param {string} text - The text to filter
@@ -51,7 +67,14 @@ function filterContent(text) {
 
   let filtered = text;
 
+  // Filter default words
   BANNED_WORDS.forEach(word => {
+    const regex = new RegExp(`\\b${word}\\b`, 'gi');
+    filtered = filtered.replace(regex, '*'.repeat(word.length));
+  });
+
+  // Filter custom words
+  customBannedWords.forEach(word => {
     const regex = new RegExp(`\\b${word}\\b`, 'gi');
     filtered = filtered.replace(regex, '*'.repeat(word.length));
   });
@@ -70,7 +93,14 @@ function containsBannedWords(text) {
   }
 
   const lowerText = text.toLowerCase();
-  return BANNED_WORDS.some(word => {
+  const hasDefault = BANNED_WORDS.some(word => {
+    const regex = new RegExp(`\\b${word}\\b`, 'i');
+    return regex.test(lowerText);
+  });
+  
+  if (hasDefault) return true;
+
+  return customBannedWords.some(word => {
     const regex = new RegExp(`\\b${word}\\b`, 'i');
     return regex.test(lowerText);
   });
@@ -96,6 +126,13 @@ function getBannedWordsFound(text) {
     }
   });
 
+  customBannedWords.forEach(word => {
+    const regex = new RegExp(`\\b${word}\\b`, 'i');
+    if (regex.test(lowerText)) {
+      found.push(word);
+    }
+  });
+
   return found;
 }
 
@@ -103,5 +140,6 @@ module.exports = {
   filterContent,
   containsBannedWords,
   getBannedWordsFound,
+  loadCustomBannedWords,
   BANNED_WORDS
 };
