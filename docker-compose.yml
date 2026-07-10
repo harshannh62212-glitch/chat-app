@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: chat_app_db
+    environment:
+      POSTGRES_DB: chat_db
+      POSTGRES_USER: chat_user
+      POSTGRES_PASSWORD: secure_password_change_me
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - chat_network
+
+  backend:
+    build: .
+    container_name: chat_app_backend
+    environment:
+      DATABASE_URL: postgresql://chat_user:secure_password_change_me@postgres:5432/chat_db
+      JWT_SECRET: your_jwt_secret_change_in_production
+      PORT: 5000
+      NODE_ENV: development
+      CLIENT_URL: http://localhost:3000
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+    networks:
+      - chat_network
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
+
+networks:
+  chat_network:
+    driver: bridge

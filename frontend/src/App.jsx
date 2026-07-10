@@ -1,0 +1,66 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import io from 'socket.io-client';
+import Auth from './pages/Auth';
+import Dashboard from './pages/Dashboard';
+import '../styles/App.css';
+
+function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [socket, setSocket] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      fetchCurrentUser();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      const newSocket = io('http://localhost:5000', {
+        auth: { userId: currentUser.id }
+      });
+      setSocket(newSocket);
+
+      return () => {
+        newSocket.close();
+      };
+    }
+  }, [currentUser]);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await axios.get('/api/auth/me');
+      setCurrentUser(response.data);
+    } catch (err) {
+      console.error('Failed to fetch user:', err);
+      localStorage.removeItem('authToken');
+    }
+  };
+
+  const handleLogin = (token, user) => {
+    localStorage.setItem('authToken', token);
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    setCurrentUser(user);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    delete axios.defaults.headers.common['Authorization'];
+    setCurrentUser(null);
+  };
+
+  return (
+    <div className="app">
+      {currentUser ? (
+        <Dashboard user={currentUser} socket={socket} onLogout={handleLogout} />
+      ) : (
+        <Auth onLogin={handleLogin} />
+      )}
+    </div>
+  );
+}
+
+export default App;
