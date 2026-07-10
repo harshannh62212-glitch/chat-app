@@ -89,6 +89,7 @@ io.on('connection', (socket) => {
         timestamp: new Date()
       });
       io.to(`user-${senderId}`).emit('dm-sent', {
+        senderId,
         dmWith,
         content: filteredContent,
         timestamp: new Date()

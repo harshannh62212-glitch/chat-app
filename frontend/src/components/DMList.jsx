@@ -91,7 +91,7 @@ function DMList({ onSelectDM, selectedDM }) {
           conversations.map(conv => (
             <div
               key={conv.other_user_id}
-              className={`conversation-item ${selectedDM?.id === conv.other_user_id ? 'active' : ''}`}
+              className={`conversation-item ${(selectedDM?.id || selectedDM?.other_user_id) === conv.other_user_id ? 'active' : ''}`}
               onClick={() => onSelectDM(conv)}
             >
               <h4>{conv.username}</h4>

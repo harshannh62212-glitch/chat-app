@@ -13,23 +13,28 @@ function DirectMessage({ dmWith, socket, currentUser }) {
 
   useEffect(() => {
     if (socket) {
+      const targetUserId = dmWith.id || dmWith.other_user_id;
       socket.emit('user-joined', currentUser.id, null);
 
-      socket.on('new-dm', (message) => {
-        if (message.senderId === dmWith.id) {
+      const handleNewDM = (message) => {
+        if (message.senderId === targetUserId) {
           setMessages(prev => [...prev, message]);
         }
-      });
+      };
 
-      socket.on('dm-sent', (message) => {
-        if (message.dmWith === dmWith.id) {
-          setMessages(prev => [...prev, message]);
+      const handleDMSent = (message) => {
+        if (message.dmWith === targetUserId) {
+          // Ensure senderId is populated so the UI renders it as 'sent'
+          setMessages(prev => [...prev, { ...message, senderId: currentUser.id }]);
         }
-      });
+      };
+
+      socket.on('new-dm', handleNewDM);
+      socket.on('dm-sent', handleDMSent);
 
       return () => {
-        socket.off('new-dm');
-        socket.off('dm-sent');
+        socket.off('new-dm', handleNewDM);
+        socket.off('dm-sent', handleDMSent);
       };
     }
   }, [socket, dmWith, currentUser]);
