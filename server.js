@@ -9,7 +9,7 @@ const messageRoutes = require('./routes/messages');
 const userRoutes = require('./routes/users');
 const adminRoutes = require('./routes/admin');
 const { initDB, query } = require('./db/database');
-const { filterContent } = require('./utils/contentFilter');
+const { filterContent, containsBannedWords } = require('./utils/contentFilter');
 
 const app = express();
 const server = http.createServer(app);
@@ -69,6 +69,20 @@ io.on('connection', (socket) => {
       }
     } catch (err) {
       console.error('Socket timeout check failed:', err);
+    }
+
+    // Auto-timeout user for 30 seconds if message contains profanity or slurs
+    if (containsBannedWords(content)) {
+      try {
+        const timeoutUntil = new Date(Date.now() + 30 * 1000);
+        await query('UPDATE users SET timeout_until = $1 WHERE id = $2', [timeoutUntil, senderId]);
+        socket.emit('timeout-error', { 
+          message: 'You have been automatically timed out for 30 seconds for sending profanity or slurs.' 
+        });
+        return;
+      } catch (err) {
+        console.error('Failed to auto-timeout user:', err);
+      }
     }
 
     const filteredContent = filterContent(content);
