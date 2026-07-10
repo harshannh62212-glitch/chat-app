@@ -25,7 +25,7 @@ function ServerChat({ server, socket, currentUser }) {
       socket.emit('user-joined', currentUser.id, server.id);
 
       socket.on('new-message', (message) => {
-        if (message.serverId === server.id) {
+        if (message.serverId === server.id && message.chatroomId === selectedChatroom?.id) {
           setMessages(prev => [...prev, message]);
         }
       });
@@ -34,7 +34,7 @@ function ServerChat({ server, socket, currentUser }) {
         socket.off('new-message');
       };
     }
-  }, [socket, server, currentUser]);
+  }, [socket, server, currentUser, selectedChatroom]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

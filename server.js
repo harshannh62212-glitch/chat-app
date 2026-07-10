@@ -55,7 +55,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-message', async (data) => {
-    const { senderId, senderUsername, content, serverId, dmWith } = data;
+    const { senderId, senderUsername, content, serverId, chatroomId, dmWith } = data;
     
     // Check if user is currently timed out
     try {
@@ -73,27 +73,60 @@ io.on('connection', (socket) => {
 
     const filteredContent = filterContent(content);
 
-    if (serverId) {
-      io.to(`server-${serverId}`).emit('new-message', {
-        senderId,
-        content: filteredContent,
-        serverId,
-        timestamp: new Date(),
-        isDM: false
-      });
-    } else if (dmWith) {
-      io.to(`user-${dmWith}`).emit('new-dm', {
-        senderId,
-        senderUsername,
-        content: filteredContent,
-        timestamp: new Date()
-      });
-      io.to(`user-${senderId}`).emit('dm-sent', {
-        senderId,
-        dmWith,
-        content: filteredContent,
-        timestamp: new Date()
-      });
+    try {
+      if (serverId && chatroomId) {
+        // Insert into server_messages table
+        const insertResult = await query(
+          `INSERT INTO server_messages (chatroom_id, sender_id, content) 
+           VALUES ($1, $2, $3) 
+           RETURNING id, created_at`,
+          [chatroomId, senderId, filteredContent]
+        );
+        const createdMsg = insertResult.rows[0];
+
+        // Fetch sender username to display correctly
+        const senderCheck = await query('SELECT username, avatar_url FROM users WHERE id = $1', [senderId]);
+        const sender = senderCheck.rows[0];
+
+        io.to(`server-${serverId}`).emit('new-message', {
+          id: createdMsg.id,
+          sender_id: senderId,
+          username: sender?.username || 'Unknown',
+          avatar_url: sender?.avatar_url,
+          content: filteredContent,
+          serverId,
+          chatroomId,
+          created_at: createdMsg.created_at,
+          isDM: false
+        });
+      } else if (dmWith) {
+        // Insert into direct_messages table
+        const insertResult = await query(
+          `INSERT INTO direct_messages (sender_id, recipient_id, content) 
+           VALUES ($1, $2, $3) 
+           RETURNING id, created_at`,
+          [senderId, dmWith, filteredContent]
+        );
+        const createdMsg = insertResult.rows[0];
+
+        io.to(`user-${dmWith}`).emit('new-dm', {
+          id: createdMsg.id,
+          senderId,
+          senderUsername,
+          content: filteredContent,
+          timestamp: createdMsg.created_at
+        });
+
+        io.to(`user-${senderId}`).emit('dm-sent', {
+          id: createdMsg.id,
+          senderId,
+          dmWith,
+          content: filteredContent,
+          timestamp: createdMsg.created_at
+        });
+      }
+    } catch (err) {
+      console.error('Failed to save message to database:', err);
     }
   });
 
