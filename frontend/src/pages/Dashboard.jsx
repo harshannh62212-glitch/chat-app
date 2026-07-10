@@ -13,10 +13,51 @@ function Dashboard({ user, socket, onLogout }) {
   const [selectedDM, setSelectedDM] = useState(null);
   const [showNewServerModal, setShowNewServerModal] = useState(false);
   const [servers, setServers] = useState([]);
+  const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
     fetchServers();
   }, []);
+
+  useEffect(() => {
+    if (socket) {
+      const handleNewDM = (message) => {
+        const currentDmUserId = selectedDM?.id || selectedDM?.other_user_id;
+        // Show notification toast if the message is from someone else OR we are not on the DM tab
+        if (activeTab !== 'dms' || currentDmUserId !== message.senderId) {
+          const newNotification = {
+            id: Date.now() + Math.random(),
+            senderId: message.senderId,
+            senderUsername: message.senderUsername || 'Someone',
+            content: message.content,
+            timestamp: message.timestamp
+          };
+          setNotifications(prev => [...prev, newNotification]);
+
+          // Automatically clear notification after 5 seconds
+          setTimeout(() => {
+            setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
+          }, 5000);
+        }
+      };
+
+      socket.on('new-dm', handleNewDM);
+      return () => {
+        socket.off('new-dm', handleNewDM);
+      };
+    }
+  }, [socket, selectedDM, activeTab]);
+
+  const handleNotificationClick = (notif) => {
+    setActiveTab('dms');
+    setSelectedServer(null);
+    setSelectedDM({
+      id: notif.senderId,
+      other_user_id: notif.senderId,
+      username: notif.senderUsername
+    });
+    setNotifications(prev => prev.filter(n => n.id !== notif.id));
+  };
 
   const fetchServers = async () => {
     try {
@@ -120,6 +161,34 @@ function Dashboard({ user, socket, onLogout }) {
           onServerCreated={handleServerCreated}
         />
       )}
+
+      {/* Toast Notifications Container */}
+      <div className="toasts-container">
+        {notifications.map(notif => (
+          <div 
+            key={notif.id} 
+            className="toast-notification"
+            onClick={() => handleNotificationClick(notif)}
+          >
+            <div className="toast-header">
+              <span className="toast-title">New DM from <strong>{notif.senderUsername}</strong></span>
+              <button 
+                className="toast-close-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNotifications(prev => prev.filter(n => n.id !== notif.id));
+                }}
+              >
+                &times;
+              </button>
+            </div>
+            <div className="toast-body">
+              {notif.content.length > 60 ? `${notif.content.substring(0, 60)}...` : notif.content}
+            </div>
+            <div className="toast-timeout-bar"></div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

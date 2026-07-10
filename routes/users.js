@@ -9,17 +9,27 @@ router.get('/search', authMiddleware, async (req, res) => {
   try {
     const { q } = req.query;
 
-    if (!q || q.length < 2) {
-      return res.status(400).json({ error: 'Search query too short' });
+    let result;
+    if (!q || q.trim() === '') {
+      // Return all users (excluding current user)
+      result = await query(
+        `SELECT id, username, avatar_url 
+         FROM users 
+         WHERE id != $1 
+         ORDER BY username ASC 
+         LIMIT 50`,
+        [req.userId]
+      );
+    } else {
+      // Search users matching query (excluding current user)
+      result = await query(
+        `SELECT id, username, avatar_url 
+         FROM users 
+         WHERE username ILIKE $1 AND id != $2 
+         LIMIT 10`,
+        [`%${q}%`, req.userId]
+      );
     }
-
-    const result = await query(
-      `SELECT id, username, avatar_url 
-       FROM users 
-       WHERE username ILIKE $1 
-       LIMIT 10`,
-      [`%${q}%`]
-    );
 
     res.json(result.rows);
   } catch (err) {

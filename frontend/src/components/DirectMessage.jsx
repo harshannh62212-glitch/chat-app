@@ -56,6 +56,7 @@ function DirectMessage({ dmWith, socket, currentUser }) {
 
     socket.emit('send-message', {
       senderId: currentUser.id,
+      senderUsername: currentUser.username,
       content: messageInput,
       dmWith: dmWith.id || dmWith.other_user_id
     });

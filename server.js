@@ -53,7 +53,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-message', (data) => {
-    const { senderId, content, serverId, dmWith } = data;
+    const { senderId, senderUsername, content, serverId, dmWith } = data;
     const filteredContent = filterContent(content);
 
     if (serverId) {
@@ -67,6 +67,7 @@ io.on('connection', (socket) => {
     } else if (dmWith) {
       io.to(`user-${dmWith}`).emit('new-dm', {
         senderId,
+        senderUsername,
         content: filteredContent,
         timestamp: new Date()
       });

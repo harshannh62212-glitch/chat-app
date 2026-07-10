@@ -13,6 +13,17 @@ function DMList({ onSelectDM, selectedDM }) {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (showSearch) {
+      const delayDebounce = setTimeout(() => {
+        fetchUsers();
+      }, 300);
+      return () => clearTimeout(delayDebounce);
+    } else {
+      setSearchResults([]);
+    }
+  }, [showSearch, searchQuery]);
+
   const fetchConversations = async () => {
     try {
       const response = await axios.get('/api/messages/dm-conversations/list');
@@ -22,10 +33,7 @@ function DMList({ onSelectDM, selectedDM }) {
     }
   };
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-
+  const fetchUsers = async () => {
     try {
       const response = await axios.get('/api/users/search', {
         params: { q: searchQuery }
@@ -48,11 +56,11 @@ function DMList({ onSelectDM, selectedDM }) {
         className="start-dm-btn"
         onClick={() => setShowSearch(!showSearch)}
       >
-        + New DM
+        {showSearch ? 'Cancel' : '+ New DM'}
       </button>
 
       {showSearch && (
-        <form onSubmit={handleSearch} className="dm-search">
+        <form onSubmit={(e) => e.preventDefault()} className="dm-search">
           <input
             type="text"
             placeholder="Search users..."

@@ -27,6 +27,7 @@ function App() {
       const newSocket = io(BACKEND_URL, {
         auth: { userId: currentUser.id }
       });
+      newSocket.emit('user-joined', currentUser.id, null);
       setSocket(newSocket);
 
       return () => {

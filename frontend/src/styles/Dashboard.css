@@ -1,1 +1,112 @@
 /* Dashboard Additional Styles */
+
+/* Toasts Container */
+.toasts-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 350px;
+  pointer-events: none; /* Let clicks pass through container, but toast itself is clickable */
+}
+
+/* Toast Notification Card */
+.toast-notification {
+  pointer-events: auto; /* Re-enable clicks on the toast card */
+  background: rgba(47, 49, 54, 0.85); /* Glassmorphic dark background */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  color: #dcddde;
+  padding: 14px 16px;
+  width: 320px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.toast-notification:hover {
+  transform: translateY(-2px);
+  background: rgba(47, 49, 54, 0.95);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.toast-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.toast-title {
+  font-size: 13px;
+  color: #fff;
+}
+
+.toast-title strong {
+  color: #5865f2; /* Accent blue color */
+}
+
+.toast-close-btn {
+  background: none;
+  border: none;
+  color: #72767d;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.toast-close-btn:hover {
+  color: #dcddde;
+}
+
+.toast-body {
+  font-size: 13px;
+  color: #b9bbbe;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+/* Ticking timeout bar at bottom of toast */
+.toast-timeout-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: #5865f2;
+  width: 100%;
+  animation: shrink 5s linear forwards;
+}
+
+/* Animations */
+@keyframes slideIn {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
