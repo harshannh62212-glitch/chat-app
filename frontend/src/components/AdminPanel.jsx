@@ -40,7 +40,6 @@ function AdminPanel({ socket, currentUser, onSelectServer }) {
 
   // User Actions
   const handleBanUser = async (userId) => {
-    if (!window.confirm('Are you sure you want to ban this user globally? They will be signed out and blocked from logging in.')) return;
     try {
       await axios.post(`/api/admin/users/${userId}/ban`);
       setMessage('User banned globally');
@@ -61,7 +60,6 @@ function AdminPanel({ socket, currentUser, onSelectServer }) {
   };
 
   const handleKickUser = async (userId) => {
-    if (!window.confirm('Are you sure you want to kick this user from all servers?')) return;
     try {
       await axios.post(`/api/admin/users/${userId}/kick-all`);
       setMessage('User kicked from all servers');
@@ -114,7 +112,6 @@ function AdminPanel({ socket, currentUser, onSelectServer }) {
   };
 
   const handleDeleteServer = async (serverId) => {
-    if (!window.confirm('Are you sure you want to delete this server permanently? This deletes all channels and messages.')) return;
     try {
       await axios.delete(`/api/admin/servers/${serverId}`);
       setMessage('Server deleted successfully');
