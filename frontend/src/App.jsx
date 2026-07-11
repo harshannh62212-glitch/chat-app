@@ -1,20 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import io from 'socket.io-client';
+import { supabase } from './supabase';
+import { loadCustomBannedWords } from './utils/contentFilter';
+import { ensureGeneralServerAndMembership } from './utils/generalServer';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
+import LandingPage from './pages/LandingPage';
 import './styles/App.css';
-
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-if (import.meta.env.VITE_API_URL) {
-  axios.defaults.baseURL = import.meta.env.VITE_API_URL;
-}
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [socket, setSocket] = useState(null);
+  const [showAuth, setShowAuth] = useState(false);
 
   useEffect(() => {
+    loadCustomBannedWords();
+    
     // Load custom theme, typography, and letter spacing variables on mount
     const savedTheme = localStorage.getItem('theme') || 'cosmic-dark';
     const savedFont = localStorage.getItem('font') || 'Outfit';
@@ -26,47 +25,60 @@ function App() {
     document.documentElement.style.setProperty('--font-size', savedSize);
     document.documentElement.style.setProperty('--letter-spacing', savedSpacing);
 
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      fetchCurrentUser();
-    }
+    let unsubUser = () => {};
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const userId = session.user.id;
+        
+        // Initial fetch
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        if (data) {
+          await ensureGeneralServerAndMembership(userId, data.username, data.avatar_url);
+          setCurrentUser({ id: userId, ...data });
+        }
+
+        // Listen for updates on the current user profile
+        const channel = supabase
+          .channel(`user-profile-${userId}`)
+          .on('postgres_changes', { 
+            event: 'UPDATE', 
+            schema: 'public', 
+            table: 'users', 
+            filter: `id=eq.${userId}` 
+          }, (payload) => {
+            setCurrentUser({ id: userId, ...payload.new });
+          })
+          .subscribe();
+
+        unsubUser = () => {
+          supabase.removeChannel(channel);
+        };
+      } else {
+        unsubUser();
+        setCurrentUser(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      unsubUser();
+    };
   }, []);
 
-  useEffect(() => {
-    if (currentUser) {
-      const newSocket = io(BACKEND_URL, {
-        auth: { userId: currentUser.id }
-      });
-      newSocket.emit('user-joined', currentUser.id, null);
-      setSocket(newSocket);
-
-      return () => {
-        newSocket.close();
-      };
-    }
-  }, [currentUser]);
-
-  const fetchCurrentUser = async () => {
-    try {
-      const response = await axios.get('/api/auth/me');
-      setCurrentUser(response.data);
-    } catch (err) {
-      console.error('Failed to fetch user:', err);
-      localStorage.removeItem('authToken');
-    }
-  };
-
   const handleLogin = (token, user) => {
-    localStorage.setItem('authToken', token);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setCurrentUser(user);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    delete axios.defaults.headers.common['Authorization'];
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setCurrentUser(null);
+    setShowAuth(false); // Reset to landing page on logout
   };
 
   return (
@@ -75,11 +87,12 @@ function App() {
         <Dashboard 
           user={currentUser} 
           setUser={setCurrentUser} 
-          socket={socket} 
           onLogout={handleLogout} 
         />
+      ) : showAuth ? (
+        <Auth onLogin={handleLogin} onBack={() => setShowAuth(false)} />
       ) : (
-        <Auth onLogin={handleLogin} />
+        <LandingPage onEnterPortal={() => setShowAuth(true)} />
       )}
     </div>
   );

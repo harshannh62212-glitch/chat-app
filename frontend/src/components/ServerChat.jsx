@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import { supabase } from '../supabase';
+import { filterContent } from '../utils/contentFilter';
+import { checkRateLimit } from '../utils/rateLimiter';
 import GiphyPanel from './GiphyPanel';
 
-function ServerChat({ server, socket, currentUser, onOpenSettings, onLogout }) {
+function ServerChat({ server, currentUser, onOpenSettings }) {
   const [chatrooms, setChatrooms] = useState([]);
   const [selectedChatroom, setSelectedChatroom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -12,79 +14,188 @@ function ServerChat({ server, socket, currentUser, onOpenSettings, onLogout }) {
   const [showGiphy, setShowGiphy] = useState(false);
   const messagesEndRef = useRef(null);
 
+  // Listen to chatrooms of the server
   useEffect(() => {
-    fetchChatrooms();
-    fetchMembers();
-  }, [server]);
-
-  useEffect(() => {
-    if (selectedChatroom) {
-      fetchMessages();
-    }
-  }, [selectedChatroom]);
-
-  useEffect(() => {
-    if (socket) {
-      socket.emit('user-joined', currentUser.id, server.id);
-
-      socket.on('new-message', (message) => {
-        if (message.serverId === server.id && message.chatroomId === selectedChatroom?.id) {
-          setMessages(prev => [...prev, message]);
+    const fetchChatrooms = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('chatrooms')
+          .select('*')
+          .eq('server_id', server.id)
+          .order('is_general', { ascending: false })
+          .order('created_at', { ascending: true });
+        
+        if (error) throw error;
+        if (data) {
+          setChatrooms(data);
+          if (data.length > 0) {
+            if (!selectedChatroom || !data.some(r => r.id === selectedChatroom.id)) {
+              setSelectedChatroom(data[0]);
+            }
+          }
         }
-      });
+      } catch (err) {
+        console.error('Failed to fetch chatrooms:', err);
+      }
+    };
 
-      return () => {
-        socket.off('new-message');
-      };
+    fetchChatrooms();
+
+    const channel = supabase
+      .channel(`chatrooms-${server.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'chatrooms',
+        filter: `server_id=eq.${server.id}`
+      }, () => {
+        fetchChatrooms();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [server.id]);
+
+  // Listen to members of the server
+  useEffect(() => {
+    const fetchMembers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('server_members')
+          .select('*')
+          .eq('server_id', server.id);
+        
+        if (error) throw error;
+        if (data) setMembers(data);
+      } catch (err) {
+        console.error('Failed to fetch members:', err);
+      }
+    };
+
+    fetchMembers();
+
+    const channel = supabase
+      .channel(`members-${server.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'server_members',
+        filter: `server_id=eq.${server.id}`
+      }, () => {
+        fetchMembers();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [server.id]);
+
+  // Listen to messages in the active chatroom
+  useEffect(() => {
+    if (!selectedChatroom) {
+      setMessages([]);
+      return;
     }
-  }, [socket, server, currentUser, selectedChatroom]);
+
+    const fetchMessages = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('server_messages')
+          .select('*')
+          .eq('chatroom_id', selectedChatroom.id)
+          .order('created_at', { ascending: true });
+        
+        if (error) throw error;
+        if (data) setMessages(data);
+      } catch (err) {
+        console.error('Failed to fetch messages:', err);
+      }
+    };
+
+    fetchMessages();
+
+    const channel = supabase
+      .channel(`messages-${selectedChatroom.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'server_messages',
+        filter: `chatroom_id=eq.${selectedChatroom.id}`
+      }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setMessages(prev => [...prev, payload.new]);
+        } else if (payload.eventType === 'DELETE') {
+          setMessages(prev => prev.filter(m => m.id !== payload.old.id));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [server.id, selectedChatroom]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const fetchChatrooms = async () => {
-    try {
-      const response = await axios.get(`/api/servers/${server.id}/chatrooms`);
-      setChatrooms(response.data);
-      if (response.data.length > 0) {
-        setSelectedChatroom(response.data[0]);
-      }
-    } catch (err) {
-      console.error('Failed to fetch chatrooms:', err);
-    }
-  };
-
-  const fetchMessages = async () => {
-    try {
-      const response = await axios.get(`/api/messages/chatroom/${selectedChatroom.id}`);
-      setMessages(response.data);
-    } catch (err) {
-      console.error('Failed to fetch messages:', err);
-    }
-  };
-
-  const fetchMembers = async () => {
-    try {
-      const response = await axios.get(`/api/servers/${server.id}/members`);
-      setMembers(response.data);
-    } catch (err) {
-      console.error('Failed to fetch members:', err);
-    }
-  };
-
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!messageInput.trim() || !selectedChatroom) return;
 
-    socket.emit('send-message', {
-      senderId: currentUser.id,
-      content: messageInput,
-      serverId: server.id,
-      chatroomId: selectedChatroom.id
-    });
+    if (!checkRateLimit(currentUser.is_admin)) {
+      alert('Slow down! You can only send 1 message per second.');
+      return;
+    }
 
+    const content = messageInput;
     setMessageInput('');
+    await sendMsg(content);
+  };
+
+  const sendMsg = async (contentStr) => {
+    const filteredContent = filterContent(contentStr);
+
+    try {
+      const { error } = await supabase.from('server_messages').insert({
+        sender_id: currentUser.id,
+        chatroom_id: selectedChatroom.id,
+        username: currentUser.username,
+        avatar_url: currentUser.avatar_url || '',
+        content: filteredContent
+      });
+      if (error) throw error;
+    } catch (err) {
+      console.error('Failed to send message:', err);
+    }
+  };
+
+  const handleSelectGif = async (gifUrl) => {
+    if (!checkRateLimit(currentUser.is_admin)) {
+      alert('Slow down! You can only send 1 message per second.');
+      return;
+    }
+
+    setShowGiphy(false);
+    await sendMsg(gifUrl);
+  };
+
+  const handleDeleteMessage = async (msgId) => {
+    const confirmDelete = window.confirm('Are you sure you want to delete this message?');
+    if (!confirmDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from('server_messages')
+        .delete()
+        .eq('id', msgId);
+      if (error) throw error;
+    } catch (err) {
+      console.error('Failed to delete message:', err);
+    }
   };
 
   return (
@@ -92,6 +203,7 @@ function ServerChat({ server, socket, currentUser, onOpenSettings, onLogout }) {
       <div className="chat-header">
         <h2>{server.name} {selectedChatroom && <span className="channel-hash"># {selectedChatroom.name}</span>}</h2>
         <div className="header-info">
+          <span className="chat-header-brand" style={{ color: '#00ffff', fontWeight: 'bold', letterSpacing: '0.5px', fontSize: '0.85em', textTransform: 'uppercase', marginRight: '10px' }}>wired-io</span>
           <span>{members.length} members</span>
           <button 
             className="toggle-members-btn"
@@ -133,7 +245,7 @@ function ServerChat({ server, socket, currentUser, onOpenSettings, onLogout }) {
                 {currentUser.avatar_url ? (
                   <img src={currentUser.avatar_url} alt={currentUser.username} />
                 ) : (
-                  <div className="avatar-placeholder">{currentUser.username[0].toUpperCase()}</div>
+                  <div className="avatar-placeholder">{currentUser.username ? currentUser.username[0].toUpperCase() : '?'}</div>
                 )}
                 <span className="status-indicator online"></span>
               </div>
@@ -144,7 +256,6 @@ function ServerChat({ server, socket, currentUser, onOpenSettings, onLogout }) {
             </div>
             <div className="user-bar-actions">
               <button className="user-bar-btn" onClick={onOpenSettings} title="Settings">⚙️</button>
-              <button className="user-bar-btn" onClick={onLogout} title="Logout">🚪</button>
             </div>
           </div>
         </div>
@@ -154,17 +265,38 @@ function ServerChat({ server, socket, currentUser, onOpenSettings, onLogout }) {
             {messages.length === 0 ? (
               <p className="no-messages">No messages yet. Be the first to say hello!</p>
             ) : (
-              messages.map((msg, idx) => (
-                <div key={idx} className="message">
-                  <strong>{msg.username}</strong>
-                  {msg.content.startsWith('http') && msg.content.includes('giphy.com') ? (
-                    <img src={msg.content} className="message-gif" alt="GIF" />
-                  ) : (
-                    <p>{msg.content}</p>
-                  )}
-                  <span className="timestamp">
-                    {new Date(msg.created_at).toLocaleTimeString()}
-                  </span>
+              messages.map((msg) => (
+                <div key={msg.id} className="message-wrapper">
+                  <div className="message-avatar">
+                    {msg.avatar_url ? (
+                      <img src={msg.avatar_url} alt={msg.username} />
+                    ) : (
+                      <span>{msg.username ? msg.username[0].toUpperCase() : '?'}</span>
+                    )}
+                  </div>
+                  <div className="message-content-col">
+                    <div className="message-meta">
+                      <span className="message-username">{msg.username}</span>
+                      <span className="message-timestamp">
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {(msg.sender_id === currentUser.id || currentUser.is_admin) && (
+                        <button
+                          className="delete-msg-btn"
+                          onClick={() => handleDeleteMessage(msg.id)}
+                          title="Delete Message"
+                          style={{ marginLeft: '8px' }}
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
+                    {msg.content.startsWith('http') && msg.content.includes('giphy.com') ? (
+                      <img src={msg.content} className="message-gif" alt="GIF" />
+                    ) : (
+                      <div className="message-text">{msg.content}</div>
+                    )}
+                  </div>
                 </div>
               ))
             )}
@@ -174,15 +306,7 @@ function ServerChat({ server, socket, currentUser, onOpenSettings, onLogout }) {
           <form onSubmit={handleSendMessage} className="message-input-form-wrapper">
             {showGiphy && (
               <GiphyPanel 
-                onSelectGif={(gifUrl) => {
-                  socket.emit('send-message', {
-                    senderId: currentUser.id,
-                    content: gifUrl,
-                    serverId: server.id,
-                    chatroomId: selectedChatroom.id
-                  });
-                  setShowGiphy(false);
-                }}
+                onSelectGif={handleSelectGif}
                 onClose={() => setShowGiphy(false)}
               />
             )}

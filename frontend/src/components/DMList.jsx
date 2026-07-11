@@ -1,36 +1,66 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { supabase } from '../supabase';
 
-function DMList({ onSelectDM, selectedDM, socket }) {
+function DMList({ onSelectDM, selectedDM, currentUser }) {
   const [conversations, setConversations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
 
+  // Listen to DM conversations in real-time
   useEffect(() => {
+    const fetchConversations = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('dm_conversations')
+          .select('*')
+          .contains('participants', [currentUser.id])
+          .order('last_message_at', { ascending: false });
+        
+        if (error) throw error;
+
+        if (data) {
+          const convList = data.map(conv => {
+            const otherUserId = conv.participants.find(p => p !== currentUser.id);
+            const otherUsername = conv.usernames?.[otherUserId] || 'Someone';
+            return {
+              id: otherUserId,
+              other_user_id: otherUserId,
+              username: otherUsername,
+              last_message_content: conv.last_message_content || 'No messages yet',
+              last_message_at: conv.last_message_at
+            };
+          });
+          setConversations(convList);
+        }
+      } catch (err) {
+        console.error('Failed to fetch conversations:', err);
+      }
+    };
+
     fetchConversations();
-    const interval = setInterval(fetchConversations, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
-  useEffect(() => {
-    if (socket) {
-      const handleRefresh = () => {
+    const channel = supabase
+      .channel(`dm-conv-list-${currentUser.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'dm_conversations'
+      }, () => {
         fetchConversations();
-      };
-      socket.on('new-dm', handleRefresh);
-      socket.on('dm-sent', handleRefresh);
-      return () => {
-        socket.off('new-dm', handleRefresh);
-        socket.off('dm-sent', handleRefresh);
-      };
-    }
-  }, [socket]);
+      })
+      .subscribe();
 
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser.id]);
+
+  // Debounce search input
   useEffect(() => {
-    if (showSearch) {
+    if (showSearch && searchQuery.trim().length > 0) {
       const delayDebounce = setTimeout(() => {
-        fetchUsers();
+        searchUsers();
       }, 300);
       return () => clearTimeout(delayDebounce);
     } else {
@@ -38,28 +68,31 @@ function DMList({ onSelectDM, selectedDM, socket }) {
     }
   }, [showSearch, searchQuery]);
 
-  const fetchConversations = async () => {
-    try {
-      const response = await axios.get('/api/messages/dm-conversations/list');
-      setConversations(response.data);
-    } catch (err) {
-      console.error('Failed to fetch conversations:', err);
-    }
-  };
+  const searchUsers = async () => {
+    const term = searchQuery.trim();
+    if (!term) return;
 
-  const fetchUsers = async () => {
     try {
-      const response = await axios.get('/api/users/search', {
-        params: { q: searchQuery }
-      });
-      setSearchResults(response.data);
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, username')
+        .ilike('username', `${term}%`)
+        .neq('id', currentUser.id)
+        .eq('is_banned', false);
+      
+      if (error) throw error;
+      if (data) setSearchResults(data);
     } catch (err) {
       console.error('Failed to search users:', err);
     }
   };
 
-  const handleStartDM = (user) => {
-    onSelectDM(user);
+  const handleStartDM = (targetUser) => {
+    onSelectDM({
+      id: targetUser.id,
+      other_user_id: targetUser.id,
+      username: targetUser.username
+    });
     setShowSearch(false);
     setSearchQuery('');
   };
@@ -84,13 +117,13 @@ function DMList({ onSelectDM, selectedDM, socket }) {
           />
           {searchResults.length > 0 && (
             <div className="search-results">
-              {searchResults.map(user => (
+              {searchResults.map(u => (
                 <div
-                  key={user.id}
+                  key={u.id}
                   className="search-result"
-                  onClick={() => handleStartDM(user)}
+                  onClick={() => handleStartDM(u)}
                 >
-                  <span>{user.username}</span>
+                  <span>{u.username}</span>
                 </div>
               ))}
             </div>
@@ -112,7 +145,7 @@ function DMList({ onSelectDM, selectedDM, socket }) {
               <div className="conversation-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h4 style={{ margin: 0 }}>{conv.username}</h4>
                 <span className="last-message-time" style={{ fontSize: '0.75em', color: '#72767d' }}>
-                  {new Date(conv.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {conv.last_message_at ? new Date(conv.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                 </span>
               </div>
               <p className="last-message" style={{ margin: '4px 0 0 0' }}>

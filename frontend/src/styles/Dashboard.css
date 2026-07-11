@@ -457,21 +457,66 @@ body.theme-cyberpunk-neon {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
-  background-color: var(--chat-bg);
+  background: radial-gradient(circle at 10% 20%, #171520 0%, #09090c 90%);
+  padding: 14px;
+  gap: 14px;
+  box-sizing: border-box;
+}
+
+/* Brand Logo Styling */
+.brand-logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+  padding: 4px;
+  filter: drop-shadow(0 2px 8px rgba(138, 43, 226, 0.4));
+  transition: transform 0.3s ease;
+}
+
+.brand-logo-container:hover {
+  transform: rotate(5deg) scale(1.08);
+}
+
+.brand-header-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.brand-header-title h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: white;
+}
+
+.brand-subtext {
+  font-size: 10px;
+  color: #00ffff;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.85;
 }
 
 /* 1. Server Rail styles */
 .discord-server-rail {
-  width: 72px;
-  background-color: rgba(15, 16, 22, 0.9);
-  padding: 12px 0;
+  width: 76px;
+  background: rgba(13, 14, 20, 0.65);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 16px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  border-right: 1px solid var(--sidebar-border);
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
   flex-shrink: 0;
   overflow-y: auto;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
 .discord-server-rail::-webkit-scrollbar {
@@ -483,29 +528,31 @@ body.theme-cyberpunk-neon {
   height: 48px;
   border-radius: 50%;
   background-color: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   color: #dcddde;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  transition: all 0.25s cubic-bezier(0.3, 1.5, 0.6, 1);
+  transition: all 0.25s cubic-bezier(0.25, 1, 0.2, 1);
   position: relative;
 }
 
 .rail-icon:hover {
-  border-radius: 15px;
-  background-color: var(--accent-color);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #8a2be2 0%, #00ffff 100%);
   color: white;
   transform: scale(1.05);
+  box-shadow: 0 4px 15px rgba(138, 43, 226, 0.4);
 }
 
 .rail-icon.active {
-  border-radius: 15px;
-  background-color: var(--accent-color);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #8a2be2 0%, #00ffff 100%);
   color: white;
+  box-shadow: 0 4px 15px rgba(138, 43, 226, 0.45);
 }
 
 /* Small status bar indicator on active icon edge (Discord style) */
@@ -516,48 +563,53 @@ body.theme-cyberpunk-neon {
   top: 12px;
   width: 4px;
   height: 24px;
-  background-color: white;
+  background-color: #00ffff;
   border-radius: 0 4px 4px 0;
 }
 
 .rail-separator {
-  width: 32px;
+  width: 36px;
   height: 2px;
   background-color: rgba(255, 255, 255, 0.08);
   margin: 4px 0;
 }
 
 .add-server-icon {
-  color: #3ba55d;
+  color: #00ff88;
   font-size: 24px;
 }
 .add-server-icon:hover {
-  background-color: #3ba55d;
-  color: white;
+  background: #00ff88 !important;
+  color: #121214 !important;
+  box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3) !important;
 }
 
 .discover-icon {
-  color: #3ba55d;
+  color: #00f2fe;
 }
 .discover-icon:hover, .discover-icon.active {
-  background-color: #3ba55d;
+  background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%) !important;
   color: white;
+  box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3) !important;
 }
 
 /* 2. Sub-sidebar styles */
 .discord-sub-sidebar {
-  width: 240px;
-  background: var(--sidebar-bg);
-  backdrop-filter: var(--panel-blur);
-  -webkit-backdrop-filter: var(--panel-blur);
-  border-right: 1px solid var(--sidebar-border);
+  width: 250px;
+  background: rgba(18, 20, 29, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
 }
 
 .sub-sidebar-header {
-  height: 60px;
+  height: 64px;
   padding: 0 16px;
   display: flex;
   align-items: center;
@@ -996,4 +1048,325 @@ body.theme-cyberpunk-neon {
   font-size: 13.5px;
   line-height: 1.5;
   padding: 12px;
+}
+
+.leave-server-btn {
+  background-color: #ff4757;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  margin-right: 12px;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.leave-server-btn:hover {
+  background-color: #ff6b81;
+  transform: translateY(-1px);
+}
+
+.leave-server-btn:active {
+  transform: translateY(0);
+}
+
+.delete-msg-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #ff4757;
+  opacity: 0.5;
+  transition: opacity 0.2s ease, transform 0.1s ease;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-msg-btn:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+/* Chat & Welcome Panels (Island Panels) */
+.server-chat,
+.direct-message,
+.admin-panel,
+.welcome-island {
+  flex: 1;
+  background: rgba(22, 24, 35, 0.55) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45) !important;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Welcoming Landing Page Branded for Wired-IO */
+.welcome-island {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+}
+
+.welcome-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+
+.welcome-logo-large {
+  filter: drop-shadow(0 4px 20px rgba(138, 43, 226, 0.5));
+  animation: float 4s ease-in-out infinite;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.welcome-brand h1 {
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  margin: 10px 0 0 0;
+  background: linear-gradient(135deg, #00ffff 0%, #8a2be2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 10px rgba(0, 255, 255, 0.25));
+}
+
+.welcome-brand .powered-by {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 6px;
+  width: 160px;
+}
+
+.welcome-info {
+  max-width: 480px;
+}
+
+.welcome-info h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 12px;
+}
+
+.welcome-info p {
+  font-size: 14.5px;
+  color: #9ea2a7;
+  line-height: 1.6;
+}
+
+/* Chat inner components styling (Sub-islands in ServerChat) */
+.server-chat .chat-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  padding: 12px !important;
+  gap: 12px !important;
+}
+
+.server-chat .chatroom-selector {
+  width: 210px !important;
+  background: rgba(10, 11, 16, 0.35) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-radius: 14px !important;
+  padding: 14px !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.server-chat .chat-main {
+  flex: 1 !important;
+  background: rgba(10, 11, 16, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-radius: 14px !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.server-chat .members-sidebar {
+  width: 210px !important;
+  background: rgba(10, 11, 16, 0.35) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-radius: 14px !important;
+  padding: 14px !important;
+}
+
+/* Message list items structured with avatars next to usernames (Discord format) */
+.message-wrapper {
+  display: flex;
+  gap: 16px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  transition: background-color 0.2s cubic-bezier(0.25, 1, 0.5, 1), transform 0.2s ease;
+  margin-bottom: 2px;
+}
+
+.message-wrapper:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+  transform: translateX(2px);
+}
+
+.message-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-color) 0%, #00ffff 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.message-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.message-content-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.message-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.message-username {
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 14px;
+  letter-spacing: 0.1px;
+}
+
+.message-timestamp {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 500;
+}
+
+.message-text {
+  color: #e3e5e8;
+  font-size: 14.5px;
+  line-height: 1.5;
+  word-break: break-word;
+  white-space: pre-wrap;
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 10px 14px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Thin premium scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Make channels / chatroom buttons look extremely premium */
+.chatroom-btn {
+  border-left: 3px solid transparent !important;
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+.chatroom-btn:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  border-left-color: rgba(255, 255, 255, 0.3) !important;
+  transform: translateX(4px);
+}
+
+.chatroom-btn.active {
+  background: linear-gradient(90deg, rgba(88, 101, 242, 0.2) 0%, transparent 100%) !important;
+  border-left-color: var(--accent-color) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  box-shadow: inset 2px 0 0 var(--accent-color);
+}
+
+/* Message input field premium improvements */
+.message-input {
+  background: rgba(13, 14, 20, 0.65) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  padding: 16px 20px !important;
+}
+
+.message-input input {
+  border-radius: 12px !important;
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  transition: all 0.25s ease !important;
+}
+
+.message-input input:focus {
+  border-color: var(--accent-color) !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 0 0 12px rgba(88, 101, 242, 0.25) !important;
+}
+
+.message-input button {
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, var(--accent-color) 0%, #00ffff 100%) !important;
+  box-shadow: 0 4px 15px rgba(88, 101, 242, 0.3) !important;
+  transition: all 0.2s ease !important;
+}
+
+.message-input button:hover:not(:disabled) {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(0, 255, 255, 0.35) !important;
 }

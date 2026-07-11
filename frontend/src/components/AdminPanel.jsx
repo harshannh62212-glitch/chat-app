@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { supabase } from '../supabase';
+import { loadCustomBannedWords } from '../utils/contentFilter';
 
-function AdminPanel({ socket, currentUser, onSelectServer }) {
+function AdminPanel({ currentUser, onSelectServer }) {
   const [activeSubTab, setActiveSubTab] = useState('users');
   const [users, setUsers] = useState([]);
   const [servers, setServers] = useState([]);
@@ -22,17 +23,38 @@ function AdminPanel({ socket, currentUser, onSelectServer }) {
     setMessage('');
     try {
       if (activeSubTab === 'users') {
-        const response = await axios.get('/api/admin/users');
-        setUsers(response.data);
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .order('username', { ascending: true });
+        
+        if (error) throw error;
+        setUsers(data || []);
       } else if (activeSubTab === 'servers') {
-        const response = await axios.get('/api/admin/servers');
-        setServers(response.data);
+        // Query server details along with owner username using joins
+        const { data, error } = await supabase
+          .from('servers')
+          .select('*, users (username)')
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        const mapped = (data || []).map(s => ({
+          ...s,
+          owner_name: s.users?.username || 'Unknown'
+        }));
+        setServers(mapped);
       } else if (activeSubTab === 'words') {
-        const response = await axios.get('/api/admin/words');
-        setWords(response.data);
+        const { data, error } = await supabase
+          .from('banned_words')
+          .select('word')
+          .order('word', { ascending: true });
+        
+        if (error) throw error;
+        setWords((data || []).map(w => w.word));
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to fetch administration data');
+      setError(err.message || 'Failed to fetch administration data');
     } finally {
       setLoading(false);
     }
@@ -41,31 +63,46 @@ function AdminPanel({ socket, currentUser, onSelectServer }) {
   // User Actions
   const handleBanUser = async (userId) => {
     try {
-      await axios.post(`/api/admin/users/${userId}/ban`);
+      const { error } = await supabase
+        .from('users')
+        .update({ is_banned: true })
+        .eq('id', userId);
+
+      if (error) throw error;
       setMessage('User banned globally');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to ban user');
+      setError(err.message || 'Failed to ban user');
     }
   };
 
   const handleUnbanUser = async (userId) => {
     try {
-      await axios.post(`/api/admin/users/${userId}/unban`);
+      const { error } = await supabase
+        .from('users')
+        .update({ is_banned: false })
+        .eq('id', userId);
+
+      if (error) throw error;
       setMessage('User unbanned globally');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to unban user');
+      setError(err.message || 'Failed to unban user');
     }
   };
 
   const handleKickUser = async (userId) => {
     try {
-      await axios.post(`/api/admin/users/${userId}/kick-all`);
+      const { error } = await supabase
+        .from('server_members')
+        .delete()
+        .eq('user_id', userId);
+
+      if (error) throw error;
       setMessage('User kicked from all servers');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to kick user');
+      setError(err.message || 'Failed to kick user');
     }
   };
 
@@ -76,68 +113,89 @@ function AdminPanel({ socket, currentUser, onSelectServer }) {
       return;
     }
     try {
-      await axios.post(`/api/admin/users/${userId}/timeout`, { durationMinutes: mins });
+      const timeoutUntil = new Date(Date.now() + mins * 60 * 1000).toISOString();
+      const { error } = await supabase
+        .from('users')
+        .update({ timeout_until: timeoutUntil })
+        .eq('id', userId);
+
+      if (error) throw error;
       setMessage(`User timed out for ${mins} minutes`);
       setTimeoutMinutes(prev => ({ ...prev, [userId]: '' }));
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to timeout user');
+      setError(err.message || 'Failed to timeout user');
     }
   };
 
   const handleRemoveTimeout = async (userId) => {
     try {
-      await axios.post(`/api/admin/users/${userId}/untimeout`);
+      const { error } = await supabase
+        .from('users')
+        .update({ timeout_until: null })
+        .eq('id', userId);
+
+      if (error) throw error;
       setMessage('Timeout removed');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to remove timeout');
+      setError(err.message || 'Failed to remove timeout');
     }
   };
 
   const handleToggleAdmin = async (userId, makeAdmin) => {
-    const password = window.prompt(`Enter super-admin password to authorize making this user ${makeAdmin ? 'an Admin' : 'a Regular User'}:`);
-    if (password === null) return;
-    if (!password.trim()) {
-      alert('Password is required to verify this action.');
-      return;
-    }
+    const confirmAction = window.confirm(`Are you sure you want to ${makeAdmin ? 'promote' : 'demote'} this user?`);
+    if (!confirmAction) return;
 
     try {
-      const response = await axios.post(`/api/admin/users/${userId}/toggle-admin`, {
-        adminPassword: password,
-        makeAdmin
-      });
-      setMessage(response.data.message);
+      const { error } = await supabase
+        .from('users')
+        .update({ is_admin: makeAdmin })
+        .eq('id', userId);
+
+      if (error) throw error;
+      setMessage(`User administrative privileges ${makeAdmin ? 'granted' : 'revoked'} successfully`);
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to update administrative permissions');
+      setError(err.message || 'Failed to update administrative permissions');
     }
   };
 
   // Server Actions
   const handleJoinServer = async (server) => {
     try {
-      // Admins bypass password checking on /join endpoint!
-      await axios.post(`/api/servers/${server.id}/join`, {});
+      const { error } = await supabase
+        .from('server_members')
+        .insert({
+          user_id: currentUser.id,
+          server_id: server.id,
+          username: currentUser.username,
+          avatar_url: currentUser.avatar_url || ''
+        });
+
+      // Ignore duplicates, select either way
+      if (error && !error.message?.includes('duplicate')) throw error;
       onSelectServer(server);
     } catch (err) {
-      // If already a member, we can still select it!
-      if (err.response?.data?.error === 'Already a member') {
-        onSelectServer(server);
-      } else {
-        setError(err.response?.data?.error || 'Failed to join server');
-      }
+      setError(err.message || 'Failed to join server');
     }
   };
 
   const handleDeleteServer = async (serverId) => {
+    const confirmAction = window.confirm('Are you sure you want to delete this server permanently? All channels and memberships will be deleted.');
+    if (!confirmAction) return;
+
     try {
-      await axios.delete(`/api/admin/servers/${serverId}`);
+      const { error } = await supabase
+        .from('servers')
+        .delete()
+        .eq('id', serverId);
+
+      if (error) throw error;
       setMessage('Server deleted successfully');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to delete server');
+      setError(err.message || 'Failed to delete server');
     }
   };
 
@@ -145,30 +203,43 @@ function AdminPanel({ socket, currentUser, onSelectServer }) {
   const handleAddWord = async (e) => {
     e.preventDefault();
     if (!newWord.trim()) return;
+    const formattedWord = newWord.trim().toLowerCase();
     try {
-      await axios.post('/api/admin/words', { word: newWord });
-      setMessage(`Word "${newWord}" added to filter`);
+      const { error } = await supabase
+        .from('banned_words')
+        .insert({ word: formattedWord });
+
+      if (error) throw error;
+      await loadCustomBannedWords();
+      setMessage(`Word "${formattedWord}" added to filter`);
       setNewWord('');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to add word');
+      setError(err.message || 'Failed to add word');
     }
   };
 
   const handleDeleteWord = async (word) => {
     try {
-      await axios.delete(`/api/admin/words/${word}`);
+      const { error } = await supabase
+        .from('banned_words')
+        .delete()
+        .eq('word', word.toLowerCase());
+
+      if (error) throw error;
+      await loadCustomBannedWords();
       setMessage(`Word "${word}" removed from filter`);
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to delete word');
+      setError(err.message || 'Failed to delete word');
     }
   };
 
   return (
     <div className="admin-panel">
       <div className="admin-header">
-        <h2>🛠️ Administrator Dashboard</h2>
+        <h2>🛠️ wired-io Administration Dashboard</h2>
+        <span style={{ fontSize: '11px', color: '#00ffff', textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: 'bold', marginTop: '-10px' }}>Secured by wired.inc</span>
         <div className="admin-subtabs">
           <button 
             className={`admin-subtab ${activeSubTab === 'users' ? 'active' : ''}`}
@@ -205,7 +276,6 @@ function AdminPanel({ socket, currentUser, onSelectServer }) {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>ID</th>
                       <th>Username</th>
                       <th>Email</th>
                       <th>Admin?</th>
@@ -216,7 +286,6 @@ function AdminPanel({ socket, currentUser, onSelectServer }) {
                   <tbody>
                     {users.map(u => (
                       <tr key={u.id} className={u.is_banned ? 'row-banned' : ''}>
-                        <td>{u.id}</td>
                         <td className="bold">{u.username}</td>
                         <td>{u.email}</td>
                         <td>{u.is_admin ? '✅ Yes' : 'No'}</td>
@@ -282,7 +351,6 @@ function AdminPanel({ socket, currentUser, onSelectServer }) {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>ID</th>
                       <th>Server Name</th>
                       <th>Owner</th>
                       <th>Visibility</th>
@@ -293,7 +361,6 @@ function AdminPanel({ socket, currentUser, onSelectServer }) {
                   <tbody>
                     {servers.map(s => (
                       <tr key={s.id}>
-                        <td>{s.id}</td>
                         <td className="bold">{s.name}</td>
                         <td>{s.owner_name}</td>
                         <td>{s.is_public ? '🌐 Public' : '🔒 Private'}</td>

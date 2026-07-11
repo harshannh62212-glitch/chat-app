@@ -1,84 +1,168 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import { supabase } from '../supabase';
+import { filterContent } from '../utils/contentFilter';
+import { checkRateLimit } from '../utils/rateLimiter';
 import GiphyPanel from './GiphyPanel';
 
-function DirectMessage({ dmWith, socket, currentUser, onOpenSettings }) {
+function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
   const [messages, setMessages] = useState([]);
   const [messageInput, setMessageInput] = useState('');
   const [showGiphy, setShowGiphy] = useState(false);
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef(null);
 
+  const dmUserId = dmWith.id || dmWith.other_user_id;
+  const dmUsername = dmWith.username;
+
+  // Sorted alphabetical ID to be unique for the pair
+  const conversationId = currentUser.id < dmUserId 
+    ? `${currentUser.id}_${dmUserId}` 
+    : `${dmUserId}_${currentUser.id}`;
+
+  // Listen to messages in real-time
   useEffect(() => {
-    fetchMessages();
-  }, [dmWith]);
-
-  useEffect(() => {
-    if (socket) {
-      const targetUserId = dmWith.id || dmWith.other_user_id;
-      socket.emit('user-joined', currentUser.id, null);
-
-      const handleNewDM = (message) => {
-        if (message.senderId === targetUserId) {
-          setMessages(prev => [...prev, message]);
+    setLoading(true);
+    const fetchDMs = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('direct_messages')
+          .select('*')
+          .eq('conversation_id', conversationId)
+          .order('created_at', { ascending: true });
+        
+        if (error) throw error;
+        if (data) {
+          const mapped = data.map(m => ({
+            id: m.id,
+            senderId: m.sender_id,
+            content: m.content,
+            created_at: m.created_at
+          }));
+          setMessages(mapped);
         }
-      };
+      } catch (err) {
+        console.error('Failed to fetch direct messages:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      const handleDMSent = (message) => {
-        if (message.dmWith === targetUserId) {
-          // Ensure senderId is populated so the UI renders it as 'sent'
-          setMessages(prev => [...prev, { ...message, senderId: currentUser.id }]);
+    fetchDMs();
+
+    const channel = supabase
+      .channel(`dms-${conversationId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'direct_messages',
+        filter: `conversation_id=eq.${conversationId}`
+      }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newMsg = payload.new;
+          setMessages(prev => [...prev, {
+            id: newMsg.id,
+            senderId: newMsg.sender_id,
+            content: newMsg.content,
+            created_at: newMsg.created_at
+          }]);
+        } else if (payload.eventType === 'DELETE') {
+          setMessages(prev => prev.filter(m => m.id !== payload.old.id));
         }
-      };
+      })
+      .subscribe();
 
-      socket.on('new-dm', handleNewDM);
-      socket.on('dm-sent', handleDMSent);
-
-      return () => {
-        socket.off('new-dm', handleNewDM);
-        socket.off('dm-sent', handleDMSent);
-      };
-    }
-  }, [socket, dmWith, currentUser]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const fetchMessages = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`/api/messages/dm/${dmWith.id || dmWith.other_user_id}`);
-      setMessages(response.data);
-    } catch (err) {
-      console.error('Failed to fetch messages:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!messageInput.trim()) return;
 
-    socket.emit('send-message', {
-      senderId: currentUser.id,
-      senderUsername: currentUser.username,
-      content: messageInput,
-      dmWith: dmWith.id || dmWith.other_user_id
-    });
+    if (!checkRateLimit(currentUser.is_admin)) {
+      alert('Slow down! You can only send 1 message per second.');
+      return;
+    }
 
+    const content = messageInput;
     setMessageInput('');
+    await sendDM(content);
   };
 
-  const dmUserId = dmWith.id || dmWith.other_user_id;
-  const dmUsername = dmWith.username;
+  const sendDM = async (contentStr) => {
+    const filteredContent = filterContent(contentStr);
+
+    try {
+      // 1. Add DM message
+      const { error: msgErr } = await supabase.from('direct_messages').insert({
+        conversation_id: conversationId,
+        sender_id: currentUser.id,
+        recipient_id: dmUserId,
+        sender_username: currentUser.username,
+        content: filteredContent
+      });
+
+      if (msgErr) throw msgErr;
+
+      // 2. Upsert DM conversation meta info
+      const { error: upsertErr } = await supabase.from('dm_conversations').upsert({
+        id: conversationId,
+        participants: [currentUser.id, dmUserId],
+        last_message_content: filteredContent,
+        last_message_at: new Date().toISOString(),
+        usernames: {
+          [currentUser.id]: currentUser.username,
+          [dmUserId]: dmUsername
+        },
+        avatar_urls: {
+          [currentUser.id]: currentUser.avatar_url || '',
+          [dmUserId]: dmWith.avatar_url || ''
+        }
+      });
+
+      if (upsertErr) throw upsertErr;
+
+    } catch (err) {
+      console.error('Failed to send DM:', err);
+    }
+  };
+
+  const handleSelectGif = async (gifUrl) => {
+    if (!checkRateLimit(currentUser.is_admin)) {
+      alert('Slow down! You can only send 1 message per second.');
+      return;
+    }
+
+    setShowGiphy(false);
+    await sendDM(gifUrl);
+  };
+
+  const handleDeleteMessage = async (msgId) => {
+    const confirmDelete = window.confirm('Are you sure you want to delete this message?');
+    if (!confirmDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from('direct_messages')
+        .delete()
+        .eq('id', msgId);
+      if (error) throw error;
+    } catch (err) {
+      console.error('Failed to delete message:', err);
+    }
+  };
 
   return (
     <div className="direct-message">
       <div className="chat-header">
         <h2>💬 {dmUsername}</h2>
         <div className="header-info">
+          <span className="chat-header-brand" style={{ color: '#00ffff', fontWeight: 'bold', letterSpacing: '0.5px', fontSize: '0.85em', textTransform: 'uppercase', marginRight: '10px' }}>wired-io</span>
           <button 
             className="header-settings-btn"
             onClick={onOpenSettings}
@@ -95,18 +179,33 @@ function DirectMessage({ dmWith, socket, currentUser, onOpenSettings }) {
         ) : messages.length === 0 ? (
           <p className="no-messages">No messages yet. Start the conversation!</p>
         ) : (
-          messages.map((msg, idx) => (
+          messages.map((msg) => (
             <div 
-              key={idx} 
+              key={msg.id} 
               className={`message ${msg.senderId === currentUser.id ? 'sent' : 'received'}`}
+              style={{ position: 'relative' }}
             >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <span style={{ fontSize: '0.85em', color: '#72767d', fontWeight: 'bold' }}>
+                  {msg.senderId === currentUser.id ? 'You' : dmUsername}
+                </span>
+                {(msg.senderId === currentUser.id || currentUser.is_admin) && (
+                  <button
+                    className="delete-msg-btn"
+                    onClick={() => handleDeleteMessage(msg.id)}
+                    title="Delete Message"
+                  >
+                    🗑️
+                  </button>
+                )}
+              </div>
               {msg.content.startsWith('http') && msg.content.includes('giphy.com') ? (
                 <img src={msg.content} className="message-gif" alt="GIF" />
               ) : (
                 <p>{msg.content}</p>
               )}
               <span className="timestamp">
-                {new Date(msg.timestamp || msg.created_at).toLocaleTimeString()}
+                {new Date(msg.created_at).toLocaleTimeString()}
               </span>
             </div>
           ))
@@ -117,15 +216,7 @@ function DirectMessage({ dmWith, socket, currentUser, onOpenSettings }) {
       <form onSubmit={handleSendMessage} className="message-input-form-wrapper">
         {showGiphy && (
           <GiphyPanel 
-            onSelectGif={(gifUrl) => {
-              socket.emit('send-message', {
-                senderId: currentUser.id,
-                senderUsername: currentUser.username,
-                content: gifUrl,
-                dmWith: dmWith.id || dmWith.other_user_id
-              });
-              setShowGiphy(false);
-            }}
+            onSelectGif={handleSelectGif}
             onClose={() => setShowGiphy(false)}
           />
         )}

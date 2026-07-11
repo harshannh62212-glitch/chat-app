@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { supabase } from '../supabase';
 import ServerList from '../components/ServerList';
 import Discovery from '../components/Discovery';
 import ServerChat from '../components/ServerChat';
 import DMList from '../components/DMList';
 import DirectMessage from '../components/DirectMessage';
 import AdminPanel from '../components/AdminPanel';
+import Logo from '../components/Logo';
 import '../styles/Dashboard.css';
 
-function Dashboard({ user, setUser, socket, onLogout }) {
+function Dashboard({ user, setUser, onLogout }) {
   const [activeTab, setActiveTab] = useState('servers');
   const [selectedServer, setSelectedServer] = useState(null);
   const [selectedDM, setSelectedDM] = useState(null);
@@ -17,60 +18,85 @@ function Dashboard({ user, setUser, socket, onLogout }) {
   const [servers, setServers] = useState([]);
   const [notifications, setNotifications] = useState([]);
 
+  // Listen to the user's servers in real-time
   useEffect(() => {
-    fetchServers();
-  }, []);
+    const fetchUserServers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('server_members')
+          .select('server_id, servers (*)')
+          .eq('user_id', user.id);
+        
+        if (error) throw error;
+        
+        if (data) {
+          const loadedServers = data.map(d => d.servers).filter(Boolean);
+          loadedServers.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+          setServers(loadedServers);
+        }
+      } catch (err) {
+        console.error('Failed to fetch user servers:', err);
+      }
+    };
 
+    fetchUserServers();
+
+    // Listen to changes on server memberships
+    const channel = supabase
+      .channel(`my-servers-${user.id}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'server_members', 
+        filter: `user_id=eq.${user.id}` 
+      }, () => {
+        fetchUserServers();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user.id]);
+
+  // Listen to new direct messages for toast notifications
   useEffect(() => {
-    if (socket) {
-      const handleTimeoutError = (data) => {
-        const newNotification = {
-          id: Date.now() + Math.random(),
-          senderUsername: 'System Notification',
-          content: data.message,
-          timestamp: new Date()
-        };
-        setNotifications(prev => [...prev, newNotification]);
-
-        setTimeout(() => {
-          setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
-        }, 5000);
-      };
-      socket.on('timeout-error', handleTimeoutError);
-      return () => {
-        socket.off('timeout-error', handleTimeoutError);
-      };
-    }
-  }, [socket]);
-
-  useEffect(() => {
-    if (socket) {
-      const handleNewDM = (message) => {
+    const channel = supabase
+      .channel(`new-dms-${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'direct_messages',
+        filter: `recipient_id=eq.${user.id}`
+      }, (payload) => {
+        const message = payload.new;
         const currentDmUserId = selectedDM?.id || selectedDM?.other_user_id;
-        // Show notification toast if the message is from someone else OR we are not on the DM tab
-        if (activeTab !== 'dms' || currentDmUserId !== message.senderId) {
+        
+        if (activeTab !== 'dms' || currentDmUserId !== message.sender_id) {
           const newNotification = {
-            id: Date.now() + Math.random(),
-            senderId: message.senderId,
-            senderUsername: message.senderUsername || 'Someone',
+            id: message.id,
+            senderId: message.sender_id,
+            senderUsername: message.sender_username || 'Someone',
             content: message.content,
-            timestamp: message.timestamp
+            timestamp: new Date(message.created_at).getTime()
           };
-          setNotifications(prev => [...prev, newNotification]);
+          
+          setNotifications(prev => {
+            if (prev.some(n => n.id === newNotification.id)) return prev;
+            return [...prev, newNotification];
+          });
 
-          // Automatically clear notification after 5 seconds
           setTimeout(() => {
             setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
           }, 5000);
         }
-      };
+      })
+      .subscribe();
 
-      socket.on('new-dm', handleNewDM);
-      return () => {
-        socket.off('new-dm', handleNewDM);
-      };
-    }
-  }, [socket, selectedDM, activeTab]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user.id, selectedDM, activeTab]);
 
   const handleNotificationClick = (notif) => {
     setActiveTab('dms');
@@ -83,17 +109,7 @@ function Dashboard({ user, setUser, socket, onLogout }) {
     setNotifications(prev => prev.filter(n => n.id !== notif.id));
   };
 
-  const fetchServers = async () => {
-    try {
-      const response = await axios.get('/api/servers/my-servers');
-      setServers(response.data);
-    } catch (err) {
-      console.error('Failed to fetch servers:', err);
-    }
-  };
-
-  const handleServerCreated = (newServer) => {
-    setServers([newServer, ...servers]);
+  const handleServerCreated = () => {
     setShowNewServerModal(false);
   };
 
@@ -101,6 +117,12 @@ function Dashboard({ user, setUser, socket, onLogout }) {
     <div className="dashboard discord-layout">
       {/* 1. Leftmost Server Rail (Narrow Icon Column) */}
       <div className="discord-server-rail">
+        <div className="brand-logo-container">
+          <Logo width={36} height={36} />
+        </div>
+
+        <div className="rail-separator"></div>
+
         <div 
           className={`rail-icon home-icon ${activeTab === 'dms' && !selectedServer ? 'active' : ''}`}
           onClick={() => { setActiveTab('dms'); setSelectedServer(null); setSelectedDM(null); }}
@@ -156,13 +178,25 @@ function Dashboard({ user, setUser, socket, onLogout }) {
         <div className="discord-sub-sidebar">
           <div className="sub-sidebar-header">
             {activeTab === 'dms' ? (
-              <h3>Direct Messages</h3>
+              <div className="brand-header-title">
+                <h3>Direct Messages</h3>
+                <span className="brand-subtext">wired-io</span>
+              </div>
             ) : activeTab === 'discovery' ? (
-              <h3>Server Discovery</h3>
+              <div className="brand-header-title">
+                <h3>Server Discovery</h3>
+                <span className="brand-subtext">wired-io</span>
+              </div>
             ) : activeTab === 'admin' ? (
-              <h3>Admin Panel</h3>
+              <div className="brand-header-title">
+                <h3>Admin Panel</h3>
+                <span className="brand-subtext">wired-io</span>
+              </div>
             ) : (
-              <h3>Chat App</h3>
+              <div className="brand-header-title">
+                <h3>wired-io</h3>
+                <span className="brand-subtext">Main Lobby</span>
+              </div>
             )}
           </div>
 
@@ -171,12 +205,12 @@ function Dashboard({ user, setUser, socket, onLogout }) {
               <DMList 
                 onSelectDM={setSelectedDM}
                 selectedDM={selectedDM}
-                socket={socket}
+                currentUser={user}
               />
             )}
 
             {activeTab === 'discovery' && (
-              <Discovery onServerJoined={fetchServers} />
+              <Discovery currentUser={user} />
             )}
 
             {activeTab === 'admin' && (
@@ -189,7 +223,6 @@ function Dashboard({ user, setUser, socket, onLogout }) {
           {/* User Profile Bar at the bottom of sub-sidebar */}
           <UserProfileBar 
             user={user} 
-            onLogout={onLogout} 
             onOpenSettings={() => setShowSettingsModal(true)} 
           />
         </div>
@@ -200,17 +233,14 @@ function Dashboard({ user, setUser, socket, onLogout }) {
         {selectedServer && (
           <ServerChat 
             server={selectedServer}
-            socket={socket}
             currentUser={user}
             onOpenSettings={() => setShowSettingsModal(true)}
-            onLogout={onLogout}
           />
         )}
 
         {selectedDM && (
           <DirectMessage 
             dmWith={selectedDM}
-            socket={socket}
             currentUser={user}
             onOpenSettings={() => setShowSettingsModal(true)}
           />
@@ -218,7 +248,6 @@ function Dashboard({ user, setUser, socket, onLogout }) {
 
         {activeTab === 'admin' && (
           <AdminPanel 
-            socket={socket}
             currentUser={user}
             onSelectServer={(srv) => {
               setSelectedServer(srv);
@@ -229,15 +258,23 @@ function Dashboard({ user, setUser, socket, onLogout }) {
         )}
 
         {!selectedServer && !selectedDM && activeTab !== 'admin' && (
-          <div className="welcome">
-            <h2>Welcome to Chat App! 👋</h2>
-            <p>Select a server on the left rail or open DMs to start chatting</p>
+          <div className="welcome-container welcome-island">
+            <div className="welcome-brand">
+              <Logo width={96} height={96} />
+              <h1>wired-io</h1>
+              <span className="powered-by">powered by wired.inc</span>
+            </div>
+            <div className="welcome-info">
+              <h2>Welcome to wired-io! 👋</h2>
+              <p>Select a server on the left rail or start a direct message to begin your journey.</p>
+            </div>
           </div>
         )}
       </div>
 
       {showNewServerModal && (
         <CreateServerModal 
+          currentUser={user}
           onClose={() => setShowNewServerModal(false)}
           onServerCreated={handleServerCreated}
         />
@@ -250,6 +287,7 @@ function Dashboard({ user, setUser, socket, onLogout }) {
           onUpdateAvatar={(newUrl) => {
             setUser({ ...user, avatar_url: newUrl });
           }}
+          onLogout={onLogout}
         />
       )}
 
@@ -284,7 +322,7 @@ function Dashboard({ user, setUser, socket, onLogout }) {
   );
 }
 
-function CreateServerModal({ onClose, onServerCreated }) {
+function CreateServerModal({ currentUser, onClose, onServerCreated }) {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -308,10 +346,51 @@ function CreateServerModal({ onClose, onServerCreated }) {
     setLoading(true);
 
     try {
-      const response = await axios.post('/api/servers', formData);
-      onServerCreated(response.data);
+      // 1. Create server document
+      const { data: server, error: srvErr } = await supabase
+        .from('servers')
+        .insert({
+          name: formData.name,
+          description: formData.description || '',
+          owner_id: currentUser.id,
+          password_hash: formData.password || null,
+          has_password: !!formData.password,
+          is_public: formData.isPublic !== false,
+          avatar_url: ''
+        })
+        .select('id')
+        .single();
+
+      if (srvErr) throw srvErr;
+
+      // 2. Create mandatory general chatroom inside the server
+      const { error: roomErr } = await supabase
+        .from('chatrooms')
+        .insert({
+          server_id: server.id,
+          name: 'general',
+          is_general: true,
+          description: 'General chatroom'
+        });
+
+      if (roomErr) throw roomErr;
+
+      // 3. Create server membership for the owner
+      const { error: memErr } = await supabase
+        .from('server_members')
+        .insert({
+          user_id: currentUser.id,
+          server_id: server.id,
+          username: currentUser.username,
+          avatar_url: currentUser.avatar_url || ''
+        });
+
+      if (memErr) throw memErr;
+
+      onServerCreated();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to create server');
+      console.error(err);
+      setError(err.message || 'Failed to create server');
     } finally {
       setLoading(false);
     }
@@ -368,7 +447,7 @@ function CreateServerModal({ onClose, onServerCreated }) {
   );
 }
 
-function UserProfileBar({ user, onLogout, onOpenSettings }) {
+function UserProfileBar({ user, onOpenSettings }) {
   return (
     <div className="discord-user-bar">
       <div className="user-bar-profile">
@@ -376,7 +455,7 @@ function UserProfileBar({ user, onLogout, onOpenSettings }) {
           {user.avatar_url ? (
             <img src={user.avatar_url} alt={user.username} />
           ) : (
-            <div className="avatar-placeholder">{user.username[0].toUpperCase()}</div>
+            <div className="avatar-placeholder">{user.username ? user.username[0].toUpperCase() : '?'}</div>
           )}
           <span className="status-indicator online"></span>
         </div>
@@ -387,13 +466,12 @@ function UserProfileBar({ user, onLogout, onOpenSettings }) {
       </div>
       <div className="user-bar-actions">
         <button className="user-bar-btn" onClick={onOpenSettings} title="Settings">⚙️</button>
-        <button className="user-bar-btn" onClick={onLogout} title="Logout">🚪</button>
       </div>
     </div>
   );
 }
 
-function SettingsModal({ user, onClose, onUpdateAvatar }) {
+function SettingsModal({ user, onClose, onUpdateAvatar, onLogout }) {
   const [activeSettingsTab, setActiveSettingsTab] = useState('profile');
   const [avatarUrl, setAvatarUrl] = useState(user.avatar_url || '');
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'cosmic-dark');
@@ -437,11 +515,17 @@ function SettingsModal({ user, onClose, onUpdateAvatar }) {
     setSuccess('');
     setLoading(true);
     try {
-      await axios.put('/api/users/profile', { avatarUrl });
+      const { error: profileErr } = await supabase
+        .from('users')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', user.id);
+
+      if (profileErr) throw profileErr;
+      
       onUpdateAvatar(avatarUrl);
       setSuccess('Profile updated successfully!');
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to update profile');
+      setError(err.message || 'Failed to update profile');
     } finally {
       setLoading(false);
     }
@@ -465,7 +549,20 @@ function SettingsModal({ user, onClose, onUpdateAvatar }) {
             >
               🎨 Appearance
             </button>
+            <button 
+              className="settings-tab-btn settings-logout-btn" 
+              onClick={() => {
+                onClose();
+                onLogout();
+              }}
+              style={{ color: '#ff4757', marginTop: 'auto' }}
+            >
+              🚪 Log Out
+            </button>
             <button className="settings-close-btn-bottom" onClick={onClose}>Close</button>
+            <div style={{ padding: '10px 0 0 0', fontSize: '11px', color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              wired-io v1.0.0<br/>powered by wired.inc
+            </div>
           </div>
 
           <div className="settings-content">
@@ -484,7 +581,7 @@ function SettingsModal({ user, onClose, onUpdateAvatar }) {
                     {avatarUrl ? (
                       <img src={avatarUrl} alt="Preview" />
                     ) : (
-                      <div className="avatar-placeholder-large">{user.username[0].toUpperCase()}</div>
+                      <div className="avatar-placeholder-large">{user.username ? user.username[0].toUpperCase() : '?'}</div>
                     )}
                   </div>
                   <div className="presets-container">
