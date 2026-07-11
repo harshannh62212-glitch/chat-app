@@ -259,10 +259,9 @@ function Dashboard({ user, setUser, onLogout }) {
 
         {!selectedServer && !selectedDM && activeTab !== 'admin' && (
           <div className="welcome-container welcome-island">
-            <div className="welcome-brand">
-              <Logo width={96} height={96} />
-              <h1>wired-io</h1>
-              <span className="powered-by">powered by wired.inc</span>
+            <div className="welcome-brand" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+              <Logo width={260} variant="full" />
+              <span className="powered-by" style={{ marginTop: '8px' }}>powered by wired.inc</span>
             </div>
             <div className="welcome-info">
               <h2>Welcome to wired-io! 👋</h2>

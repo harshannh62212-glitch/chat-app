@@ -119,10 +119,9 @@ function Auth({ onLogin, onBack }) {
   return (
     <div className="auth-container">
       <div className="auth-box">
-        <div className="auth-brand" onClick={onBack} style={{ cursor: 'pointer' }} title="Back to landing page">
-          <Logo width={64} height={64} className="auth-logo" />
-          <h1>wired-io</h1>
-          <span className="auth-powered-by">powered by wired.inc</span>
+        <div className="auth-brand" onClick={onBack} style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }} title="Back to landing page">
+          <Logo width={220} variant="full" className="auth-logo" />
+          <span className="auth-powered-by" style={{ marginTop: '4px' }}>powered by wired.inc</span>
         </div>
         
         <h2>{isRegister ? 'Create Account' : 'Portal Login'}</h2>
