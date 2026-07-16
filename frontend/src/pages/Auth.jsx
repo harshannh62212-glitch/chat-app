@@ -122,10 +122,24 @@ function Auth({ onLogin, onBack }) {
       }
     } catch (err) {
       console.error(err);
-      let errMsg = err.message || 'Authentication failed';
-      if (err.message?.includes('already registered')) {
+      let errMsg = 'Authentication failed';
+      if (err) {
+        if (typeof err === 'string') {
+          errMsg = err;
+        } else if (err.message && typeof err.message === 'string') {
+          errMsg = err.message;
+        } else if (err.error_description && typeof err.error_description === 'string') {
+          errMsg = err.error_description;
+        } else if (typeof err === 'object') {
+          errMsg = err.message || err.error || JSON.stringify(err);
+          if (errMsg === '{}') {
+            errMsg = err.toString() !== '[object Object]' ? err.toString() : 'Authentication failed';
+          }
+        }
+      }
+      if (errMsg.includes('already registered')) {
         errMsg = 'Username already exists';
-      } else if (err.message?.includes('Invalid login credentials')) {
+      } else if (errMsg.includes('Invalid login credentials')) {
         errMsg = 'Invalid credentials';
       }
       setError(errMsg);

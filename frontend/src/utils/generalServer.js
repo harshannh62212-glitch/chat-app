@@ -50,9 +50,7 @@ export async function ensureGeneralServerAndMembership(userId, username, avatarU
       // Re-join the user to General server
       await supabase.from('server_members').insert({
         user_id: userId,
-        server_id: GENERAL_SERVER_ID,
-        username: username,
-        avatar_url: avatarUrl || ''
+        server_id: GENERAL_SERVER_ID
       });
     }
   } catch (err) {
