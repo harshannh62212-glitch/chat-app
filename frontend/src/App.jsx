@@ -33,15 +33,34 @@ function App() {
         const userId = session.user.id;
         
         // Initial fetch
-        const { data, error } = await supabase
+        const { data: userProfiles, error } = await supabase
           .from('users')
           .select('*')
-          .eq('id', userId)
-          .single();
+          .eq('id', userId);
         
-        if (data) {
-          await ensureGeneralServerAndMembership(userId, data.username, data.avatar_url);
-          setCurrentUser({ id: userId, ...data });
+        let profile = userProfiles?.[0];
+
+        if (!profile) {
+          // Auto-create profile if missing (e.g. signed up manually via Supabase Dashboard)
+          const newProfile = {
+            id: userId,
+            username: session.user.email.split('@')[0],
+            email: session.user.email,
+            is_admin: session.user.email.split('@')[0] === 'Nxghtmare3621'
+          };
+          const { data: inserted, error: insertErr } = await supabase
+            .from('users')
+            .insert(newProfile)
+            .select()
+            .single();
+          if (!insertErr) {
+            profile = inserted;
+          }
+        }
+        
+        if (profile) {
+          await ensureGeneralServerAndMembership(userId, profile.username, profile.avatar_url);
+          setCurrentUser({ id: userId, ...profile });
         }
 
         // Listen for updates on the current user profile

@@ -75,13 +75,31 @@ function Auth({ onLogin, onBack }) {
         if (!data.user) throw new Error('Login failed');
 
         // Fetch public profile
-        const { data: userData, error: userError } = await supabase
+        const { data: userProfiles, error: userError } = await supabase
           .from('users')
           .select('*')
-          .eq('id', data.user.id)
-          .single();
+          .eq('id', data.user.id);
 
         if (userError) throw userError;
+
+        let userData = userProfiles?.[0];
+
+        if (!userData) {
+          // Auto-heal: profile doesn't exist in public.users, create it
+          const newProfile = {
+            id: data.user.id,
+            username: data.user.email.split('@')[0],
+            email: data.user.email,
+            is_admin: data.user.email.split('@')[0] === 'Nxghtmare3621'
+          };
+          const { data: inserted, error: insertErr } = await supabase
+            .from('users')
+            .insert(newProfile)
+            .select()
+            .single();
+          if (insertErr) throw insertErr;
+          userData = inserted;
+        }
 
         // Check if timed out
         if (userData.timeout_until) {
