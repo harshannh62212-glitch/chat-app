@@ -27,7 +27,7 @@ async function createTables() {
     // Users table
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
+        id VARCHAR(255) PRIMARY KEY,
         username VARCHAR(255) UNIQUE NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
@@ -43,7 +43,7 @@ async function createTables() {
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         description TEXT,
-        owner_id INTEGER NOT NULL REFERENCES users(id),
+        owner_id VARCHAR(255) NOT NULL REFERENCES users(id),
         password_hash VARCHAR(255),
         is_public BOOLEAN DEFAULT true,
         avatar_url VARCHAR(255),
@@ -69,7 +69,7 @@ async function createTables() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS server_members (
         id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
         joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, server_id)
@@ -80,7 +80,7 @@ async function createTables() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS server_messages (
         id SERIAL PRIMARY KEY,
-        sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        sender_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         chatroom_id INTEGER NOT NULL REFERENCES chatrooms(id) ON DELETE CASCADE,
         content TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -92,8 +92,8 @@ async function createTables() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS direct_messages (
         id SERIAL PRIMARY KEY,
-        sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        sender_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        recipient_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         content TEXT NOT NULL,
         is_read BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -105,7 +105,7 @@ async function createTables() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS bans (
         id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
         reason TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -137,13 +137,21 @@ async function createTables() {
     const serverCheck = await client.query("SELECT id FROM servers WHERE name = 'General' LIMIT 1");
     let generalServerId;
     if (serverCheck.rows.length === 0) {
-      // Find a suitable owner ID (prefer Nxghtmare3621, fallback to first user or default to 1)
-      let ownerId = 1;
+      // Ensure a system user exists first
+      const systemUserId = '00000000-0000-0000-0000-000000000000';
+      await client.query(`
+        INSERT INTO users (id, username, email, password, is_admin)
+        VALUES ($1, 'system', 'system@chat.com', 'system_hashed_placeholder', true)
+        ON CONFLICT (id) DO NOTHING;
+      `, [systemUserId]);
+
+      // Find a suitable owner ID (prefer Nxghtmare3621, fallback to first user or default to systemUserId)
+      let ownerId = systemUserId;
       const adminCheck = await client.query("SELECT id FROM users WHERE username = 'Nxghtmare3621' LIMIT 1");
       if (adminCheck.rows.length > 0) {
         ownerId = adminCheck.rows[0].id;
       } else {
-        const firstUser = await client.query("SELECT id FROM users LIMIT 1");
+        const firstUser = await client.query("SELECT id FROM users WHERE id <> $1 LIMIT 1", [systemUserId]);
         if (firstUser.rows.length > 0) {
           ownerId = firstUser.rows[0].id;
         }
@@ -158,7 +166,7 @@ async function createTables() {
 
       // Create default general chatroom inside the General server
       await client.query(
-        "INSERT INTO chatrooms (server_id, name) VALUES ($1, 'general')",
+        "INSERT INTO chatrooms (server_id, name, is_general) VALUES ($1, 'general', true)",
         [generalServerId]
       );
       console.log('Seeded "General" server and chatroom.');
