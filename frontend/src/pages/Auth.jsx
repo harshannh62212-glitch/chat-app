@@ -131,9 +131,16 @@ function Auth({ onLogin, onBack }) {
         } else if (err.error_description && typeof err.error_description === 'string') {
           errMsg = err.error_description;
         } else if (typeof err === 'object') {
-          errMsg = err.message || err.error || JSON.stringify(err);
-          if (errMsg === '{}') {
-            errMsg = err.toString() !== '[object Object]' ? err.toString() : 'Authentication failed';
+          const msg = err.message || err.error || err.error_description;
+          if (msg && typeof msg === 'string') {
+            errMsg = msg;
+          } else {
+            try {
+              const str = JSON.stringify(err);
+              errMsg = str !== '{}' ? str : (err.toString() !== '[object Object]' ? err.toString() : 'Authentication failed');
+            } catch (e) {
+              errMsg = err.toString() || 'Authentication failed';
+            }
           }
         }
       }
