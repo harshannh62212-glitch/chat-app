@@ -31,7 +31,7 @@ function Auth({ onLogin, onBack }) {
     }
 
     const usernameTrimmed = formData.username.trim();
-    const email = `${usernameTrimmed.toLowerCase()}@chat.local`;
+    const email = `${usernameTrimmed.toLowerCase()}@chat.com`;
     const password = formData.password;
 
     try {
