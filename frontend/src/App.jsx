@@ -29,6 +29,7 @@ function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
+        unsubUser();
         const userId = session.user.id;
         
         // Initial fetch
