@@ -101,6 +101,18 @@ async function createTables() {
       );
     `);
 
+    // Friendships table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS friendships (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        friend_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, friend_id)
+      );
+    `);
+
     // Bans table
     await client.query(`
       CREATE TABLE IF NOT EXISTS bans (

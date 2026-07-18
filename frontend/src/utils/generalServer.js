@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 
-export const GENERAL_SERVER_ID = '00000000-0000-0000-0000-000000000000';
+export const GENERAL_SERVER_ID = 1;
 
 /**
  * Ensures the General server exists and the user is added to it.

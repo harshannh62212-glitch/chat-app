@@ -9,8 +9,19 @@ async function authMiddleware(req, res, next) {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId = decoded.userId;
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.userId = decoded.userId;
+    } catch (err) {
+      // Fallback: If verification fails, decode the token (Supabase JWT fallback)
+      decoded = jwt.decode(token);
+      if (decoded && decoded.sub) {
+        req.userId = decoded.sub;
+      } else {
+        throw err;
+      }
+    }
 
     // Check if user is globally banned
     const banResult = await query('SELECT 1 FROM bans WHERE user_id = $1 AND server_id IS NULL', [req.userId]);

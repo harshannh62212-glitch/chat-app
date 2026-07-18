@@ -5,6 +5,7 @@ import { ensureGeneralServerAndMembership } from './utils/generalServer';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import LandingPage from './pages/LandingPage';
+import axios from 'axios';
 import './styles/App.css';
 
 function App() {
@@ -29,6 +30,7 @@ function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${session.access_token}`;
         unsubUser();
         const userId = session.user.id;
         
@@ -82,6 +84,7 @@ function App() {
       } else {
         unsubUser();
         setCurrentUser(null);
+        delete axios.defaults.headers.common['Authorization'];
       }
     });
 
@@ -102,7 +105,7 @@ function App() {
   };
 
   return (
-    <div className="app">
+    <div className={`app ${currentUser ? 'dashboard-view' : 'public-view'}`}>
       {currentUser ? (
         <Dashboard 
           user={currentUser} 

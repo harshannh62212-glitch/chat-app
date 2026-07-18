@@ -74,4 +74,169 @@ router.put('/profile', authMiddleware, async (req, res) => {
   }
 });
 
+// Send a friend request
+router.post('/friends/request', authMiddleware, async (req, res) => {
+  try {
+    const { friendUsername } = req.body;
+    const userId = req.userId;
+
+    if (!friendUsername || !friendUsername.trim()) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+
+    // Find the friend by username
+    const friendResult = await query(
+      'SELECT id FROM users WHERE LOWER(username) = LOWER($1)',
+      [friendUsername.trim()]
+    );
+
+    if (friendResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const friendId = friendResult.rows[0].id;
+
+    if (friendId === userId) {
+      return res.status(400).json({ error: 'You cannot add yourself as a friend' });
+    }
+
+    // Check if friendship already exists
+    const existResult = await query(
+      'SELECT * FROM friendships WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)',
+      [userId, friendId]
+    );
+
+    if (existResult.rows.length > 0) {
+      const friendship = existResult.rows[0];
+      if (friendship.status === 'accepted') {
+        return res.status(400).json({ error: 'You are already friends' });
+      } else if (friendship.user_id === userId) {
+        return res.status(400).json({ error: 'Friend request already sent' });
+      } else {
+        // If the other user already sent a request, accept it automatically
+        await query(
+          "UPDATE friendships SET status = 'accepted' WHERE id = $1",
+          [friendship.id]
+        );
+        return res.json({ message: 'Friend request accepted automatically', status: 'accepted' });
+      }
+    }
+
+    // Insert new pending friend request
+    await query(
+      "INSERT INTO friendships (user_id, friend_id, status) VALUES ($1, $2, 'pending')",
+      [userId, friendId]
+    );
+
+    res.status(201).json({ message: 'Friend request sent', status: 'pending' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send friend request' });
+  }
+});
+
+// Accept a friend request
+router.post('/friends/accept', authMiddleware, async (req, res) => {
+  try {
+    const { requesterId } = req.body;
+    const userId = req.userId;
+
+    if (!requesterId) {
+      return res.status(400).json({ error: 'Requester ID is required' });
+    }
+
+    const result = await query(
+      "UPDATE friendships SET status = 'accepted' WHERE user_id = $1 AND friend_id = $2 AND status = 'pending' RETURNING id",
+      [requesterId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Pending friend request not found' });
+    }
+
+    res.json({ message: 'Friend request accepted' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to accept friend request' });
+  }
+});
+
+// Decline or remove a friend/request
+router.post('/friends/decline', authMiddleware, async (req, res) => {
+  try {
+    const { otherUserId } = req.body;
+    const userId = req.userId;
+
+    if (!otherUserId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const result = await query(
+      'DELETE FROM friendships WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)',
+      [userId, otherUserId]
+    );
+
+    res.json({ message: 'Friendship or request removed successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to decline or remove friend' });
+  }
+});
+
+// Get friends list
+router.get('/friends/list', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const result = await query(
+      `SELECT u.id, u.username, u.avatar_url 
+       FROM friendships f
+       INNER JOIN users u ON (f.user_id = $1 AND f.friend_id = u.id) OR (f.friend_id = $1 AND f.user_id = u.id)
+       WHERE f.status = 'accepted'
+       ORDER BY u.username ASC`,
+      [userId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch friends' });
+  }
+});
+
+// Get pending friend requests
+router.get('/friends/pending', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    // Incoming requests (people who sent requests to current user)
+    const incomingResult = await query(
+      `SELECT f.id as request_id, u.id as user_id, u.username, u.avatar_url
+       FROM friendships f
+       INNER JOIN users u ON f.user_id = u.id
+       WHERE f.friend_id = $1 AND f.status = 'pending'
+       ORDER BY u.username ASC`,
+      [userId]
+    );
+
+    // Outgoing requests (people current user sent requests to)
+    const outgoingResult = await query(
+      `SELECT f.id as request_id, u.id as user_id, u.username, u.avatar_url
+       FROM friendships f
+       INNER JOIN users u ON f.friend_id = u.id
+       WHERE f.user_id = $1 AND f.status = 'pending'
+       ORDER BY u.username ASC`,
+      [userId]
+    );
+
+    res.json({
+      incoming: incomingResult.rows,
+      outgoing: outgoingResult.rows
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch pending requests' });
+  }
+});
+
 module.exports = router;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import { supabase } from '../supabase';
 import { filterContent } from '../utils/contentFilter';
 import { checkRateLimit } from '../utils/rateLimiter';
@@ -9,6 +10,8 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
   const [messageInput, setMessageInput] = useState('');
   const [showGiphy, setShowGiphy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isFriend, setIsFriend] = useState(false);
+  const [friendCheckLoading, setFriendCheckLoading] = useState(true);
   const messagesEndRef = useRef(null);
 
   const dmUserId = dmWith.id || dmWith.other_user_id;
@@ -18,6 +21,25 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
   const conversationId = currentUser.id < dmUserId 
     ? `${currentUser.id}_${dmUserId}` 
     : `${dmUserId}_${currentUser.id}`;
+
+  // Verify friendship status
+  useEffect(() => {
+    const checkFriendship = async () => {
+      try {
+        setFriendCheckLoading(true);
+        const res = await axios.get('/api/users/friends/list');
+        const friendsList = res.data || [];
+        const isFound = friendsList.some(f => f.id === dmUserId);
+        setIsFriend(isFound);
+      } catch (err) {
+        console.error('Failed to verify friendship status:', err);
+        setIsFriend(false);
+      } finally {
+        setFriendCheckLoading(false);
+      }
+    };
+    checkFriendship();
+  }, [dmUserId]);
 
   // Listen to messages in real-time
   useEffect(() => {
@@ -108,25 +130,6 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
       });
 
       if (msgErr) throw msgErr;
-
-      // 2. Upsert DM conversation meta info
-      const { error: upsertErr } = await supabase.from('dm_conversations').upsert({
-        id: conversationId,
-        participants: [currentUser.id, dmUserId],
-        last_message_content: filteredContent,
-        last_message_at: new Date().toISOString(),
-        usernames: {
-          [currentUser.id]: currentUser.username,
-          [dmUserId]: dmUsername
-        },
-        avatar_urls: {
-          [currentUser.id]: currentUser.avatar_url || '',
-          [dmUserId]: dmWith.avatar_url || ''
-        }
-      });
-
-      if (upsertErr) throw upsertErr;
-
     } catch (err) {
       console.error('Failed to send DM:', err);
     }
@@ -220,23 +223,36 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
             onClose={() => setShowGiphy(false)}
           />
         )}
-        <div className="message-input">
-          <button 
-            type="button" 
-            className="giphy-toggle-btn"
-            onClick={() => setShowGiphy(!showGiphy)}
-            title="Send a GIF"
-          >
-            GIF
-          </button>
-          <input
-            type="text"
-            placeholder="Type a message..."
-            value={messageInput}
-            onChange={(e) => setMessageInput(e.target.value)}
-          />
-          <button type="submit">Send</button>
-        </div>
+        {friendCheckLoading ? (
+          <div className="message-input" style={{ justifyContent: 'center', alignItems: 'center', color: '#72767d', fontSize: '0.9em' }}>
+            Verifying friendship status...
+          </div>
+        ) : !isFriend ? (
+          <div className="message-input friendship-lock" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '16px 20px', background: 'rgba(240, 71, 71, 0.05)', borderTop: '1px solid rgba(240, 71, 71, 0.2)', textAlign: 'center' }}>
+            <span style={{ fontSize: '1.2em' }}>🔒</span>
+            <span style={{ fontSize: '0.9em', color: '#ff5b5b', fontWeight: '500' }}>
+              You can only send messages to friends. Send a friend request to <strong>{dmUsername}</strong> to chat!
+            </span>
+          </div>
+        ) : (
+          <div className="message-input">
+            <button 
+              type="button" 
+              className="giphy-toggle-btn"
+              onClick={() => setShowGiphy(!showGiphy)}
+              title="Send a GIF"
+            >
+              GIF
+            </button>
+            <input
+              type="text"
+              placeholder="Type a message..."
+              value={messageInput}
+              onChange={(e) => setMessageInput(e.target.value)}
+            />
+            <button type="submit">Send</button>
+          </div>
+        )}
       </form>
     </div>
   );

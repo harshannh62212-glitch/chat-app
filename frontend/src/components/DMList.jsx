@@ -1,98 +1,61 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
+import axios from 'axios';
 
-function DMList({ onSelectDM, selectedDM, currentUser }) {
+function DMList({ onSelectDM, selectedDM }) {
   const [conversations, setConversations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
+  const [friendsList, setFriendsList] = useState([]);
 
-  // Listen to DM conversations in real-time
   useEffect(() => {
-    const fetchConversations = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('dm_conversations')
-          .select('*')
-          .contains('participants', [currentUser.id])
-          .order('last_message_at', { ascending: false });
-        
-        if (error) throw error;
-
-        if (data) {
-          const convList = data.map(conv => {
-            const otherUserId = conv.participants.find(p => p !== currentUser.id);
-            const otherUsername = conv.usernames?.[otherUserId] || 'Someone';
-            return {
-              id: otherUserId,
-              other_user_id: otherUserId,
-              username: otherUsername,
-              last_message_content: conv.last_message_content || 'No messages yet',
-              last_message_at: conv.last_message_at
-            };
-          });
-          setConversations(convList);
-        }
-      } catch (err) {
-        console.error('Failed to fetch conversations:', err);
-      }
-    };
-
     fetchConversations();
+    const interval = setInterval(fetchConversations, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
-    const channel = supabase
-      .channel(`dm-conv-list-${currentUser.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'dm_conversations'
-      }, () => {
-        fetchConversations();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentUser.id]);
-
-  // Debounce search input
-  useEffect(() => {
-    if (showSearch && searchQuery.trim().length > 0) {
-      const delayDebounce = setTimeout(() => {
-        searchUsers();
-      }, 300);
-      return () => clearTimeout(delayDebounce);
-    } else {
-      setSearchResults([]);
-    }
-  }, [showSearch, searchQuery]);
-
-  const searchUsers = async () => {
-    const term = searchQuery.trim();
-    if (!term) return;
-
+  const fetchConversations = async () => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, username')
-        .ilike('username', `${term}%`)
-        .neq('id', currentUser.id)
-        .eq('is_banned', false);
-      
-      if (error) throw error;
-      if (data) setSearchResults(data);
+      const response = await axios.get('/api/messages/dm-conversations/list');
+      setConversations(response.data);
     } catch (err) {
-      console.error('Failed to search users:', err);
+      console.error('Failed to fetch conversations:', err);
     }
   };
 
-  const handleStartDM = (targetUser) => {
-    onSelectDM({
-      id: targetUser.id,
-      other_user_id: targetUser.id,
-      username: targetUser.username
-    });
+  // Fetch friends list when search is opened
+  useEffect(() => {
+    if (showSearch) {
+      const fetchFriends = async () => {
+        try {
+          const res = await axios.get('/api/users/friends/list');
+          setFriendsList(res.data || []);
+        } catch (err) {
+          console.error('Failed to fetch friends list:', err);
+        }
+      };
+      fetchFriends();
+    }
+  }, [showSearch]);
+
+  // Filter friends list by query
+  useEffect(() => {
+    if (showSearch) {
+      if (!searchQuery.trim()) {
+        setSearchResults(friendsList);
+      } else {
+        const filtered = friendsList.filter(f => 
+          f.username.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        setSearchResults(filtered);
+      }
+    } else {
+      setSearchResults([]);
+    }
+  }, [searchQuery, showSearch, friendsList]);
+
+  const handleStartDM = (user) => {
+    onSelectDM(user);
     setShowSearch(false);
     setSearchQuery('');
   };
@@ -103,32 +66,47 @@ function DMList({ onSelectDM, selectedDM, currentUser }) {
         className="start-dm-btn"
         onClick={() => setShowSearch(!showSearch)}
       >
-        {showSearch ? 'Cancel' : '+ New DM'}
+        {showSearch ? '✕ Close Search' : '+ New DM'}
       </button>
 
       {showSearch && (
-        <form onSubmit={(e) => e.preventDefault()} className="dm-search">
+        <div className="dm-search" style={{ position: 'relative', marginBottom: '12px' }}>
           <input
             type="text"
-            placeholder="Search users..."
+            placeholder="Search users to message..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             autoFocus
+            style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.2)', color: '#fff' }}
           />
-          {searchResults.length > 0 && (
-            <div className="search-results">
-              {searchResults.map(u => (
+          {searchResults.length > 0 ? (
+            <div className="search-results" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: '#181920', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto', marginTop: '4px', boxShadow: '0 4px 15px rgba(0,0,0,0.5)' }}>
+              {searchResults.map(user => (
                 <div
-                  key={u.id}
+                  key={user.id}
                   className="search-result"
-                  onClick={() => handleStartDM(u)}
+                  onClick={() => handleStartDM(user)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.03)' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
                 >
-                  <span>{u.username}</span>
+                  <div className="search-result-avatar" style={{ width: '24px', height: '24px', position: 'relative' }}>
+                    {user.avatar_url ? (
+                      <img src={user.avatar_url} alt={user.username} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <div className="avatar-placeholder-xs" style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold' }}>
+                        {user.username ? user.username[0].toUpperCase() : '?'}
+                      </div>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '0.9em', color: '#fff' }}>{user.username}</span>
                 </div>
               ))}
             </div>
+          ) : (
+            searchQuery.trim() && <div className="search-no-results" style={{ padding: '8px 12px', fontSize: '0.85em', color: '#72767d', textAlign: 'center' }}>No users found</div>
           )}
-        </form>
+        </div>
       )}
 
       <div className="conversations">
@@ -138,19 +116,11 @@ function DMList({ onSelectDM, selectedDM, currentUser }) {
           conversations.map(conv => (
             <div
               key={conv.other_user_id}
-              className={`conversation-item ${(selectedDM?.id || selectedDM?.other_user_id) === conv.other_user_id ? 'active' : ''}`}
+              className={`conversation-item ${selectedDM?.id === conv.other_user_id ? 'active' : ''}`}
               onClick={() => onSelectDM(conv)}
-              style={{ position: 'relative' }}
             >
-              <div className="conversation-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h4 style={{ margin: 0 }}>{conv.username}</h4>
-                <span className="last-message-time" style={{ fontSize: '0.75em', color: '#72767d' }}>
-                  {conv.last_message_at ? new Date(conv.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                </span>
-              </div>
-              <p className="last-message" style={{ margin: '4px 0 0 0' }}>
-                {conv.last_message_content || 'No messages yet'}
-              </p>
+              <h4>{conv.username}</h4>
+              <p className="last-message">Last: {new Date(conv.last_message_at).toLocaleDateString()}</p>
             </div>
           ))
         )}

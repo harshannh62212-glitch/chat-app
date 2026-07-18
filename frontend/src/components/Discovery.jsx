@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import { GENERAL_SERVER_ID } from '../utils/generalServer';
 
 function Discovery({ currentUser }) {
   const [servers, setServers] = useState([]);
@@ -120,7 +121,7 @@ function Discovery({ currentUser }) {
         <div className="discovery-list">
           {servers.map(server => {
             const isJoined = joinedServerIds.has(server.id);
-            const isGeneral = server.id === '00000000-0000-0000-0000-000000000000';
+            const isGeneral = server.id === GENERAL_SERVER_ID;
             
             return (
               <div key={server.id} className="discovery-card">

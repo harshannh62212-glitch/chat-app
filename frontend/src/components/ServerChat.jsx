@@ -4,7 +4,7 @@ import { filterContent } from '../utils/contentFilter';
 import { checkRateLimit } from '../utils/rateLimiter';
 import GiphyPanel from './GiphyPanel';
 
-function ServerChat({ server, currentUser, onOpenSettings }) {
+function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
   const [chatrooms, setChatrooms] = useState([]);
   const [selectedChatroom, setSelectedChatroom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -64,11 +64,14 @@ function ServerChat({ server, currentUser, onOpenSettings }) {
       try {
         const { data, error } = await supabase
           .from('server_members')
-          .select('*')
+          .select('user_id, users(id, username, avatar_url)')
           .eq('server_id', server.id);
         
         if (error) throw error;
-        if (data) setMembers(data);
+        if (data) {
+          const formatted = data.map(m => m.users).filter(Boolean);
+          setMembers(formatted);
+        }
       } catch (err) {
         console.error('Failed to fetch members:', err);
       }
@@ -104,12 +107,19 @@ function ServerChat({ server, currentUser, onOpenSettings }) {
       try {
         const { data, error } = await supabase
           .from('server_messages')
-          .select('*')
+          .select('*, users(username, avatar_url)')
           .eq('chatroom_id', selectedChatroom.id)
           .order('created_at', { ascending: true });
         
         if (error) throw error;
-        if (data) setMessages(data);
+        if (data) {
+          const formatted = data.map(m => ({
+            ...m,
+            username: m.users?.username || 'Unknown',
+            avatar_url: m.users?.avatar_url || ''
+          }));
+          setMessages(formatted);
+        }
       } catch (err) {
         console.error('Failed to fetch messages:', err);
       }
@@ -126,7 +136,23 @@ function ServerChat({ server, currentUser, onOpenSettings }) {
         filter: `chatroom_id=eq.${selectedChatroom.id}`
       }, (payload) => {
         if (payload.eventType === 'INSERT') {
-          setMessages(prev => [...prev, payload.new]);
+          const newMsg = payload.new;
+          supabase
+            .from('users')
+            .select('username, avatar_url')
+            .eq('id', newMsg.sender_id)
+            .single()
+            .then(({ data: userData }) => {
+              const enrichedMsg = {
+                ...newMsg,
+                username: userData?.username || 'Unknown',
+                avatar_url: userData?.avatar_url || ''
+              };
+              setMessages(prev => {
+                if (prev.some(m => m.id === newMsg.id)) return prev;
+                return [...prev, enrichedMsg];
+              });
+            });
         } else if (payload.eventType === 'DELETE') {
           setMessages(prev => prev.filter(m => m.id !== payload.old.id));
         }
@@ -163,8 +189,6 @@ function ServerChat({ server, currentUser, onOpenSettings }) {
       const { error } = await supabase.from('server_messages').insert({
         sender_id: currentUser.id,
         chatroom_id: selectedChatroom.id,
-        username: currentUser.username,
-        avatar_url: currentUser.avatar_url || '',
         content: filteredContent
       });
       if (error) throw error;
@@ -337,7 +361,22 @@ function ServerChat({ server, currentUser, onOpenSettings }) {
             <h4>Members ({members.length})</h4>
             <div className="members-list">
               {members.map(member => (
-                <div key={member.id} className="member-item">
+                <div 
+                  key={member.id} 
+                  className={`member-item ${member.id !== currentUser.id ? 'clickable' : ''}`}
+                  onClick={() => member.id !== currentUser.id && onStartDM && onStartDM(member)}
+                  title={member.id !== currentUser.id ? `DM ${member.username}` : 'You'}
+                  style={{ cursor: member.id !== currentUser.id ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', borderRadius: '4px' }}
+                >
+                  <div className="member-avatar-small" style={{ display: 'flex', alignItems: 'center' }}>
+                    {member.avatar_url ? (
+                      <img src={member.avatar_url} alt={member.username} style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <div className="avatar-placeholder-small" style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 'bold', color: '#fff' }}>
+                        {member.username ? member.username[0].toUpperCase() : '?'}
+                      </div>
+                    )}
+                  </div>
                   <span>{member.username}</span>
                 </div>
               ))}

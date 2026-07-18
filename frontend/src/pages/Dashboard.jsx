@@ -6,6 +6,7 @@ import ServerChat from '../components/ServerChat';
 import DMList from '../components/DMList';
 import DirectMessage from '../components/DirectMessage';
 import AdminPanel from '../components/AdminPanel';
+import FriendsPanel from '../components/FriendsPanel';
 import Logo from '../components/Logo';
 import '../styles/Dashboard.css';
 
@@ -235,6 +236,11 @@ function Dashboard({ user, setUser, onLogout }) {
             server={selectedServer}
             currentUser={user}
             onOpenSettings={() => setShowSettingsModal(true)}
+            onStartDM={(otherUser) => {
+              setSelectedServer(null);
+              setSelectedDM(otherUser);
+              setActiveTab('dms');
+            }}
           />
         )}
 
@@ -257,7 +263,16 @@ function Dashboard({ user, setUser, onLogout }) {
           />
         )}
 
-        {!selectedServer && !selectedDM && activeTab !== 'admin' && (
+        {activeTab === 'dms' && !selectedDM && (
+          <FriendsPanel 
+            currentUser={user}
+            onStartDM={(friend) => {
+              setSelectedDM(friend);
+            }}
+          />
+        )}
+
+        {activeTab !== 'dms' && !selectedServer && !selectedDM && activeTab !== 'admin' && (
           <div className="welcome-container welcome-island">
             <div className="welcome-brand" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
               <Logo width={260} variant="full" />
