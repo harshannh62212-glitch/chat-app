@@ -16,7 +16,7 @@ function GiphyPanel({ onSelectGif, onClose }) {
     setLoading(true);
     try {
       const res = await axios.get(
-        `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=16`
+        `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=16&rating=g`
       );
       setGifs(res.data.data);
     } catch (err) {
@@ -36,7 +36,7 @@ function GiphyPanel({ onSelectGif, onClose }) {
     setLoading(true);
     try {
       const res = await axios.get(
-        `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(val)}&limit=16`
+        `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(val)}&limit=16&rating=g`
       );
       setGifs(res.data.data);
     } catch (err) {

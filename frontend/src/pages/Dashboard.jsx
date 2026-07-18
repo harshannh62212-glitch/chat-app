@@ -528,6 +528,16 @@ function SettingsModal({ user, onClose, onUpdateAvatar, onLogout }) {
     setError('');
     setSuccess('');
     setLoading(true);
+
+    // Validate avatar URL against inappropriate content keywords
+    const lowerUrl = (avatarUrl || '').toLowerCase();
+    const isViolation = /(child\s*porn|childporn|cp|csam|pornography|porn|nudity|nude|sex|nsfw|naked|hentai)/.test(lowerUrl);
+    if (isViolation) {
+      setError('Inappropriate avatar URL detected. Please select a safe profile picture.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const { error: profileErr } = await supabase
         .from('users')
