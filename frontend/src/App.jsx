@@ -8,6 +8,10 @@ import LandingPage from './pages/LandingPage';
 import axios from 'axios';
 import './styles/App.css';
 
+axios.defaults.baseURL = import.meta.env.PROD 
+  ? (import.meta.env.VITE_API_URL || '') 
+  : '';
+
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
