@@ -197,6 +197,40 @@ async function createTables() {
       )
     `, [generalServerId]);
 
+    // Auto-Moderation Trigger
+    await client.query(`
+      CREATE OR REPLACE FUNCTION public.check_message_content_moderation()
+      RETURNS TRIGGER AS $$
+      DECLARE
+        violation_found BOOLEAN := FALSE;
+        forbidden_regex TEXT := '\\\\y(child\\\\s*porn|childporn|cp|csam|pornography|porn|nudity|nude|illegal\\\\s*weapons|illegal\\\\s*drugs|cocaine|heroin|methamphetamine|meth)\\\\y';
+      BEGIN
+        IF NEW.content ~* forbidden_regex THEN
+          violation_found := TRUE;
+        END IF;
+
+        IF violation_found THEN
+          UPDATE public.users SET is_banned = TRUE WHERE id = NEW.sender_id;
+          RAISE EXCEPTION 'Message blocked by auto-moderation. Your account has been globally banned.';
+        END IF;
+
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+      DROP TRIGGER IF EXISTS tr_server_msg_moderation ON public.server_messages;
+      CREATE TRIGGER tr_server_msg_moderation
+        BEFORE INSERT ON public.server_messages
+        FOR EACH ROW
+        EXECUTE FUNCTION public.check_message_content_moderation();
+
+      DROP TRIGGER IF EXISTS tr_direct_msg_moderation ON public.direct_messages;
+      CREATE TRIGGER tr_direct_msg_moderation
+        BEFORE INSERT ON public.direct_messages
+        FOR EACH ROW
+        EXECUTE FUNCTION public.check_message_content_moderation();
+    `);
+
     console.log('Tables created successfully');
   } catch (err) {
     console.error('Error creating tables:', err);
