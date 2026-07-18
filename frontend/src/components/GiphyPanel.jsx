@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const GIPHY_API_KEY = import.meta.env.VITE_GIPHY_API_KEY || 'LIVDxiqcx5KoGLG6m8tB5X6s64FCX50B';
+const GIPHY_API_KEY = import.meta.env.VITE_GIPHY_API_KEY || 'sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh';
 
 function GiphyPanel({ onSelectGif, onClose }) {
   const [query, setQuery] = useState('');
