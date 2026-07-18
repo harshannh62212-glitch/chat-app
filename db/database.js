@@ -129,6 +129,7 @@ async function createTables() {
     await client.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS timeout_until TIMESTAMP;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT false;
     `);
 
     // Seed Administrator role
