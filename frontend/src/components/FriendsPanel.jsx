@@ -173,7 +173,7 @@ function FriendsPanel({ currentUser, onStartDM }) {
                         {friend.avatar_url ? (
                           <img src={friend.avatar_url} alt={friend.username} />
                         ) : (
-                          <div className="avatar-placeholder">{friend.username[0].toUpperCase()}</div>
+                          <div className="avatar-placeholder">{friend.username ? friend.username[0].toUpperCase() : '?'}</div>
                         )}
                         <span className="status-indicator online"></span>
                       </div>
@@ -220,7 +220,7 @@ function FriendsPanel({ currentUser, onStartDM }) {
                           {req.avatar_url ? (
                             <img src={req.avatar_url} alt={req.username} />
                           ) : (
-                            <div className="avatar-placeholder">{req.username[0].toUpperCase()}</div>
+                            <div className="avatar-placeholder">{req.username ? req.username[0].toUpperCase() : '?'}</div>
                           )}
                         </div>
                         <span>{req.username}</span>
@@ -258,7 +258,7 @@ function FriendsPanel({ currentUser, onStartDM }) {
                           {req.avatar_url ? (
                             <img src={req.avatar_url} alt={req.username} />
                           ) : (
-                            <div className="avatar-placeholder">{req.username[0].toUpperCase()}</div>
+                            <div className="avatar-placeholder">{req.username ? req.username[0].toUpperCase() : '?'}</div>
                           )}
                         </div>
                         <span>{req.username}</span>
