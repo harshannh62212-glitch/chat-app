@@ -6,7 +6,6 @@ function DMList({ onSelectDM, selectedDM }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
-  const [friendsList, setFriendsList] = useState([]);
 
   useEffect(() => {
     fetchConversations();
@@ -23,36 +22,28 @@ function DMList({ onSelectDM, selectedDM }) {
     }
   };
 
-  // Fetch friends list when search is opened
+  // Perform search queries on all users in workspace
   useEffect(() => {
     if (showSearch) {
-      const fetchFriends = async () => {
-        try {
-          const res = await axios.get('/api/users/friends/list');
-          setFriendsList(res.data || []);
-        } catch (err) {
-          console.error('Failed to fetch friends list:', err);
-        }
-      };
-      fetchFriends();
-    }
-  }, [showSearch]);
-
-  // Filter friends list by query
-  useEffect(() => {
-    if (showSearch) {
-      if (!searchQuery.trim()) {
-        setSearchResults(friendsList);
-      } else {
-        const filtered = friendsList.filter(f => 
-          f.username.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-        setSearchResults(filtered);
-      }
+      const delayDebounceFn = setTimeout(() => {
+        performSearch(searchQuery);
+      }, 150);
+      return () => clearTimeout(delayDebounceFn);
     } else {
       setSearchResults([]);
     }
-  }, [searchQuery, showSearch, friendsList]);
+  }, [searchQuery, showSearch]);
+
+  const performSearch = async (queryVal) => {
+    try {
+      const response = await axios.get('/api/users/search', {
+        params: { q: queryVal }
+      });
+      setSearchResults(response.data);
+    } catch (err) {
+      console.error('Failed to search users:', err);
+    }
+  };
 
   const handleStartDM = (user) => {
     onSelectDM(user);
