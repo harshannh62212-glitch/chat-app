@@ -1,20 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from './supabase';
 import { loadCustomBannedWords } from './utils/contentFilter';
-import { ensureGeneralServerAndMembership } from './utils/generalServer';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import LandingPage from './pages/LandingPage';
 import axios from 'axios';
 import './styles/App.css';
 
-axios.defaults.baseURL = import.meta.env.PROD 
-  ? (import.meta.env.VITE_API_URL || '') 
-  : '';
+const DEFAULT_API_URL = 'https://starter-taste-lamp-wit.trycloudflare.com';
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || DEFAULT_API_URL;
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
+  const [loadingApp, setLoadingApp] = useState(true);
 
   useEffect(() => {
     loadCustomBannedWords();
@@ -30,82 +28,41 @@ function App() {
     document.documentElement.style.setProperty('--font-size', savedSize);
     document.documentElement.style.setProperty('--letter-spacing', savedSpacing);
 
-    let unsubUser = () => {};
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        axios.defaults.headers.common['Authorization'] = `Bearer ${session.access_token}`;
-        unsubUser();
-        const userId = session.user.id;
-        
-        // Initial fetch
-        const { data: userProfiles, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', userId);
-        
-        let profile = userProfiles?.[0];
-
-        if (!profile) {
-          // Auto-create profile if missing (e.g. signed up manually via Supabase Dashboard)
-          const newProfile = {
-            id: userId,
-            username: session.user.email.split('@')[0],
-            email: session.user.email,
-            is_admin: session.user.email.split('@')[0] === 'Nxghtmare3621'
-          };
-          const { data: inserted, error: insertErr } = await supabase
-            .from('users')
-            .insert(newProfile)
-            .select()
-            .single();
-          if (!insertErr) {
-            profile = inserted;
-          }
-        }
-        
-        if (profile) {
-          await ensureGeneralServerAndMembership(userId, profile.username, profile.avatar_url);
-          setCurrentUser({ id: userId, ...profile });
-        }
-
-        // Listen for updates on the current user profile
-        const channel = supabase
-          .channel(`user-profile-${userId}`)
-          .on('postgres_changes', { 
-            event: 'UPDATE', 
-            schema: 'public', 
-            table: 'users', 
-            filter: `id=eq.${userId}` 
-          }, (payload) => {
-            setCurrentUser({ id: userId, ...payload.new });
-          })
-          .subscribe();
-
-        unsubUser = () => {
-          supabase.removeChannel(channel);
-        };
-      } else {
-        unsubUser();
-        setCurrentUser(null);
-        delete axios.defaults.headers.common['Authorization'];
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-      unsubUser();
-    };
+    // Check stored JWT token
+    const token = localStorage.getItem('chat_token');
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      axios.get('/api/auth/me')
+        .then((res) => {
+          setCurrentUser(res.data);
+        })
+        .catch(() => {
+          localStorage.removeItem('chat_token');
+          localStorage.removeItem('chat_user');
+          delete axios.defaults.headers.common['Authorization'];
+          setCurrentUser(null);
+        })
+        .finally(() => {
+          setLoadingApp(false);
+        });
+    } else {
+      setLoadingApp(false);
+    }
   }, []);
 
   const handleLogin = (token, user) => {
+    localStorage.setItem('chat_token', token);
+    localStorage.setItem('chat_user', JSON.stringify(user));
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setCurrentUser(user);
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleLogout = () => {
+    localStorage.removeItem('chat_token');
+    localStorage.removeItem('chat_user');
+    delete axios.defaults.headers.common['Authorization'];
     setCurrentUser(null);
-    setShowAuth(false); // Reset to landing page on logout
+    setShowAuth(false);
   };
 
   return (

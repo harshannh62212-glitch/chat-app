@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
+import axios from 'axios';
 import { loadCustomBannedWords } from '../utils/contentFilter';
 
 function AdminPanel({ currentUser, onSelectServer }) {
@@ -13,6 +13,8 @@ function AdminPanel({ currentUser, onSelectServer }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
+  const [systemStatus, setSystemStatus] = useState(null);
+
   useEffect(() => {
     fetchData();
   }, [activeSubTab]);
@@ -23,38 +25,20 @@ function AdminPanel({ currentUser, onSelectServer }) {
     setMessage('');
     try {
       if (activeSubTab === 'users') {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .order('username', { ascending: true });
-        
-        if (error) throw error;
-        setUsers(data || []);
+        const res = await axios.get('/api/admin/users');
+        setUsers(res.data || []);
       } else if (activeSubTab === 'servers') {
-        // Query server details along with owner username using joins
-        const { data, error } = await supabase
-          .from('servers')
-          .select('*, users (username)')
-          .order('created_at', { ascending: false });
-        
-        if (error) throw error;
-        
-        const mapped = (data || []).map(s => ({
-          ...s,
-          owner_name: s.users?.username || 'Unknown'
-        }));
-        setServers(mapped);
+        const res = await axios.get('/api/admin/servers');
+        setServers(res.data || []);
       } else if (activeSubTab === 'words') {
-        const { data, error } = await supabase
-          .from('banned_words')
-          .select('word')
-          .order('word', { ascending: true });
-        
-        if (error) throw error;
-        setWords((data || []).map(w => w.word));
+        const res = await axios.get('/api/admin/banned-words');
+        setWords((res.data || []).map(w => w.word || w));
+      } else if (activeSubTab === 'system') {
+        const res = await axios.get('/api/system-status');
+        setSystemStatus(res.data);
       }
     } catch (err) {
-      setError(err.message || 'Failed to fetch administration data');
+      setError(err.response?.data?.error || err.message || 'Failed to fetch administration data');
     } finally {
       setLoading(false);
     }
@@ -63,46 +47,31 @@ function AdminPanel({ currentUser, onSelectServer }) {
   // User Actions
   const handleBanUser = async (userId) => {
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ is_banned: true })
-        .eq('id', userId);
-
-      if (error) throw error;
+      await axios.post(`/api/admin/users/${userId}/ban`);
       setMessage('User banned globally');
       fetchData();
     } catch (err) {
-      setError(err.message || 'Failed to ban user');
+      setError(err.response?.data?.error || err.message || 'Failed to ban user');
     }
   };
 
   const handleUnbanUser = async (userId) => {
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ is_banned: false })
-        .eq('id', userId);
-
-      if (error) throw error;
+      await axios.post(`/api/admin/users/${userId}/unban`);
       setMessage('User unbanned globally');
       fetchData();
     } catch (err) {
-      setError(err.message || 'Failed to unban user');
+      setError(err.response?.data?.error || err.message || 'Failed to unban user');
     }
   };
 
   const handleKickUser = async (userId) => {
     try {
-      const { error } = await supabase
-        .from('server_members')
-        .delete()
-        .eq('user_id', userId);
-
-      if (error) throw error;
+      await axios.delete(`/api/admin/users/${userId}/kick`);
       setMessage('User kicked from all servers');
       fetchData();
     } catch (err) {
-      setError(err.message || 'Failed to kick user');
+      setError(err.response?.data?.error || err.message || 'Failed to kick user');
     }
   };
 
@@ -113,33 +82,22 @@ function AdminPanel({ currentUser, onSelectServer }) {
       return;
     }
     try {
-      const timeoutUntil = new Date(Date.now() + mins * 60 * 1000).toISOString();
-      const { error } = await supabase
-        .from('users')
-        .update({ timeout_until: timeoutUntil })
-        .eq('id', userId);
-
-      if (error) throw error;
+      await axios.post(`/api/admin/users/${userId}/timeout`, { durationMinutes: mins });
       setMessage(`User timed out for ${mins} minutes`);
       setTimeoutMinutes(prev => ({ ...prev, [userId]: '' }));
       fetchData();
     } catch (err) {
-      setError(err.message || 'Failed to timeout user');
+      setError(err.response?.data?.error || err.message || 'Failed to timeout user');
     }
   };
 
   const handleRemoveTimeout = async (userId) => {
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ timeout_until: null })
-        .eq('id', userId);
-
-      if (error) throw error;
+      await axios.post(`/api/admin/users/${userId}/untimeout`);
       setMessage('Timeout removed');
       fetchData();
     } catch (err) {
-      setError(err.message || 'Failed to remove timeout');
+      setError(err.response?.data?.error || err.message || 'Failed to remove timeout');
     }
   };
 
@@ -148,36 +106,21 @@ function AdminPanel({ currentUser, onSelectServer }) {
     if (!confirmAction) return;
 
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ is_admin: makeAdmin })
-        .eq('id', userId);
-
-      if (error) throw error;
+      await axios.post(`/api/admin/users/${userId}/role`, { makeAdmin });
       setMessage(`User administrative privileges ${makeAdmin ? 'granted' : 'revoked'} successfully`);
       fetchData();
     } catch (err) {
-      setError(err.message || 'Failed to update administrative permissions');
+      setError(err.response?.data?.error || err.message || 'Failed to update administrative permissions');
     }
   };
 
   // Server Actions
   const handleJoinServer = async (server) => {
     try {
-      const { error } = await supabase
-        .from('server_members')
-        .insert({
-          user_id: currentUser.id,
-          server_id: server.id,
-          username: currentUser.username,
-          avatar_url: currentUser.avatar_url || ''
-        });
-
-      // Ignore duplicates, select either way
-      if (error && !error.message?.includes('duplicate')) throw error;
+      await axios.post(`/api/servers/${server.id}/join`);
       onSelectServer(server);
     } catch (err) {
-      setError(err.message || 'Failed to join server');
+      setError(err.response?.data?.error || err.message || 'Failed to join server');
     }
   };
 
@@ -186,16 +129,11 @@ function AdminPanel({ currentUser, onSelectServer }) {
     if (!confirmAction) return;
 
     try {
-      const { error } = await supabase
-        .from('servers')
-        .delete()
-        .eq('id', serverId);
-
-      if (error) throw error;
+      await axios.delete(`/api/admin/servers/${serverId}`);
       setMessage('Server deleted successfully');
       fetchData();
     } catch (err) {
-      setError(err.message || 'Failed to delete server');
+      setError(err.response?.data?.error || err.message || 'Failed to delete server');
     }
   };
 
@@ -205,33 +143,24 @@ function AdminPanel({ currentUser, onSelectServer }) {
     if (!newWord.trim()) return;
     const formattedWord = newWord.trim().toLowerCase();
     try {
-      const { error } = await supabase
-        .from('banned_words')
-        .insert({ word: formattedWord });
-
-      if (error) throw error;
+      await axios.post('/api/admin/banned-words', { word: formattedWord });
       await loadCustomBannedWords();
       setMessage(`Word "${formattedWord}" added to filter`);
       setNewWord('');
       fetchData();
     } catch (err) {
-      setError(err.message || 'Failed to add word');
+      setError(err.response?.data?.error || err.message || 'Failed to add word');
     }
   };
 
   const handleDeleteWord = async (word) => {
     try {
-      const { error } = await supabase
-        .from('banned_words')
-        .delete()
-        .eq('word', word.toLowerCase());
-
-      if (error) throw error;
+      await axios.delete(`/api/admin/banned-words/${word}`);
       await loadCustomBannedWords();
       setMessage(`Word "${word}" removed from filter`);
       fetchData();
     } catch (err) {
-      setError(err.message || 'Failed to delete word');
+      setError(err.response?.data?.error || err.message || 'Failed to delete word');
     }
   };
 
@@ -259,6 +188,12 @@ function AdminPanel({ currentUser, onSelectServer }) {
           >
             Filter Blacklist
           </button>
+          <button 
+            className={`admin-subtab ${activeSubTab === 'system' ? 'active' : ''}`}
+            onClick={() => setActiveSubTab('system')}
+          >
+            📊 System Health Hub
+          </button>
         </div>
       </div>
 
@@ -270,6 +205,42 @@ function AdminPanel({ currentUser, onSelectServer }) {
           <p className="admin-loading">Loading configuration data...</p>
         ) : (
           <>
+            {activeSubTab === 'system' && systemStatus && (
+              <div className="admin-section" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3>🖥️ {systemStatus.server || 'Dell Latitude 5290'} Hardware Metrics</h3>
+                  <button onClick={fetchData} style={{ padding: '6px 16px', background: '#00ffff', color: '#000', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+                    🔄 Refresh Metrics
+                  </button>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '16px' }}>
+                    <div style={{ fontSize: '0.85em', color: '#a4b0be' }}>Status</div>
+                    <div style={{ fontSize: '1.4em', fontWeight: 'bold', color: '#2ed573', marginTop: '4px' }}>🟢 {systemStatus.status?.toUpperCase()}</div>
+                    <div style={{ fontSize: '0.8em', color: '#747d8c', marginTop: '4px' }}>Uptime: {Math.floor(systemStatus.uptimeSeconds / 3600)}h {Math.floor((systemStatus.uptimeSeconds % 3600) / 60)}m</div>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '16px' }}>
+                    <div style={{ fontSize: '0.85em', color: '#a4b0be' }}>CPU Model ({systemStatus.cpus} Cores)</div>
+                    <div style={{ fontSize: '0.95em', fontWeight: 'bold', color: '#fff', marginTop: '4px' }}>{systemStatus.cpuModel}</div>
+                    <div style={{ fontSize: '0.8em', color: '#00ffff', marginTop: '4px' }}>Load: {systemStatus.cpuLoadAverage?.['1min']} (1m) | {systemStatus.cpuLoadAverage?.['5min']} (5m)</div>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '16px' }}>
+                    <div style={{ fontSize: '0.85em', color: '#a4b0be' }}>System Memory (RAM)</div>
+                    <div style={{ fontSize: '1.4em', fontWeight: 'bold', color: '#ffa502', marginTop: '4px' }}>{systemStatus.memory?.usedGB} / {systemStatus.memory?.totalGB}</div>
+                    <div style={{ fontSize: '0.8em', color: '#747d8c', marginTop: '4px' }}>{systemStatus.memory?.usedPercent} RAM Used ({systemStatus.memory?.freeGB} Free)</div>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '16px' }}>
+                    <div style={{ fontSize: '0.85em', color: '#a4b0be' }}>Node.js API Footprint</div>
+                    <div style={{ fontSize: '1.4em', fontWeight: 'bold', color: '#70a1ff', marginTop: '4px' }}>{systemStatus.processMemoryMB}</div>
+                    <div style={{ fontSize: '0.8em', color: '#747d8c', marginTop: '4px' }}>Adaptive Memory Scaling</div>
+                  </div>
+                </div>
+              </div>
+            )}
             {activeSubTab === 'users' && (
               <div className="admin-section">
                 <h3>User Accounts Management</h3>

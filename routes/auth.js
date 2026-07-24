@@ -67,13 +67,12 @@ router.post('/login', async (req, res) => {
     const user = result.rows[0];
 
     if (!user) {
+      // Check if user is archived (globally banned)
+      const archivedResult = await query('SELECT 1 FROM archived_users WHERE username = $1', [username]);
+      if (archivedResult.rows.length > 0) {
+        return res.status(403).json({ error: 'Your account has been globally banned' });
+      }
       return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Check if user is globally banned
-    const banResult = await query('SELECT * FROM bans WHERE user_id = $1 AND server_id IS NULL', [user.id]);
-    if (banResult.rows.length > 0) {
-      return res.status(403).json({ error: 'Your account is globally banned' });
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password);

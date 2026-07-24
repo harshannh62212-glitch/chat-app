@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
+import axios from 'axios';
 import { GENERAL_SERVER_ID } from '../utils/generalServer';
 
 function Discovery({ currentUser }) {
@@ -17,25 +17,17 @@ function Discovery({ currentUser }) {
     try {
       setLoading(true);
       
-      // 1. Get all public servers
-      const { data: publicServers, error: srvErr } = await supabase
-        .from('servers')
-        .select('*')
-        .eq('is_public', true);
-      
-      if (srvErr) throw srvErr;
+      const [discRes, myRes] = await Promise.all([
+        axios.get('/api/servers/discovery'),
+        axios.get('/api/servers/my-servers')
+      ]);
 
-      // 2. Get user memberships
-      const { data: memberships, error: memErr } = await supabase
-        .from('server_members')
-        .select('server_id')
-        .eq('user_id', currentUser.id);
+      const publicServers = discRes.data || [];
+      const myServers = myRes.data || [];
 
-      if (memErr) throw memErr;
-
-      const ids = new Set(memberships.map(m => m.server_id));
+      const ids = new Set(myServers.map(m => m.id));
       setJoinedServerIds(ids);
-      setServers(publicServers || []);
+      setServers(publicServers);
     } catch (err) {
       console.error('Failed to fetch discovery servers:', err);
     } finally {
@@ -50,33 +42,21 @@ function Discovery({ currentUser }) {
     try {
       setJoiningServer(serverId);
       
-      // Call secure join RPC database function
-      const { data: joinedSuccessfully, error } = await supabase.rpc('join_server', {
-        target_server_id: serverId,
-        provided_password: password || ''
+      await axios.post(`/api/servers/${serverId}/join`, { password });
+
+      setJoinedServerIds(prev => {
+        const next = new Set(prev);
+        next.add(serverId);
+        return next;
       });
-
-      if (error) throw error;
-
-      if (joinedSuccessfully) {
-        // Update joined state
-        setJoinedServerIds(prev => {
-          const next = new Set(prev);
-          next.add(serverId);
-          return next;
-        });
-        setPasswordPrompt(null);
-      } else {
-        // Password verification failed
-        if (serverDoc.has_password && !password) {
-          setPasswordPrompt(serverId);
-        } else {
-          alert('Incorrect password or unauthorized to join');
-        }
-      }
+      setPasswordPrompt(null);
     } catch (err) {
-      console.error('Failed to join server:', err);
-      alert(err.message || 'Failed to join server');
+      const errMsg = err.response?.data?.error || err.message || 'Failed to join server';
+      if (errMsg.includes('password required')) {
+        setPasswordPrompt(serverId);
+      } else {
+        alert(errMsg);
+      }
     } finally {
       setJoiningServer(null);
     }
@@ -90,15 +70,8 @@ function Discovery({ currentUser }) {
     if (!confirmLeave) return;
 
     try {
-      const { error } = await supabase
-        .from('server_members')
-        .delete()
-        .eq('user_id', currentUser.id)
-        .eq('server_id', serverId);
+      await axios.delete(`/api/servers/${serverId}/leave`);
 
-      if (error) throw error;
-
-      // Update joined state
       setJoinedServerIds(prev => {
         const next = new Set(prev);
         next.delete(serverId);
@@ -106,7 +79,7 @@ function Discovery({ currentUser }) {
       });
     } catch (err) {
       console.error('Failed to leave server:', err);
-      alert(err.message || 'Failed to leave server');
+      alert(err.response?.data?.error || 'Failed to leave server');
     }
   };
 

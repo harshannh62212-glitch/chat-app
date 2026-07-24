@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '../supabase';
+import axios from 'axios';
+import { io } from 'socket.io-client';
 import { filterContent } from '../utils/contentFilter';
 import { checkRateLimit } from '../utils/rateLimiter';
 import GiphyPanel from './GiphyPanel';
+
+const socket = io(import.meta.env.VITE_API_URL || 'https://starter-taste-lamp-wit.trycloudflare.com', {
+  autoConnect: true
+});
 
 function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
   const [chatrooms, setChatrooms] = useState([]);
@@ -14,23 +19,16 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
   const [showGiphy, setShowGiphy] = useState(false);
   const messagesEndRef = useRef(null);
 
-  // Listen to chatrooms of the server
+  // Fetch chatrooms of the server
   useEffect(() => {
     const fetchChatrooms = async () => {
       try {
-        const { data, error } = await supabase
-          .from('chatrooms')
-          .select('*')
-          .eq('server_id', server.id)
-          .order('is_general', { ascending: false })
-          .order('created_at', { ascending: true });
-        
-        if (error) throw error;
-        if (data) {
-          setChatrooms(data);
-          if (data.length > 0) {
-            if (!selectedChatroom || !data.some(r => r.id === selectedChatroom.id)) {
-              setSelectedChatroom(data[0]);
+        const res = await axios.get(`/api/servers/${server.id}/chatrooms`);
+        if (res.data) {
+          setChatrooms(res.data);
+          if (res.data.length > 0) {
+            if (!selectedChatroom || !res.data.some(r => r.id === selectedChatroom.id)) {
+              setSelectedChatroom(res.data[0]);
             }
           }
         }
@@ -40,37 +38,15 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
     };
 
     fetchChatrooms();
-
-    const channel = supabase
-      .channel(`chatrooms-${server.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'chatrooms',
-        filter: `server_id=eq.${server.id}`
-      }, () => {
-        fetchChatrooms();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [server.id]);
 
-  // Listen to members of the server
+  // Fetch members of the server
   useEffect(() => {
     const fetchMembers = async () => {
       try {
-        const { data, error } = await supabase
-          .from('server_members')
-          .select('user_id, users(id, username, avatar_url)')
-          .eq('server_id', server.id);
-        
-        if (error) throw error;
-        if (data) {
-          const formatted = data.map(m => m.users).filter(Boolean);
-          setMembers(formatted);
+        const res = await axios.get(`/api/servers/${server.id}/members`);
+        if (res.data) {
+          setMembers(res.data);
         }
       } catch (err) {
         console.error('Failed to fetch members:', err);
@@ -78,25 +54,9 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
     };
 
     fetchMembers();
-
-    const channel = supabase
-      .channel(`members-${server.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'server_members',
-        filter: `server_id=eq.${server.id}`
-      }, () => {
-        fetchMembers();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [server.id]);
 
-  // Listen to messages in the active chatroom
+  // Fetch & listen to messages in the active chatroom
   useEffect(() => {
     if (!selectedChatroom) {
       setMessages([]);
@@ -105,20 +65,9 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
 
     const fetchMessages = async () => {
       try {
-        const { data, error } = await supabase
-          .from('server_messages')
-          .select('*, users(username, avatar_url)')
-          .eq('chatroom_id', selectedChatroom.id)
-          .order('created_at', { ascending: true });
-        
-        if (error) throw error;
-        if (data) {
-          const formatted = data.map(m => ({
-            ...m,
-            username: m.users?.username || 'Unknown',
-            avatar_url: m.users?.avatar_url || ''
-          }));
-          setMessages(formatted);
+        const res = await axios.get(`/api/messages/chatroom/${selectedChatroom.id}`);
+        if (res.data) {
+          setMessages(res.data);
         }
       } catch (err) {
         console.error('Failed to fetch messages:', err);
@@ -127,40 +76,18 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
 
     fetchMessages();
 
-    const channel = supabase
-      .channel(`messages-${selectedChatroom.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'server_messages',
-        filter: `chatroom_id=eq.${selectedChatroom.id}`
-      }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          const newMsg = payload.new;
-          supabase
-            .from('users')
-            .select('username, avatar_url')
-            .eq('id', newMsg.sender_id)
-            .single()
-            .then(({ data: userData }) => {
-              const enrichedMsg = {
-                ...newMsg,
-                username: userData?.username || 'Unknown',
-                avatar_url: userData?.avatar_url || ''
-              };
-              setMessages(prev => {
-                if (prev.some(m => m.id === newMsg.id)) return prev;
-                return [...prev, enrichedMsg];
-              });
-            });
-        } else if (payload.eventType === 'DELETE') {
-          setMessages(prev => prev.filter(m => m.id !== payload.old.id));
-        }
-      })
-      .subscribe();
+    socket.emit('user-joined', currentUser.id, server.id);
+
+    const handleNewMessage = (msgData) => {
+      if (msgData.serverId === server.id || msgData.chatroom_id === selectedChatroom.id) {
+        setMessages(prev => [...prev, msgData]);
+      }
+    };
+
+    socket.on('new-message', handleNewMessage);
 
     return () => {
-      supabase.removeChannel(channel);
+      socket.off('new-message', handleNewMessage);
     };
   }, [server.id, selectedChatroom]);
 
@@ -186,12 +113,22 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
     const filteredContent = filterContent(contentStr);
 
     try {
-      const { error } = await supabase.from('server_messages').insert({
-        sender_id: currentUser.id,
-        chatroom_id: selectedChatroom.id,
+      const res = await axios.post('/api/messages/server', {
+        chatroomId: selectedChatroom.id,
         content: filteredContent
       });
-      if (error) throw error;
+
+      const newMsg = res.data;
+      socket.emit('send-message', {
+        senderId: currentUser.id,
+        content: filteredContent,
+        serverId: server.id,
+        chatroom_id: selectedChatroom.id
+      });
+      setMessages(prev => {
+        if (prev.some(m => m.id === newMsg.id)) return prev;
+        return [...prev, newMsg];
+      });
     } catch (err) {
       console.error('Failed to send message:', err);
     }
@@ -212,11 +149,8 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
     if (!confirmDelete) return;
 
     try {
-      const { error } = await supabase
-        .from('server_messages')
-        .delete()
-        .eq('id', msgId);
-      if (error) throw error;
+      await axios.delete(`/api/messages/${msgId}`);
+      setMessages(prev => prev.filter(m => m.id !== msgId));
     } catch (err) {
       console.error('Failed to delete message:', err);
     }

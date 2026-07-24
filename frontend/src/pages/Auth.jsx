@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../supabase';
-import { ensureGeneralServerAndMembership } from '../utils/generalServer';
+import axios from 'axios';
 import Logo from '../components/Logo';
 import '../styles/Auth.css';
 
@@ -31,124 +30,27 @@ function Auth({ onLogin, onBack }) {
     }
 
     const usernameTrimmed = formData.username.trim();
-    const email = `${usernameTrimmed.toLowerCase().replace(/[^a-z0-9]/g, '')}@chat.com`;
     const password = formData.password;
 
     try {
       if (isRegister) {
-        // Register via Supabase Auth
-        const { data, error: authError } = await supabase.auth.signUp({
-          email,
-          password
-        });
-
-        if (authError) throw authError;
-        if (!data.user) throw new Error('Registration failed');
-
-        // Create Public Profile Doc
-        const userData = {
-          id: data.user.id,
+        const res = await axios.post('/api/auth/register', {
           username: usernameTrimmed,
-          email: email,
-          is_admin: usernameTrimmed === 'Nxghtmare3621'
-        };
-
-        const { error: userError } = await supabase
-          .from('users')
-          .insert(userData);
-
-        if (userError) throw userError;
-
-        // Auto-heal / Ensure default "General" server exists and join it
-        await ensureGeneralServerAndMembership(data.user.id, usernameTrimmed, '');
-
-        const session = data.session || (await supabase.auth.getSession()).data.session;
-        onLogin(session?.access_token || '', userData);
-      } else {
-        // Login via Supabase Auth
-        const { data, error: authError } = await supabase.auth.signInWithPassword({
-          email,
           password
         });
-
-        if (authError) throw authError;
-        if (!data.user) throw new Error('Login failed');
-
-        // Fetch public profile
-        const { data: userProfiles, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', data.user.id);
-
-        if (userError) throw userError;
-
-        let userData = userProfiles?.[0];
-
-        if (!userData) {
-          // Auto-heal: profile doesn't exist in public.users, create it
-          const newProfile = {
-            id: data.user.id,
-            username: data.user.email.split('@')[0],
-            email: data.user.email,
-            is_admin: data.user.email.split('@')[0] === 'Nxghtmare3621'
-          };
-          const { data: inserted, error: insertErr } = await supabase
-            .from('users')
-            .insert(newProfile)
-            .select()
-            .single();
-          if (insertErr) throw insertErr;
-          userData = inserted;
-        }
-
-        // Check if timed out
-        if (userData.timeout_until) {
-          const timeoutDate = new Date(userData.timeout_until);
-          if (timeoutDate > new Date()) {
-            throw new Error(`Your account is timed out until ${timeoutDate.toLocaleString()}`);
-          }
-        }
-
-        // Check if banned
-        if (userData.is_banned) {
-          throw new Error('Your account has been globally banned');
-        }
-
-        // Auto-heal / Ensure default "General" server exists and join it
-        await ensureGeneralServerAndMembership(data.user.id, userData.username, userData.avatar_url);
-
-        const session = data.session || (await supabase.auth.getSession()).data.session;
-        onLogin(session?.access_token || '', userData);
+        const { user, token } = res.data;
+        onLogin(token, user);
+      } else {
+        const res = await axios.post('/api/auth/login', {
+          username: usernameTrimmed,
+          password
+        });
+        const { user, token } = res.data;
+        onLogin(token, user);
       }
     } catch (err) {
       console.error(err);
-      let errMsg = 'Authentication failed';
-      if (err) {
-        if (typeof err === 'string') {
-          errMsg = err;
-        } else if (err.message && typeof err.message === 'string') {
-          errMsg = err.message;
-        } else if (err.error_description && typeof err.error_description === 'string') {
-          errMsg = err.error_description;
-        } else if (typeof err === 'object') {
-          const msg = err.message || err.error || err.error_description;
-          if (msg && typeof msg === 'string') {
-            errMsg = msg;
-          } else {
-            try {
-              const str = JSON.stringify(err);
-              errMsg = str !== '{}' ? str : (err.toString() !== '[object Object]' ? err.toString() : 'Authentication failed');
-            } catch (e) {
-              errMsg = err.toString() || 'Authentication failed';
-            }
-          }
-        }
-      }
-      if (errMsg.includes('already registered')) {
-        errMsg = 'Username already exists';
-      } else if (errMsg.includes('Invalid login credentials')) {
-        errMsg = 'Invalid credentials';
-      }
+      const errMsg = err.response?.data?.error || err.message || 'Authentication failed';
       setError(errMsg);
     } finally {
       setLoading(false);

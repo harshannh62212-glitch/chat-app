@@ -25,20 +25,14 @@ const adminCheck = async (req, res, next) => {
 router.get('/users', authMiddleware, adminCheck, async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, username, email, is_admin, timeout_until, created_at 
+      `SELECT id, username, email, is_admin, timeout_until, created_at, FALSE as is_banned 
        FROM users 
+       UNION ALL
+       SELECT id, username, email, is_admin, timeout_until, created_at, TRUE as is_banned 
+       FROM archived_users
        ORDER BY username ASC`
     );
-    // Add active ban status
-    const bansResult = await query('SELECT user_id FROM bans WHERE server_id IS NULL');
-    const bannedUserIds = new Set(bansResult.rows.map(r => r.user_id));
-    
-    const users = result.rows.map(user => ({
-      ...user,
-      is_banned: bannedUserIds.has(user.id)
-    }));
-    
-    res.json(users);
+    res.json(result.rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -49,17 +43,10 @@ router.get('/users', authMiddleware, adminCheck, async (req, res) => {
 router.post('/users/:id/ban', authMiddleware, adminCheck, async (req, res) => {
   try {
     const { id } = req.params;
-    const { reason } = req.body;
     
-    // Remove any existing global ban first to avoid duplicates
-    await query('DELETE FROM bans WHERE user_id = $1 AND server_id IS NULL', [id]);
-
-    // Insert into bans (global ban has server_id = null)
-    await query(
-      `INSERT INTO bans (user_id, server_id, reason) 
-       VALUES ($1, NULL, $2)`,
-      [id, reason || 'Global ban by Administrator']
-    );
+    // Set is_banned = true on active user profile.
+    // The DB trigger tr_archive_banned_user will archive and delete the user profile.
+    await query('UPDATE users SET is_banned = TRUE WHERE id = $1', [id]);
     
     res.json({ message: 'User banned globally' });
   } catch (err) {
@@ -72,7 +59,10 @@ router.post('/users/:id/ban', authMiddleware, adminCheck, async (req, res) => {
 router.post('/users/:id/unban', authMiddleware, adminCheck, async (req, res) => {
   try {
     const { id } = req.params;
-    await query('DELETE FROM bans WHERE user_id = $1 AND server_id IS NULL', [id]);
+    
+    // Call the postgres function unban_user to restore profile & data
+    await query('SELECT public.unban_user($1)', [id]);
+    
     res.json({ message: 'User unbanned globally' });
   } catch (err) {
     console.error(err);

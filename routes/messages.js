@@ -100,4 +100,63 @@ router.get('/dm-conversations/list', authMiddleware, async (req, res) => {
   }
 });
 
+// Post message in chatroom
+router.post('/server', authMiddleware, async (req, res) => {
+  try {
+    const { chatroomId, content } = req.body;
+    const senderId = req.userId;
+
+    if (!chatroomId || !content) {
+      return res.status(400).json({ error: 'chatroomId and content required' });
+    }
+
+    const insertResult = await query(
+      `INSERT INTO server_messages (sender_id, chatroom_id, content) 
+       VALUES ($1, $2, $3) 
+       RETURNING id, sender_id, chatroom_id, content, created_at`,
+      [senderId, chatroomId, content]
+    );
+
+    const message = insertResult.rows[0];
+
+    const userResult = await query('SELECT username, avatar_url FROM users WHERE id = $1', [senderId]);
+    const user = userResult.rows[0];
+
+    const enriched = {
+      ...message,
+      username: user ? user.username : 'Unknown',
+      avatar_url: user ? user.avatar_url : ''
+    };
+
+    res.status(201).json(enriched);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// Post direct message
+router.post('/dm', authMiddleware, async (req, res) => {
+  try {
+    const { recipientId, content } = req.body;
+    const senderId = req.userId;
+
+    if (!recipientId || !content) {
+      return res.status(400).json({ error: 'recipientId and content required' });
+    }
+
+    const insertResult = await query(
+      `INSERT INTO direct_messages (sender_id, recipient_id, content) 
+       VALUES ($1, $2, $3) 
+       RETURNING id, sender_id, recipient_id, content, created_at`,
+      [senderId, recipientId, content]
+    );
+
+    res.status(201).json(insertResult.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send direct message' });
+  }
+});
+
 module.exports = router;

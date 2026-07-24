@@ -23,9 +23,9 @@ async function authMiddleware(req, res, next) {
       }
     }
 
-    // Check if user is globally banned
-    const banResult = await query('SELECT 1 FROM bans WHERE user_id = $1 AND server_id IS NULL', [req.userId]);
-    if (banResult.rows.length > 0) {
+    // Check if user is globally banned (archived)
+    const archivedResult = await query('SELECT 1 FROM archived_users WHERE id = $1', [req.userId]);
+    if (archivedResult.rows.length > 0) {
       return res.status(403).json({ error: 'Access denied: Your account is globally banned' });
     }
 

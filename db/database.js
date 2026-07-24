@@ -3,7 +3,11 @@ require('dotenv').config();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  min: 2,
+  max: 100,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 5000,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
 });
 
 pool.on('error', (err) => {
@@ -27,7 +31,7 @@ async function createTables() {
     // Users table
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
-        id VARCHAR(255) PRIMARY KEY,
+        id VARCHAR(255) PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
         username VARCHAR(255) UNIQUE NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255),
@@ -35,6 +39,7 @@ async function createTables() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+      ALTER TABLE users ALTER COLUMN id SET DEFAULT gen_random_uuid()::varchar;
     `);
 
     // Servers table
@@ -125,6 +130,15 @@ async function createTables() {
       );
     `);
 
+    // Performance Indexes for high concurrency (80+ users)
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_server_messages_chatroom ON server_messages(chatroom_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_direct_messages_users ON direct_messages(sender_id, recipient_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_server_members_user_server ON server_members(user_id, server_id);
+      CREATE INDEX IF NOT EXISTS idx_chatrooms_server_id ON chatrooms(server_id);
+      CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+    `);
+
     // Column Migrations
     await client.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
@@ -145,6 +159,126 @@ async function createTables() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Archive tables for banned users
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.archived_users (
+        id VARCHAR(255) PRIMARY KEY,
+        username VARCHAR(255) UNIQUE NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255),
+        avatar_url VARCHAR(255),
+        is_admin BOOLEAN DEFAULT false,
+        timeout_until TIMESTAMP,
+        created_at TIMESTAMP,
+        updated_at TIMESTAMP,
+        archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS public.archived_server_members (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        server_id INTEGER NOT NULL,
+        joined_at TIMESTAMP,
+        archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, server_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS public.archived_friendships (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        friend_id VARCHAR(255) NOT NULL,
+        status VARCHAR(50),
+        created_at TIMESTAMP,
+        archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, friend_id)
+      );
+    `);
+
+    // Archive trigger function and trigger
+    await client.query(`
+      CREATE OR REPLACE FUNCTION public.archive_banned_user_trigger()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW.is_banned = TRUE AND (OLD.is_banned = FALSE OR OLD.is_banned IS NULL) THEN
+          -- Archive user details
+          INSERT INTO public.archived_users (id, username, email, password, avatar_url, is_admin, timeout_until, created_at, updated_at)
+          VALUES (NEW.id, NEW.username, NEW.email, NEW.password, NEW.avatar_url, NEW.is_admin, NEW.timeout_until, NEW.created_at, NEW.updated_at)
+          ON CONFLICT (id) DO UPDATE SET
+            username = EXCLUDED.username,
+            email = EXCLUDED.email,
+            password = EXCLUDED.password,
+            avatar_url = EXCLUDED.avatar_url,
+            is_admin = EXCLUDED.is_admin,
+            timeout_until = EXCLUDED.timeout_until,
+            updated_at = EXCLUDED.updated_at;
+
+          -- Archive memberships
+          INSERT INTO public.archived_server_members (user_id, server_id, joined_at)
+          SELECT user_id, server_id, joined_at
+          FROM public.server_members
+          WHERE user_id = NEW.id
+          ON CONFLICT (user_id, server_id) DO NOTHING;
+
+          -- Archive friendships
+          INSERT INTO public.archived_friendships (user_id, friend_id, status, created_at)
+          SELECT user_id, friend_id, status, created_at
+          FROM public.friendships
+          WHERE user_id = NEW.id OR friend_id = NEW.id
+          ON CONFLICT (user_id, friend_id) DO NOTHING;
+
+          -- Delete/archive servers owned by the user first to avoid FK violation
+          DELETE FROM public.servers WHERE owner_id = NEW.id;
+
+          -- Now delete from public.users
+          DELETE FROM public.users WHERE id = NEW.id;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS tr_archive_banned_user ON public.users;
+      CREATE TRIGGER tr_archive_banned_user
+        AFTER UPDATE OF is_banned ON public.users
+        FOR EACH ROW
+        EXECUTE FUNCTION public.archive_banned_user_trigger();
+    `);
+
+    // Unban function
+    await client.query(`
+      CREATE OR REPLACE FUNCTION public.unban_user(target_user_id VARCHAR)
+      RETURNS VOID AS $$
+      BEGIN
+        -- Restore user details to public.users
+        INSERT INTO public.users (id, username, email, password, avatar_url, is_admin, timeout_until, created_at, updated_at, is_banned)
+        SELECT id, username, email, password, avatar_url, is_admin, timeout_until, created_at, updated_at, FALSE
+        FROM public.archived_users
+        WHERE id = target_user_id
+        ON CONFLICT (id) DO UPDATE SET
+          is_banned = FALSE;
+
+        -- Restore memberships
+        INSERT INTO public.server_members (user_id, server_id, joined_at)
+        SELECT user_id, server_id, joined_at
+        FROM public.archived_server_members
+        WHERE user_id = target_user_id
+        ON CONFLICT (user_id, server_id) DO NOTHING;
+
+        -- Restore friendships
+        INSERT INTO public.friendships (user_id, friend_id, status, created_at)
+        SELECT user_id, friend_id, status, created_at
+        FROM public.archived_friendships
+        WHERE user_id = target_user_id OR friend_id = target_user_id
+        ON CONFLICT (user_id, friend_id) DO NOTHING;
+
+        -- Delete from archived tables
+        DELETE FROM public.archived_users WHERE id = target_user_id;
+        DELETE FROM public.archived_server_members WHERE user_id = target_user_id;
+        DELETE FROM public.archived_friendships WHERE user_id = target_user_id OR friend_id = target_user_id;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
 
     // Seed/Ensure default "General" server exists
     const serverCheck = await client.query("SELECT id FROM servers WHERE name = 'General' LIMIT 1");

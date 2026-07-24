@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import axios from 'axios';
 
 export const BANNED_WORDS = [
   // Mild profanity
@@ -37,14 +37,15 @@ export const BANNED_WORDS = [
 
 let customBannedWords = [];
 
-// Load custom banned words from Supabase
+// Load custom banned words from backend API
 export async function loadCustomBannedWords() {
   try {
-    const { data, error } = await supabase.from('banned_words').select('word');
-    if (error) throw error;
-    customBannedWords = data.map(r => r.word.toLowerCase());
+    const res = await axios.get('/api/admin/banned-words');
+    if (res.data) {
+      customBannedWords = res.data.map(r => (r.word || r).toLowerCase());
+    }
   } catch (err) {
-    console.error('Failed to load custom banned words:', err);
+    // Fail silently if not admin or unauthenticated
   }
 }
 

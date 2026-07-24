@@ -1,0 +1,194 @@
+{
+  "users": [
+    {
+      "id": "d7da936c-3555-44fe-9456-97b16202ca6c",
+      "username": "admin",
+      "email": "admin@chat.com",
+      "password": null,
+      "avatar_url": null,
+      "is_admin": true,
+      "timeout_until": null,
+      "created_at": "2026-07-16T03:40:12.322661",
+      "updated_at": "2026-07-16T03:40:12.322661",
+      "is_banned": false
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000000",
+      "username": "system",
+      "email": "system@chat.com",
+      "password": "system_hashed_placeholder",
+      "avatar_url": null,
+      "is_admin": false,
+      "timeout_until": null,
+      "created_at": "2026-07-16T03:34:57.351112",
+      "updated_at": "2026-07-16T03:34:57.351112",
+      "is_banned": false
+    },
+    {
+      "id": "4446cb82-0832-4696-8355-bb607e2f71bb",
+      "username": "rthrthrth",
+      "email": "rthrthrth@chat.com",
+      "password": null,
+      "avatar_url": null,
+      "is_admin": false,
+      "timeout_until": null,
+      "created_at": "2026-07-17T02:48:09.547541",
+      "updated_at": "2026-07-17T02:48:09.547541",
+      "is_banned": false
+    },
+    {
+      "id": "f8ae4e87-4c79-4161-8c5c-93239aa9a465",
+      "username": "lol111",
+      "email": "lol111@chat.com",
+      "password": null,
+      "avatar_url": null,
+      "is_admin": false,
+      "timeout_until": null,
+      "created_at": "2026-07-20T02:57:42.070135",
+      "updated_at": "2026-07-20T02:57:42.070135",
+      "is_banned": false
+    },
+    {
+      "id": "42424698-abc8-462e-b563-3a397e5c2287",
+      "username": "youtuber11",
+      "email": "youtuber11@chat.com",
+      "password": null,
+      "avatar_url": null,
+      "is_admin": false,
+      "timeout_until": null,
+      "created_at": "2026-07-20T02:57:51.721714",
+      "updated_at": "2026-07-20T02:57:51.721714",
+      "is_banned": false
+    }
+  ],
+  "servers": [
+    {
+      "id": 1,
+      "name": "General",
+      "description": "Default server for all members",
+      "owner_id": "00000000-0000-0000-0000-000000000000",
+      "password_hash": null,
+      "is_public": true,
+      "avatar_url": null,
+      "created_at": "2026-07-16T03:34:57.440577",
+      "updated_at": "2026-07-16T03:34:57.440577"
+    }
+  ],
+  "chatrooms": [
+    {
+      "id": 1,
+      "server_id": 1,
+      "name": "general",
+      "is_general": true,
+      "description": null,
+      "created_at": "2026-07-16T03:34:57.527079"
+    }
+  ],
+  "server_members": [
+    {
+      "id": 1,
+      "user_id": "00000000-0000-0000-0000-000000000000",
+      "server_id": 1,
+      "joined_at": "2026-07-16T03:35:49.918336"
+    },
+    {
+      "id": 3,
+      "user_id": "d7da936c-3555-44fe-9456-97b16202ca6c",
+      "server_id": 1,
+      "joined_at": "2026-07-17T02:53:10.299363"
+    },
+    {
+      "id": 4,
+      "user_id": "4446cb82-0832-4696-8355-bb607e2f71bb",
+      "server_id": 1,
+      "joined_at": "2026-07-18T18:10:00.160445"
+    },
+    {
+      "id": 12,
+      "user_id": "f8ae4e87-4c79-4161-8c5c-93239aa9a465",
+      "server_id": 1,
+      "joined_at": "2026-07-20T02:57:42.714011"
+    },
+    {
+      "id": 13,
+      "user_id": "42424698-abc8-462e-b563-3a397e5c2287",
+      "server_id": 1,
+      "joined_at": "2026-07-20T02:57:52.279648"
+    }
+  ],
+  "server_messages": [
+    {
+      "id": 3,
+      "sender_id": "d7da936c-3555-44fe-9456-97b16202ca6c",
+      "chatroom_id": 1,
+      "content": "hi",
+      "created_at": "2026-07-18T18:25:50.627564",
+      "updated_at": "2026-07-18T18:25:50.627564"
+    },
+    {
+      "id": 4,
+      "sender_id": "d7da936c-3555-44fe-9456-97b16202ca6c",
+      "chatroom_id": 1,
+      "content": "hi",
+      "created_at": "2026-07-18T18:25:52.831132",
+      "updated_at": "2026-07-18T18:25:52.831132"
+    },
+    {
+      "id": 5,
+      "sender_id": "d7da936c-3555-44fe-9456-97b16202ca6c",
+      "chatroom_id": 1,
+      "content": "chill",
+      "created_at": "2026-07-18T18:26:00.8456",
+      "updated_at": "2026-07-18T18:26:00.8456"
+    },
+    {
+      "id": 6,
+      "sender_id": "d7da936c-3555-44fe-9456-97b16202ca6c",
+      "chatroom_id": 1,
+      "content": "hhib",
+      "created_at": "2026-07-18T18:27:11.863077",
+      "updated_at": "2026-07-18T18:27:11.863077"
+    },
+    {
+      "id": 8,
+      "sender_id": "d7da936c-3555-44fe-9456-97b16202ca6c",
+      "chatroom_id": 1,
+      "content": "jhgfdsdfghjk",
+      "created_at": "2026-07-18T18:27:16.456361",
+      "updated_at": "2026-07-18T18:27:16.456361"
+    },
+    {
+      "id": 9,
+      "sender_id": "d7da936c-3555-44fe-9456-97b16202ca6c",
+      "chatroom_id": 1,
+      "content": "hi",
+      "created_at": "2026-07-20T02:48:36.702357",
+      "updated_at": "2026-07-20T02:48:36.702357"
+    },
+    {
+      "id": 10,
+      "sender_id": "d7da936c-3555-44fe-9456-97b16202ca6c",
+      "chatroom_id": 1,
+      "content": "sdf",
+      "created_at": "2026-07-24T05:24:47.857009",
+      "updated_at": "2026-07-24T05:24:47.857009"
+    },
+    {
+      "id": 11,
+      "sender_id": "d7da936c-3555-44fe-9456-97b16202ca6c",
+      "chatroom_id": 1,
+      "content": "f",
+      "created_at": "2026-07-24T21:44:18.539429",
+      "updated_at": "2026-07-24T21:44:18.539429"
+    },
+    {
+      "id": 12,
+      "sender_id": "d7da936c-3555-44fe-9456-97b16202ca6c",
+      "chatroom_id": 1,
+      "content": "f",
+      "created_at": "2026-07-24T21:44:19.437179",
+      "updated_at": "2026-07-24T21:44:19.437179"
+    }
+  ],
+  "direct_messages": []
+}

@@ -12,17 +12,23 @@ const { filterContent } = require('./utils/contentFilter');
 
 const app = express();
 const server = http.createServer(app);
+const allowedOrigin = (origin, callback) => {
+  callback(null, true);
+};
+
 const io = socketIO(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: allowedOrigin,
     methods: ['GET', 'POST'],
     credentials: true
-  }
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: allowedOrigin,
   credentials: true
 }));
 app.use(express.json());
@@ -33,9 +39,43 @@ app.use('/api/servers', serverRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
 
+const os = require('os');
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+// Comprehensive System Status Endpoint
+app.get('/api/system-status', (req, res) => {
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+  const cpus = os.cpus();
+  const loadAvg = os.loadavg();
+
+  res.json({
+    status: 'online',
+    server: 'Dell Latitude 5290',
+    hostname: os.hostname(),
+    platform: os.platform(),
+    arch: os.arch(),
+    uptimeSeconds: Math.floor(os.uptime()),
+    cpus: cpus.length,
+    cpuModel: cpus[0]?.model || 'Intel Core i5/i7',
+    cpuLoadAverage: {
+      '1min': loadAvg[0].toFixed(2),
+      '5min': loadAvg[1].toFixed(2),
+      '15min': loadAvg[2].toFixed(2)
+    },
+    memory: {
+      totalGB: (totalMem / (1024 ** 3)).toFixed(2) + ' GB',
+      freeGB: (freeMem / (1024 ** 3)).toFixed(2) + ' GB',
+      usedGB: (usedMem / (1024 ** 3)).toFixed(2) + ' GB',
+      usedPercent: ((usedMem / totalMem) * 100).toFixed(1) + '%'
+    },
+    processMemoryMB: (process.memoryUsage().rss / (1024 * 1024)).toFixed(1) + ' MB'
+  });
 });
 
 // Socket.io connection

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
+import axios from 'axios';
 import ServerList from '../components/ServerList';
 import Discovery from '../components/Discovery';
 import ServerChat from '../components/ServerChat';
@@ -19,85 +19,20 @@ function Dashboard({ user, setUser, onLogout }) {
   const [servers, setServers] = useState([]);
   const [notifications, setNotifications] = useState([]);
 
-  // Listen to the user's servers in real-time
-  useEffect(() => {
-    const fetchUserServers = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('server_members')
-          .select('server_id, servers (*)')
-          .eq('user_id', user.id);
-        
-        if (error) throw error;
-        
-        if (data) {
-          const loadedServers = data.map(d => d.servers).filter(Boolean);
-          loadedServers.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-          setServers(loadedServers);
-        }
-      } catch (err) {
-        console.error('Failed to fetch user servers:', err);
+  const fetchUserServers = async () => {
+    try {
+      const res = await axios.get('/api/servers/my-servers');
+      if (res.data) {
+        setServers(res.data);
       }
-    };
+    } catch (err) {
+      console.error('Failed to fetch user servers:', err);
+    }
+  };
 
-    fetchUserServers();
-
-    // Listen to changes on server memberships
-    const channel = supabase
-      .channel(`my-servers-${user.id}`)
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'server_members', 
-        filter: `user_id=eq.${user.id}` 
-      }, () => {
-        fetchUserServers();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user.id]);
-
-  // Listen to new direct messages for toast notifications
   useEffect(() => {
-    const channel = supabase
-      .channel(`new-dms-${user.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'direct_messages',
-        filter: `recipient_id=eq.${user.id}`
-      }, (payload) => {
-        const message = payload.new;
-        const currentDmUserId = selectedDM?.id || selectedDM?.other_user_id;
-        
-        if (activeTab !== 'dms' || currentDmUserId !== message.sender_id) {
-          const newNotification = {
-            id: message.id,
-            senderId: message.sender_id,
-            senderUsername: message.sender_username || 'Someone',
-            content: message.content,
-            timestamp: new Date(message.created_at).getTime()
-          };
-          
-          setNotifications(prev => {
-            if (prev.some(n => n.id === newNotification.id)) return prev;
-            return [...prev, newNotification];
-          });
-
-          setTimeout(() => {
-            setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
-          }, 5000);
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user.id, selectedDM, activeTab]);
+    fetchUserServers();
+  }, [user.id]);
 
   const handleNotificationClick = (notif) => {
     setActiveTab('dms');
@@ -360,51 +295,17 @@ function CreateServerModal({ currentUser, onClose, onServerCreated }) {
     setLoading(true);
 
     try {
-      // 1. Create server document
-      const { data: server, error: srvErr } = await supabase
-        .from('servers')
-        .insert({
-          name: formData.name,
-          description: formData.description || '',
-          owner_id: currentUser.id,
-          password_hash: formData.password || null,
-          has_password: !!formData.password,
-          is_public: formData.isPublic !== false,
-          avatar_url: ''
-        })
-        .select('id')
-        .single();
-
-      if (srvErr) throw srvErr;
-
-      // 2. Create mandatory general chatroom inside the server
-      const { error: roomErr } = await supabase
-        .from('chatrooms')
-        .insert({
-          server_id: server.id,
-          name: 'general',
-          is_general: true,
-          description: 'General chatroom'
-        });
-
-      if (roomErr) throw roomErr;
-
-      // 3. Create server membership for the owner
-      const { error: memErr } = await supabase
-        .from('server_members')
-        .insert({
-          user_id: currentUser.id,
-          server_id: server.id,
-          username: currentUser.username,
-          avatar_url: currentUser.avatar_url || ''
-        });
-
-      if (memErr) throw memErr;
+      await axios.post('/api/servers', {
+        name: formData.name,
+        description: formData.description || '',
+        password: formData.password || null,
+        isPublic: formData.isPublic !== false
+      });
 
       onServerCreated();
     } catch (err) {
       console.error(err);
-      setError(err.message || 'Failed to create server');
+      setError(err.response?.data?.error || err.message || 'Failed to create server');
     } finally {
       setLoading(false);
     }
@@ -539,17 +440,11 @@ function SettingsModal({ user, onClose, onUpdateAvatar, onLogout }) {
     }
 
     try {
-      const { error: profileErr } = await supabase
-        .from('users')
-        .update({ avatar_url: avatarUrl })
-        .eq('id', user.id);
-
-      if (profileErr) throw profileErr;
-      
+      await axios.put('/api/users/profile', { avatarUrl });
       onUpdateAvatar(avatarUrl);
       setSuccess('Profile updated successfully!');
     } catch (err) {
-      setError(err.message || 'Failed to update profile');
+      setError(err.response?.data?.error || err.message || 'Failed to update profile');
     } finally {
       setLoading(false);
     }

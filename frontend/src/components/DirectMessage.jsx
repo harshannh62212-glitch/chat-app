@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { supabase } from '../supabase';
 import { filterContent } from '../utils/contentFilter';
 import { checkRateLimit } from '../utils/rateLimiter';
 import GiphyPanel from './GiphyPanel';
@@ -91,20 +90,14 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
     }
   };
 
-  // Listen to messages in real-time
+  // Fetch DMs
   useEffect(() => {
     setLoading(true);
     const fetchDMs = async () => {
       try {
-        const { data, error } = await supabase
-          .from('direct_messages')
-          .select('*')
-          .eq('conversation_id', conversationId)
-          .order('created_at', { ascending: true });
-        
-        if (error) throw error;
-        if (data) {
-          const mapped = data.map(m => ({
+        const res = await axios.get(`/api/messages/dm/${dmUserId}`);
+        if (res.data) {
+          const mapped = res.data.map(m => ({
             id: m.id,
             senderId: m.sender_id,
             content: m.content,
@@ -120,33 +113,7 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
     };
 
     fetchDMs();
-
-    const channel = supabase
-      .channel(`dms-${conversationId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'direct_messages',
-        filter: `conversation_id=eq.${conversationId}`
-      }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          const newMsg = payload.new;
-          setMessages(prev => [...prev, {
-            id: newMsg.id,
-            senderId: newMsg.sender_id,
-            content: newMsg.content,
-            created_at: newMsg.created_at
-          }]);
-        } else if (payload.eventType === 'DELETE') {
-          setMessages(prev => prev.filter(m => m.id !== payload.old.id));
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [conversationId]);
+  }, [dmUserId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -170,18 +137,19 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
     const filteredContent = filterContent(contentStr);
 
     try {
-      // 1. Add DM message
-      const { error: msgErr } = await supabase.from('direct_messages').insert({
-        conversation_id: conversationId,
-        sender_id: currentUser.id,
-        recipient_id: dmUserId,
-        sender_username: currentUser.username,
+      const res = await axios.post('/api/messages/dm', {
+        recipientId: dmUserId,
         content: filteredContent
       });
-
-      if (msgErr) throw msgErr;
+      const newMsg = res.data;
+      setMessages(prev => [...prev, {
+        id: newMsg.id,
+        senderId: newMsg.sender_id,
+        content: newMsg.content,
+        created_at: newMsg.created_at
+      }]);
     } catch (err) {
-      console.error('Failed to send DM:', err);
+      console.error('Failed to send direct message:', err);
     }
   };
 
@@ -200,11 +168,8 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
     if (!confirmDelete) return;
 
     try {
-      const { error } = await supabase
-        .from('direct_messages')
-        .delete()
-        .eq('id', msgId);
-      if (error) throw error;
+      await axios.delete(`/api/messages/dm/${msgId}`);
+      setMessages(prev => prev.filter(m => m.id !== msgId));
     } catch (err) {
       console.error('Failed to delete message:', err);
     }
