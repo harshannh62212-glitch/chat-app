@@ -29,6 +29,7 @@ function ThermalsPage({ onBack }) {
   });
 
   const [manualSpeed, setManualSpeed] = useState(50);
+  const [customInputSpeed, setCustomInputSpeed] = useState('50');
   const [history, setHistory] = useState(() => {
     const initial = [];
     const now = Date.now();
@@ -204,6 +205,15 @@ function ThermalsPage({ onBack }) {
     }
   };
 
+  const handleCustomInputApply = (e) => {
+    e.preventDefault();
+    const val = parseInt(customInputSpeed);
+    if (!isNaN(val)) {
+      handleSetFan('manual', val);
+      setManualSpeed(Math.min(100, Math.max(0, val)));
+    }
+  };
+
   // Render Password Lock Screen if not unlocked
   if (!isUnlocked) {
     return (
@@ -250,8 +260,8 @@ function ThermalsPage({ onBack }) {
           <Logo width={180} variant="full" />
         </div>
         <div style={{ textAlign: 'right' }}>
-          <h2 style={{ margin: 0, fontSize: '1.4em', color: '#00ffff' }}>🔥 Dell Latitude Thermal & Power Dashboard</h2>
-          <span style={{ fontSize: '0.8em', color: '#a4b0be' }}>Dell SMM Kernel Controller & Power Supply Monitor</span>
+          <h2 style={{ margin: 0, fontSize: '1.4em', color: '#00ffff' }}>🔥 Custom Thermal & Fan Curve Engine</h2>
+          <span style={{ fontSize: '0.8em', color: '#a4b0be' }}>Dell BIOS Fan Curves Disabled • 1s Software Daemon Enforcer Active</span>
         </div>
       </div>
 
@@ -307,11 +317,11 @@ function ThermalsPage({ onBack }) {
         </div>
 
         <div className="thermal-card highlight-cyan">
-          <div className="card-label">Fan Speed (RPM)</div>
+          <div className="card-label">Fan Speed (%)</div>
           <div className="card-val" style={{ color: '#70a1ff' }}>
-            🌀 {metrics.rpm} RPM
+            🌀 {metrics.speedPercent}%
           </div>
-          <div className="card-sub">{metrics.mode === 'auto' ? 'AUTO (BIOS Controlled)' : `Manual (${metrics.speedPercent}%)`}</div>
+          <div className="card-sub">{metrics.mode === 'auto' ? 'Custom Smart Curve (Active)' : metrics.mode === 'bios_auto' ? 'Dell BIOS Default' : `Manual Locked (${metrics.speedPercent}%)`}</div>
         </div>
 
         <div className="thermal-card highlight-purple">
@@ -351,11 +361,11 @@ function ThermalsPage({ onBack }) {
       <div className="fan-controller-box">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
-            <h3 style={{ margin: 0, color: '#00ffff', fontSize: '1.2em' }}>🌀 Hardware Fan Speed Controller</h3>
-            <span style={{ fontSize: '0.85em', color: '#a4b0be' }}>Dell SMM Kernel Sysfs Interface (`/sys/class/hwmon`)</span>
+            <h3 style={{ margin: 0, color: '#00ffff', fontSize: '1.2em' }}>⚡ Custom Thermal & Fan Speed Controller</h3>
+            <span style={{ fontSize: '0.85em', color: '#a4b0be' }}>Dell BIOS Fan Curves Disabled • 1s Software Daemon Enforcer</span>
           </div>
-          <div style={{ fontSize: '1.2em', fontWeight: 'bold', color: metrics.mode === 'auto' ? '#2ed573' : '#ffa502' }}>
-            {metrics.mode === 'auto' ? '🤖 Mode: AUTO (BIOS Managed)' : `🎛️ Mode: MANUAL (${metrics.speedPercent}%)`}
+          <div style={{ fontSize: '1.1em', fontWeight: 'bold', color: metrics.mode === 'auto' ? '#2ed573' : metrics.mode === 'bios_auto' ? '#ffa502' : '#00ffff' }}>
+            {metrics.mode === 'auto' ? '🧠 Mode: CUSTOM SMART AUTO CURVE' : metrics.mode === 'bios_auto' ? '🤖 Mode: DELL BIOS RAW' : `🎛️ Mode: MANUAL LOCKED (${metrics.speedPercent}%)`}
           </div>
         </div>
 
@@ -364,54 +374,84 @@ function ThermalsPage({ onBack }) {
             className={`btn-preset ${metrics.mode === 'auto' ? 'active-auto' : ''}`}
             onClick={() => handleSetFan('auto')}
           >
-            🤖 AUTO FAN SPEED (BIOS Adaptive)
+            🧠 CUSTOM SMART AUTO CURVE (Dynamic 25%-100%)
           </button>
 
           <button 
             className="btn-preset"
-            onClick={() => handleSetFan('manual', 25)}
+            onClick={() => { setManualSpeed(25); setCustomInputSpeed('25'); handleSetFan('manual', 25); }}
           >
             🤫 Quiet (25%)
           </button>
 
           <button 
             className="btn-preset"
-            onClick={() => handleSetFan('manual', 50)}
+            onClick={() => { setManualSpeed(50); setCustomInputSpeed('50'); handleSetFan('manual', 50); }}
           >
             ⚖️ Balanced (50%)
           </button>
 
           <button 
             className="btn-preset"
-            onClick={() => handleSetFan('manual', 75)}
+            onClick={() => { setManualSpeed(75); setCustomInputSpeed('75'); handleSetFan('manual', 75); }}
           >
             ❄️ Cool (75%)
           </button>
 
           <button 
             className="btn-preset max-btn"
-            onClick={() => handleSetFan('manual', 100)}
+            onClick={() => { setManualSpeed(100); setCustomInputSpeed('100'); handleSetFan('manual', 100); }}
           >
             🚀 Max Power (100%)
           </button>
+
+          <button 
+            className={`btn-preset ${metrics.mode === 'bios_auto' ? 'active-auto' : ''}`}
+            onClick={() => handleSetFan('bios_auto')}
+            style={{ opacity: 0.7 }}
+          >
+            🤖 Dell BIOS Default
+          </button>
         </div>
 
-        <div className="slider-control">
-          <span style={{ color: '#a4b0be', minWidth: '140px', fontSize: '0.9em' }}>Manual Speed ({manualSpeed}%):</span>
-          <input 
-            type="range" 
-            min="0" 
-            max="100" 
-            value={manualSpeed}
-            onChange={(e) => setManualSpeed(parseInt(e.target.value))}
-            className="fan-slider"
-          />
-          <button 
-            className="btn-apply"
-            onClick={() => handleSetFan('manual', manualSpeed)}
-          >
-            Apply Speed
-          </button>
+        {/* Custom Speed Input Box & Slider */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px', background: 'rgba(0, 0, 0, 0.3)', padding: '16px', borderRadius: '12px' }}>
+          <div className="slider-control" style={{ background: 'none', padding: 0 }}>
+            <span style={{ color: '#a4b0be', minWidth: '140px', fontSize: '0.9em' }}>Slider Speed ({manualSpeed}%):</span>
+            <input 
+              type="range" 
+              min="0" 
+              max="100" 
+              value={manualSpeed}
+              onChange={(e) => {
+                const val = parseInt(e.target.value);
+                setManualSpeed(val);
+                setCustomInputSpeed(val.toString());
+              }}
+              className="fan-slider"
+            />
+            <button 
+              className="btn-apply"
+              onClick={() => handleSetFan('manual', manualSpeed)}
+            >
+              Set Slider Speed
+            </button>
+          </div>
+
+          <form onSubmit={handleCustomInputApply} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ color: '#a4b0be', fontSize: '0.9em', minWidth: '140px' }}>Enter Exact % (0-100):</span>
+            <input 
+              type="number" 
+              min="0"
+              max="100"
+              value={customInputSpeed}
+              onChange={(e) => setCustomInputSpeed(e.target.value)}
+              style={{ padding: '8px 14px', background: 'rgba(0, 0, 0, 0.5)', border: '1px solid rgba(0, 255, 255, 0.3)', borderRadius: '8px', color: '#00ffff', fontWeight: 'bold', width: '100px', fontSize: '1em' }}
+            />
+            <button type="submit" className="btn-apply" style={{ background: '#2ed573' }}>
+              Lock Exact %
+            </button>
+          </form>
         </div>
       </div>
     </div>
