@@ -18,6 +18,12 @@ body {
   overflow: hidden;
 }
 
+.app.thermals-view {
+  width: 100%;
+  height: 100vh;
+  overflow-y: auto !important;
+}
+
 .app.public-view {
   width: 100%;
   min-height: 100vh;

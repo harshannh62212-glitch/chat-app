@@ -78,7 +78,7 @@ function App() {
   };
 
   return (
-    <div className={`app ${currentUser ? 'dashboard-view' : 'public-view'}`}>
+    <div className={`app ${showThermals ? 'thermals-view' : currentUser ? 'dashboard-view' : 'public-view'}`}>
       {currentUser && currentUser.is_banned ? (
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw', background: '#0f1015', color: '#ff4757', textAlign: 'center', padding: '20px', fontFamily: "'Outfit', sans-serif" }}>
           <div className="welcome-island" style={{ maxWidth: '500px', padding: '40px', background: 'rgba(255, 71, 87, 0.04)', borderRadius: '24px', border: '1px solid rgba(255, 71, 87, 0.15)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
