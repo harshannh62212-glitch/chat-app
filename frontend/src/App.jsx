@@ -9,6 +9,7 @@ import './styles/App.css';
 const DEFAULT_API_URL = 'https://starter-taste-lamp-wit.trycloudflare.com';
 const envUrl = import.meta.env.VITE_API_URL;
 axios.defaults.baseURL = (envUrl && envUrl.trim() !== '') ? envUrl : DEFAULT_API_URL;
+axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
