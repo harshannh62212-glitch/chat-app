@@ -5,7 +5,7 @@ import { filterContent } from '../utils/contentFilter';
 import { checkRateLimit } from '../utils/rateLimiter';
 import GiphyPanel from './GiphyPanel';
 
-const socketUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? window.location.origin : 'http://localhost:8000');
+const socketUrl = import.meta.env.PROD ? window.location.origin : 'http://localhost:8000';
 const socket = io(socketUrl, {
   autoConnect: true,
   extraHeaders: {

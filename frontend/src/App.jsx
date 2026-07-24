@@ -6,7 +6,8 @@ import LandingPage from './pages/LandingPage';
 import axios from 'axios';
 import './styles/App.css';
 
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:8000');
+// In production (Vercel), always use same-origin proxy ('') so browser avoids CORS/Mixed Content errors
+axios.defaults.baseURL = import.meta.env.PROD ? '' : 'http://localhost:8000';
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
 
 function App() {
