@@ -10,7 +10,7 @@
       "destination": "https://starter-taste-lamp-wit.trycloudflare.com/socket.io/:path*"
     },
     {
-      "source": "/((?!api|socket.io).*)",
+      "source": "/:path*",
       "destination": "/index.html"
     }
   ]
