@@ -26,6 +26,7 @@ services:
     build: .
     container_name: chat_app_backend
     restart: always
+    privileged: true
     environment:
       DATABASE_URL: postgresql://chat_user:secure_password_change_me@postgres:5432/chat_db
       JWT_SECRET: your_jwt_secret_change_in_production
@@ -42,6 +43,7 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      - /sys:/sys
 
 volumes:
   postgres_data:

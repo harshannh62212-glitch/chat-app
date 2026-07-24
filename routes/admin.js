@@ -9,7 +9,7 @@ const router = express.Router();
 const isAdmin = async (userId) => {
   const result = await query('SELECT is_admin, username FROM users WHERE id = $1', [userId]);
   const user = result.rows[0];
-  return user && (user.is_admin || user.username === 'Nxghtmare3621');
+  return user && (user.is_admin || user.username === 'ADMIN');
 };
 
 // Admin middleware inside router
@@ -43,11 +43,7 @@ router.get('/users', authMiddleware, adminCheck, async (req, res) => {
 router.post('/users/:id/ban', authMiddleware, adminCheck, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Set is_banned = true on active user profile.
-    // The DB trigger tr_archive_banned_user will archive and delete the user profile.
     await query('UPDATE users SET is_banned = TRUE WHERE id = $1', [id]);
-    
     res.json({ message: 'User banned globally' });
   } catch (err) {
     console.error(err);
@@ -59,10 +55,7 @@ router.post('/users/:id/ban', authMiddleware, adminCheck, async (req, res) => {
 router.post('/users/:id/unban', authMiddleware, adminCheck, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Call the postgres function unban_user to restore profile & data
     await query('SELECT public.unban_user($1)', [id]);
-    
     res.json({ message: 'User unbanned globally' });
   } catch (err) {
     console.error(err);
@@ -74,9 +67,9 @@ router.post('/users/:id/unban', authMiddleware, adminCheck, async (req, res) => 
 router.post('/users/:id/timeout', authMiddleware, adminCheck, async (req, res) => {
   try {
     const { id } = req.params;
-    const { durationMinutes } = req.body; // duration in minutes
+    const { durationMinutes } = req.body;
     
-    const timeoutUntil = new Date(Date.now() + durationMinutes * 60 * 1000);
+    const timeoutUntil = new Date(Date.now() + (durationMinutes || 10) * 60 * 1000);
     
     await query(
       'UPDATE users SET timeout_until = $1 WHERE id = $2',
@@ -103,7 +96,7 @@ router.post('/users/:id/untimeout', authMiddleware, adminCheck, async (req, res)
 });
 
 // 6. Kick user from all servers
-router.post('/users/:id/kick-all', authMiddleware, adminCheck, async (req, res) => {
+const kickUserHandler = async (req, res) => {
   try {
     const { id } = req.params;
     await query('DELETE FROM server_members WHERE user_id = $1', [id]);
@@ -112,15 +105,31 @@ router.post('/users/:id/kick-all', authMiddleware, adminCheck, async (req, res) 
     console.error(err);
     res.status(500).json({ error: 'Failed to kick user' });
   }
+};
+
+router.delete('/users/:id/kick', authMiddleware, adminCheck, kickUserHandler);
+router.post('/users/:id/kick-all', authMiddleware, adminCheck, kickUserHandler);
+
+// 7. Toggle admin role
+router.post('/users/:id/role', authMiddleware, adminCheck, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { makeAdmin } = req.body;
+    await query('UPDATE users SET is_admin = $1 WHERE id = $2', [makeAdmin === true, id]);
+    res.json({ message: `User administrative privileges ${makeAdmin ? 'granted' : 'revoked'} successfully` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update admin role' });
+  }
 });
 
-// 7. List all servers
+// 8. List all servers
 router.get('/servers', authMiddleware, adminCheck, async (req, res) => {
   try {
     const result = await query(
-      `SELECT s.id, s.name, s.description, s.is_public, s.created_at, u.username as owner_name 
+      `SELECT s.id, s.name, s.description, s.is_public, s.created_at, COALESCE(u.username, 'System') as owner_name 
        FROM servers s 
-       INNER JOIN users u ON s.owner_id = u.id 
+       LEFT JOIN users u ON s.owner_id = u.id 
        ORDER BY s.created_at DESC`
     );
     res.json(result.rows);
@@ -130,7 +139,7 @@ router.get('/servers', authMiddleware, adminCheck, async (req, res) => {
   }
 });
 
-// 8. Delete server
+// 9. Delete server
 router.delete('/servers/:id', authMiddleware, adminCheck, async (req, res) => {
   try {
     const { id } = req.params;
@@ -142,90 +151,48 @@ router.delete('/servers/:id', authMiddleware, adminCheck, async (req, res) => {
   }
 });
 
-// 9. List custom banned words
-router.get('/words', authMiddleware, adminCheck, async (req, res) => {
+// 10. Word Filter Handlers
+const getBannedWords = async (req, res) => {
   try {
     const result = await query('SELECT word FROM banned_words ORDER BY word ASC');
-    res.json(result.rows.map(r => r.word));
+    res.json(result.rows.map(r => ({ word: r.word })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch banned words' });
   }
-});
+};
 
-// 10. Add custom banned word
-router.post('/words', authMiddleware, adminCheck, async (req, res) => {
+const addBannedWord = async (req, res) => {
   try {
     const { word } = req.body;
     if (!word || !word.trim()) {
       return res.status(400).json({ error: 'Word is required' });
     }
-    
     const formattedWord = word.trim().toLowerCase();
     await query('INSERT INTO banned_words (word) VALUES ($1) ON CONFLICT DO NOTHING', [formattedWord]);
-    
-    // Refresh content filter cache
-    const { loadCustomBannedWords } = require('../utils/contentFilter');
-    await loadCustomBannedWords();
-    
     res.json({ message: `Word "${formattedWord}" added to blacklist` });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to add word' });
   }
-});
+};
 
-// 11. Delete custom banned word
-router.delete('/words/:word', authMiddleware, adminCheck, async (req, res) => {
+const deleteBannedWord = async (req, res) => {
   try {
     const { word } = req.params;
     await query('DELETE FROM banned_words WHERE word = $1', [word.toLowerCase()]);
-    
-    // Refresh content filter cache
-    const { loadCustomBannedWords } = require('../utils/contentFilter');
-    await loadCustomBannedWords();
-    
     res.json({ message: 'Word removed from blacklist' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to delete word' });
   }
-});
+};
 
-// 12. Toggle user admin status (requires Nxghtmare3621's password to authorize)
-router.post('/users/:id/toggle-admin', authMiddleware, adminCheck, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { adminPassword, makeAdmin } = req.body;
-
-    if (!adminPassword) {
-      return res.status(400).json({ error: 'Super-admin verification password is required' });
-    }
-
-    // Fetch super-admin (Nxghtmare3621) password hash from database
-    const superAdminResult = await query("SELECT password FROM users WHERE username = 'Nxghtmare3621'");
-    const superAdmin = superAdminResult.rows[0];
-
-    if (!superAdmin) {
-      return res.status(500).json({ error: 'Super-admin account not found' });
-    }
-
-    // Verify password matches Nxghtmare3621's hash
-    const passwordMatch = await bcrypt.compare(adminPassword, superAdmin.password);
-    if (!passwordMatch) {
-      return res.status(403).json({ error: 'Verification failed: Incorrect super-admin password' });
-    }
-
-    // Update user role
-    await query('UPDATE users SET is_admin = $1 WHERE id = $2', [makeAdmin === true, id]);
-
-    res.json({ 
-      message: `User administrative privileges ${makeAdmin ? 'granted' : 'revoked'} successfully` 
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update admin role status' });
-  }
-});
+router.get('/words', authMiddleware, adminCheck, getBannedWords);
+router.get('/banned-words', authMiddleware, adminCheck, getBannedWords);
+router.post('/words', authMiddleware, adminCheck, addBannedWord);
+router.post('/banned-words', authMiddleware, adminCheck, addBannedWord);
+router.delete('/words/:word', authMiddleware, adminCheck, deleteBannedWord);
+router.delete('/banned-words/:word', authMiddleware, adminCheck, deleteBannedWord);
 
 module.exports = router;

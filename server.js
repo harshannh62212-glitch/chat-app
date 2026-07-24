@@ -39,11 +39,14 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 
+const adminRoutes = require('./routes/admin');
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/servers', serverRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/admin', adminRoutes);
 
 const os = require('os');
 
@@ -80,8 +83,89 @@ app.get('/api/system-status', (req, res) => {
       usedGB: (usedMem / (1024 ** 3)).toFixed(2) + ' GB',
       usedPercent: ((usedMem / totalMem) * 100).toFixed(1) + '%'
     },
-    processMemoryMB: (process.memoryUsage().rss / (1024 * 1024)).toFixed(1) + ' MB'
+    processMemoryMB: (processMemoryUsage().rss / (1024 * 1024)).toFixed(1) + ' MB'
   });
+});
+
+// Dell Hardware Fan Control API
+const fs = require('fs');
+
+function getDellFanPath() {
+  const hwmonPath = '/sys/class/hwmon';
+  if (fs.existsSync(hwmonPath)) {
+    try {
+      const dirs = fs.readdirSync(hwmonPath);
+      for (const dir of dirs) {
+        const namePath = `${hwmonPath}/${dir}/name`;
+        if (fs.existsSync(namePath)) {
+          const name = fs.readFileSync(namePath, 'utf8').trim();
+          if (name === 'dell_smm' || name === 'dell_smm_hwmon') {
+            return `${hwmonPath}/${dir}`;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+  return '/sys/class/hwmon/hwmon7';
+}
+
+app.get('/api/system/fan', (req, res) => {
+  try {
+    const fanPath = getDellFanPath();
+    let rpm = 0;
+    let pwm = 0;
+    let enableMode = 2; // Default to Auto
+
+    if (fs.existsSync(`${fanPath}/fan1_input`)) {
+      rpm = parseInt(fs.readFileSync(`${fanPath}/fan1_input`, 'utf8').trim()) || 0;
+    }
+    if (fs.existsSync(`${fanPath}/pwm1`)) {
+      pwm = parseInt(fs.readFileSync(`${fanPath}/pwm1`, 'utf8').trim()) || 0;
+    }
+    if (fs.existsSync(`${fanPath}/pwm1_enable`)) {
+      enableMode = parseInt(fs.readFileSync(`${fanPath}/pwm1_enable`, 'utf8').trim()) || 2;
+    }
+
+    const speedPercent = Math.round((pwm / 255) * 100);
+
+    res.json({
+      rpm,
+      pwm,
+      speedPercent,
+      mode: enableMode === 2 ? 'auto' : 'manual',
+      enableMode
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to read hardware fan status: ' + err.message });
+  }
+});
+
+app.post('/api/system/fan/set', (req, res) => {
+  try {
+    const { mode, speedPercent } = req.body;
+    const fanPath = getDellFanPath();
+
+    if (mode === 'auto') {
+      if (fs.existsSync(`${fanPath}/pwm1_enable`)) {
+        fs.writeFileSync(`${fanPath}/pwm1_enable`, '2');
+      }
+      return res.json({ message: 'Fan set to AUTO mode (Dell BIOS Dynamic Control)', mode: 'auto' });
+    } else {
+      const pct = Math.min(100, Math.max(0, parseInt(speedPercent) || 50));
+      const pwmVal = Math.round((pct / 100) * 255);
+
+      if (fs.existsSync(`${fanPath}/pwm1_enable`)) {
+        fs.writeFileSync(`${fanPath}/pwm1_enable`, '1');
+      }
+      if (fs.existsSync(`${fanPath}/pwm1`)) {
+        fs.writeFileSync(`${fanPath}/pwm1`, pwmVal.toString());
+      }
+      return res.json({ message: `Fan speed set to MANUAL ${pct}% (${pwmVal} PWM)`, mode: 'manual', speedPercent: pct });
+    }
+  } catch (err) {
+    console.error('Fan control error:', err);
+    res.status(500).json({ error: 'Failed to adjust fan speed: ' + err.message });
+  }
 });
 
 // Socket.io connection

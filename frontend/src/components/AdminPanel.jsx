@@ -14,10 +14,31 @@ function AdminPanel({ currentUser, onSelectServer }) {
   const [error, setError] = useState('');
 
   const [systemStatus, setSystemStatus] = useState(null);
+  const [fanStatus, setFanStatus] = useState(null);
+  const [manualSpeed, setManualSpeed] = useState(50);
 
   useEffect(() => {
     fetchData();
   }, [activeSubTab]);
+
+  const fetchFanStatus = async () => {
+    try {
+      const res = await axios.get('/api/system/fan');
+      setFanStatus(res.data);
+    } catch (err) {
+      console.error('Failed to fetch fan status:', err);
+    }
+  };
+
+  const handleSetFan = async (mode, speedPercent) => {
+    try {
+      const res = await axios.post('/api/system/fan/set', { mode, speedPercent });
+      setMessage(res.data.message);
+      fetchFanStatus();
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to adjust fan speed');
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -36,6 +57,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       } else if (activeSubTab === 'system') {
         const res = await axios.get('/api/system-status');
         setSystemStatus(res.data);
+        fetchFanStatus();
       }
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to fetch administration data');
@@ -237,6 +259,93 @@ function AdminPanel({ currentUser, onSelectServer }) {
                     <div style={{ fontSize: '0.85em', color: '#a4b0be' }}>Node.js API Footprint</div>
                     <div style={{ fontSize: '1.4em', fontWeight: 'bold', color: '#70a1ff', marginTop: '4px' }}>{systemStatus.processMemoryMB}</div>
                     <div style={{ fontSize: '0.8em', color: '#747d8c', marginTop: '4px' }}>Adaptive Memory Scaling</div>
+                  </div>
+                </div>
+
+                {/* Dell Latitude Hardware Fan Control Panel */}
+                <div style={{ background: 'rgba(0, 255, 255, 0.04)', border: '1px solid rgba(0, 255, 255, 0.2)', borderRadius: '12px', padding: '20px', marginTop: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '1.1em', color: '#00ffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        🌀 Dell Latitude Fan & Thermal Control
+                      </h4>
+                      <span style={{ fontSize: '0.8em', color: '#a4b0be' }}>
+                        Dell SMM Kernel Controller (Hardware HWMON)
+                      </span>
+                    </div>
+                    {fanStatus && (
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: '1.1em', fontWeight: 'bold', color: fanStatus.mode === 'auto' ? '#2ed573' : '#ffa502' }}>
+                          {fanStatus.mode === 'auto' ? '🤖 AUTO (BIOS Managed)' : `🎛️ MANUAL (${fanStatus.speedPercent}%)`}
+                        </span>
+                        <div style={{ fontSize: '0.8em', color: '#747d8c' }}>
+                          Current Fan Speed: {fanStatus.rpm} RPM
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', marginTop: '12px' }}>
+                    <button 
+                      onClick={() => handleSetFan('auto')}
+                      style={{ 
+                        padding: '8px 18px', 
+                        background: fanStatus?.mode === 'auto' ? '#2ed573' : 'rgba(255,255,255,0.1)', 
+                        color: fanStatus?.mode === 'auto' ? '#000' : '#fff',
+                        fontWeight: 'bold',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🤖 AUTO FAN SPEED (BIOS Adaptive)
+                    </button>
+
+                    <button 
+                      onClick={() => handleSetFan('manual', 25)}
+                      style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer' }}
+                    >
+                      🤫 Quiet (25%)
+                    </button>
+
+                    <button 
+                      onClick={() => handleSetFan('manual', 50)}
+                      style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer' }}
+                    >
+                      ⚖️ Balanced (50%)
+                    </button>
+
+                    <button 
+                      onClick={() => handleSetFan('manual', 75)}
+                      style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer' }}
+                    >
+                      ❄️ Cool (75%)
+                    </button>
+
+                    <button 
+                      onClick={() => handleSetFan('manual', 100)}
+                      style={{ padding: '8px 14px', background: '#ff4757', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                    >
+                      🚀 Max Power (100%)
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '16px' }}>
+                    <span style={{ fontSize: '0.85em', color: '#a4b0be', minWidth: '120px' }}>Custom Speed ({manualSpeed}%):</span>
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="100" 
+                      value={manualSpeed}
+                      onChange={(e) => setManualSpeed(parseInt(e.target.value))}
+                      style={{ flex: 1, cursor: 'pointer' }}
+                    />
+                    <button 
+                      onClick={() => handleSetFan('manual', manualSpeed)}
+                      style={{ padding: '6px 14px', background: '#00ffff', color: '#000', fontWeight: 'bold', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                    >
+                      Apply Custom Speed
+                    </button>
                   </div>
                 </div>
               </div>
