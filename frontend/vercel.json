@@ -1,17 +1,19 @@
 {
-  "cleanUrls": true,
-  "rewrites": [
+  "routes": [
     {
-      "source": "/api/:path*",
-      "destination": "https://starter-taste-lamp-wit.trycloudflare.com/api/:path*"
+      "src": "/api/(.*)",
+      "dest": "https://starter-taste-lamp-wit.trycloudflare.com/api/$1"
     },
     {
-      "source": "/socket.io/:path*",
-      "destination": "https://starter-taste-lamp-wit.trycloudflare.com/socket.io/:path*"
+      "src": "/socket.io/(.*)",
+      "dest": "https://starter-taste-lamp-wit.trycloudflare.com/socket.io/$1"
     },
     {
-      "source": "/:path*",
-      "destination": "/index.html"
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
     }
   ]
 }
