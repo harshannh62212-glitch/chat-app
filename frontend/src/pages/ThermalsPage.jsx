@@ -4,6 +4,12 @@ import Logo from '../components/Logo';
 import '../styles/ThermalsPage.css';
 
 function ThermalsPage({ onBack }) {
+  const [isUnlocked, setIsUnlocked] = useState(() => {
+    return sessionStorage.getItem('thermals_unlocked') === 'true';
+  });
+  const [passwordInput, setPasswordInput] = useState('');
+  const [authError, setAuthError] = useState('');
+
   const [metrics, setMetrics] = useState({
     tempC: 45,
     rpm: 0,
@@ -14,7 +20,12 @@ function ThermalsPage({ onBack }) {
     ramTotalGB: '24 GB',
     ramPercent: '4.5%',
     cpuLoad: '0.20',
-    uptime: '18h 30m'
+    uptime: '18h 30m',
+    batteryPercent: 100,
+    batteryStatus: 'Full',
+    watts: '12.5 W',
+    acOnline: true,
+    lowBatteryAutoSaveTriggered: false
   });
 
   const [manualSpeed, setManualSpeed] = useState(50);
@@ -36,6 +47,17 @@ function ThermalsPage({ onBack }) {
   const [error, setError] = useState('');
   const canvasRef = useRef(null);
 
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault();
+    if (passwordInput.trim() === '1516') {
+      setIsUnlocked(true);
+      sessionStorage.setItem('thermals_unlocked', 'true');
+      setAuthError('');
+    } else {
+      setAuthError('Incorrect Access Code. Required: 1516');
+    }
+  };
+
   const fetchThermalMetrics = async () => {
     try {
       const [fanRes, sysRes] = await Promise.all([
@@ -45,6 +67,7 @@ function ThermalsPage({ onBack }) {
 
       const fanData = fanRes.data || {};
       const sysData = sysRes.data || {};
+      const powerData = sysData.power || {};
 
       const newPoint = {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -65,7 +88,12 @@ function ThermalsPage({ onBack }) {
         ramTotalGB: sysData.memory?.totalGB || '24 GB',
         ramPercent: sysData.memory?.usedPercent || '4.5%',
         cpuLoad: sysData.cpuLoadAverage?.['1min'] || '0.20',
-        uptime: `${Math.floor((sysData.uptimeSeconds || 0) / 3600)}h ${Math.floor(((sysData.uptimeSeconds || 0) % 3600) / 60)}m`
+        uptime: `${Math.floor((sysData.uptimeSeconds || 0) / 3600)}h ${Math.floor(((sysData.uptimeSeconds || 0) % 3600) / 60)}m`,
+        batteryPercent: powerData.batteryPercent !== undefined ? powerData.batteryPercent : 100,
+        batteryStatus: powerData.batteryStatus || 'Full',
+        watts: powerData.watts || '12.5 W',
+        acOnline: powerData.acOnline !== undefined ? powerData.acOnline : true,
+        lowBatteryAutoSaveTriggered: !!powerData.lowBatteryAutoSaveTriggered
       });
 
       setHistory(prev => [...prev.slice(-29), newPoint]);
@@ -75,13 +103,16 @@ function ThermalsPage({ onBack }) {
   };
 
   useEffect(() => {
-    fetchThermalMetrics();
-    const interval = setInterval(fetchThermalMetrics, 2000);
-    return () => clearInterval(interval);
-  }, []);
+    if (isUnlocked) {
+      fetchThermalMetrics();
+      const interval = setInterval(fetchThermalMetrics, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [isUnlocked]);
 
   // Draw Animated Curve Line Chart
   useEffect(() => {
+    if (!isUnlocked) return;
     const canvas = canvasRef.current;
     if (!canvas || history.length < 2) return;
     const ctx = canvas.getContext('2d');
@@ -111,7 +142,7 @@ function ThermalsPage({ onBack }) {
     // Draw RAM % Curve (Purple Neon)
     drawCurve(ctx, history.map(h => h.ramPercent), stepX, height, '#a55eea', 'rgba(165, 94, 234, 0.12)', 0, 100);
 
-  }, [history]);
+  }, [history, isUnlocked]);
 
   const drawCurve = (ctx, data, stepX, height, color, fillColor, minVal, maxVal) => {
     if (data.length < 2) return;
@@ -173,6 +204,40 @@ function ThermalsPage({ onBack }) {
     }
   };
 
+  // Render Password Lock Screen if not unlocked
+  if (!isUnlocked) {
+    return (
+      <div className="thermals-lock-screen">
+        <div className="lock-box">
+          <Logo width={160} variant="full" />
+          <h2 style={{ color: '#00ffff', marginTop: '16px' }}>🔒 Restrict Access: Thermals Portal</h2>
+          <p style={{ color: '#a4b0be', fontSize: '0.9em' }}>Enter security authorization code to access hardware metrics & fan controls.</p>
+          
+          {authError && <div className="lock-error">{authError}</div>}
+
+          <form onSubmit={handlePasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', marginTop: '10px' }}>
+            <input 
+              type="password"
+              placeholder="Enter Security Code..."
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              className="lock-input"
+              autoFocus
+              required
+            />
+            <button type="submit" className="lock-btn">Unlock Thermals</button>
+          </form>
+
+          {onBack && (
+            <button className="btn-back" onClick={onBack} style={{ marginTop: '16px', width: '100%' }}>
+              ← Return to Portal
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="thermals-container">
       <div className="thermals-header">
@@ -185,13 +250,35 @@ function ThermalsPage({ onBack }) {
           <Logo width={180} variant="full" />
         </div>
         <div style={{ textAlign: 'right' }}>
-          <h2 style={{ margin: 0, fontSize: '1.4em', color: '#00ffff' }}>🔥 Dell Latitude Thermal & Hardware Dashboard</h2>
-          <span style={{ fontSize: '0.8em', color: '#a4b0be' }}>Dell SMM Hardware Sensor & BIOS Controller</span>
+          <h2 style={{ margin: 0, fontSize: '1.4em', color: '#00ffff' }}>🔥 Dell Latitude Thermal & Power Dashboard</h2>
+          <span style={{ fontSize: '0.8em', color: '#a4b0be' }}>Dell SMM Kernel Controller & Power Supply Monitor</span>
         </div>
       </div>
 
       {message && <div className="thermal-alert success">{message}</div>}
       {error && <div className="thermal-alert error">{error}</div>}
+
+      {/* Low-Battery Auto-Save Protection Banner */}
+      <div className="auto-save-protection-card" style={{ borderColor: metrics.batteryPercent <= 15 ? '#ff4757' : 'rgba(46, 213, 115, 0.4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '1.4em' }}>
+            {metrics.batteryPercent <= 15 ? '⚠️' : '🛡️'}
+          </span>
+          <div>
+            <h4 style={{ margin: 0, color: metrics.batteryPercent <= 15 ? '#ff4757' : '#2ed573', fontSize: '1em' }}>
+              {metrics.batteryPercent <= 15 ? 'LOW BATTERY AUTO-SAVE TRIGGERED' : 'AUTOMATIC LOW-BATTERY SAVE PROTECTION ACTIVE'}
+            </h4>
+            <span style={{ fontSize: '0.8em', color: '#a4b0be' }}>
+              {metrics.batteryPercent <= 15 
+                ? 'Battery dropped below 15%! All database sessions, chat histories, and processes auto-saved to snapshot for next login.'
+                : 'Server monitors power continuously. If battery drops below 15% on battery power, all processes auto-save automatically for your next login.'}
+            </span>
+          </div>
+        </div>
+        <div style={{ fontWeight: 'bold', color: '#00ffff', fontSize: '0.9em' }}>
+          Threshold: 15%
+        </div>
+      </div>
 
       {/* Metrics Cards Grid */}
       <div className="thermals-grid">
@@ -204,8 +291,24 @@ function ThermalsPage({ onBack }) {
         </div>
 
         <div className="thermal-card highlight-cyan">
-          <div className="card-label">Fan Speed (RPM)</div>
+          <div className="card-label">Power Pulled (Watts)</div>
           <div className="card-val" style={{ color: '#00ffff' }}>
+            ⚡ {metrics.watts}
+          </div>
+          <div className="card-sub">{metrics.acOnline ? '🔌 AC Power Online' : '🔋 Running on Battery'}</div>
+        </div>
+
+        <div className="thermal-card highlight-green">
+          <div className="card-label">Battery Level</div>
+          <div className="card-val" style={{ color: metrics.batteryPercent <= 15 ? '#ff4757' : '#2ed573' }}>
+            🔋 {metrics.batteryPercent}% ({metrics.batteryStatus})
+          </div>
+          <div className="card-sub">Auto-save trigger at 15%</div>
+        </div>
+
+        <div className="thermal-card highlight-cyan">
+          <div className="card-label">Fan Speed (RPM)</div>
+          <div className="card-val" style={{ color: '#70a1ff' }}>
             🌀 {metrics.rpm} RPM
           </div>
           <div className="card-sub">{metrics.mode === 'auto' ? 'AUTO (BIOS Controlled)' : `Manual (${metrics.speedPercent}%)`}</div>
