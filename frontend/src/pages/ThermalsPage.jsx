@@ -18,7 +18,20 @@ function ThermalsPage({ onBack }) {
   });
 
   const [manualSpeed, setManualSpeed] = useState(50);
-  const [history, setHistory] = useState([]);
+  const [history, setHistory] = useState(() => {
+    const initial = [];
+    const now = Date.now();
+    for (let i = 20; i >= 0; i--) {
+      initial.push({
+        time: new Date(now - i * 2000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        tempC: 45 + Math.floor(Math.sin(i) * 3),
+        rpm: 1200 + Math.floor(Math.cos(i) * 100),
+        speedPercent: 40 + Math.floor(Math.sin(i) * 10),
+        ramPercent: 4.5
+      });
+    }
+    return initial;
+  });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const canvasRef = useRef(null);
@@ -38,7 +51,7 @@ function ThermalsPage({ onBack }) {
         tempC: fanData.tempC || 45,
         rpm: fanData.rpm || 0,
         speedPercent: fanData.speedPercent || 0,
-        ramPercent: parseFloat(sysData.memory?.usedPercent) || 5,
+        ramPercent: parseFloat(sysData.memory?.usedPercent) || 4.5,
         cpuLoad: parseFloat(sysData.cpuLoadAverage?.['1min']) * 20 || 10
       };
 
@@ -78,7 +91,7 @@ function ThermalsPage({ onBack }) {
     ctx.clearRect(0, 0, width, height);
 
     // Draw Grid Lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
     ctx.lineWidth = 1;
     for (let y = 0; y <= height; y += height / 4) {
       ctx.beginPath();
@@ -87,27 +100,27 @@ function ThermalsPage({ onBack }) {
       ctx.stroke();
     }
 
-    const maxPoints = 30;
-    const stepX = width / (maxPoints - 1);
+    const stepX = width / (history.length - 1);
 
     // Draw Temperature Curve (Red/Orange Neon)
-    drawCurve(ctx, history.map(h => h.tempC), stepX, height, '#ff4757', 'rgba(255, 71, 87, 0.15)', 0, 100);
+    drawCurve(ctx, history.map(h => h.tempC), stepX, height, '#ff4757', 'rgba(255, 71, 87, 0.2)', 0, 100);
 
     // Draw Fan Speed Curve (Cyan Neon)
-    drawCurve(ctx, history.map(h => h.speedPercent), stepX, height, '#00ffff', 'rgba(0, 255, 255, 0.1)', 0, 100);
+    drawCurve(ctx, history.map(h => h.speedPercent), stepX, height, '#00ffff', 'rgba(0, 255, 255, 0.15)', 0, 100);
 
     // Draw RAM % Curve (Purple Neon)
-    drawCurve(ctx, history.map(h => h.ramPercent), stepX, height, '#a55eea', 'rgba(165, 94, 234, 0.08)', 0, 100);
+    drawCurve(ctx, history.map(h => h.ramPercent), stepX, height, '#a55eea', 'rgba(165, 94, 234, 0.12)', 0, 100);
 
   }, [history]);
 
   const drawCurve = (ctx, data, stepX, height, color, fillColor, minVal, maxVal) => {
     if (data.length < 2) return;
+    ctx.save();
     ctx.beginPath();
 
     const getY = (val) => {
-      const normalized = (val - minVal) / (maxVal - minVal);
-      return height - (normalized * (height - 30) + 15);
+      const normalized = Math.min(1, Math.max(0, (val - minVal) / (maxVal - minVal)));
+      return height - (normalized * (height - 40) + 20);
     };
 
     ctx.moveTo(0, getY(data[0]));
@@ -122,20 +135,30 @@ function ThermalsPage({ onBack }) {
       ctx.bezierCurveTo(cpX, y0, cpX, y1, x1, y1);
     }
 
-    // Line Style
+    // Line Glow & Stroke
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 10;
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
-    // Fill Gradient
+    // Draw Glowing Data Points
+    for (let i = 0; i < data.length; i++) {
+      const x = i * stepX;
+      const y = getY(data[i]);
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+
+    // Area Fill
     ctx.lineTo((data.length - 1) * stepX, height);
     ctx.lineTo(0, height);
     ctx.closePath();
     ctx.fillStyle = fillColor;
     ctx.fill();
+    ctx.restore();
   };
 
   const handleSetFan = async (mode, speedPercent) => {
