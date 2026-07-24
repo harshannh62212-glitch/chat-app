@@ -10,10 +10,21 @@ import './styles/App.css';
 axios.defaults.baseURL = import.meta.env.PROD ? '' : 'http://localhost:8000';
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
 
+import ThermalsPage from './pages/ThermalsPage';
+
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
+  const [showThermals, setShowThermals] = useState(window.location.pathname === '/thermals');
   const [loadingApp, setLoadingApp] = useState(true);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setShowThermals(window.location.pathname === '/thermals');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   useEffect(() => {
     loadCustomBannedWords();
@@ -85,6 +96,8 @@ function App() {
             </button>
           </div>
         </div>
+      ) : showThermals ? (
+        <ThermalsPage onBack={() => { window.history.pushState({}, '', '/'); setShowThermals(false); }} />
       ) : currentUser ? (
         <Dashboard 
           user={currentUser} 

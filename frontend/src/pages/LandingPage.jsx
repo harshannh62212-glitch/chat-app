@@ -22,7 +22,7 @@ function LandingPage({ onEnterPortal }) {
         <div className="landing-nav-links">
           <a href="#features" className="landing-nav-link">Features</a>
           <a href="#technology" className="landing-nav-link">Technology</a>
-          <a href="#about" className="landing-nav-link">About</a>
+          <a href="/thermals" className="landing-nav-link" style={{ color: '#00ffff', fontWeight: 'bold' }}>🔥 Hardware Thermals</a>
           <button className="landing-nav-btn" onClick={onEnterPortal}>Launch Portal</button>
         </div>
       </nav>
