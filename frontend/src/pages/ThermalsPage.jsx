@@ -30,6 +30,11 @@ function ThermalsPage({ onBack }) {
 
   const [manualSpeed, setManualSpeed] = useState(50);
   const [customInputSpeed, setCustomInputSpeed] = useState('50');
+  const [stressActive, setStressActive] = useState(false);
+  const [stressCountdown, setStressCountdown] = useState(0);
+  const stressGlRef = useRef(null);
+  const stressAnimRef = useRef(null);
+  const stressTimerRef = useRef(null);
   const [history, setHistory] = useState(() => {
     const initial = [];
     const now = Date.now();
@@ -57,6 +62,83 @@ function ThermalsPage({ onBack }) {
     } else {
       setAuthError('Incorrect Access Code. Required: 1516');
     }
+  };
+
+  const stopStress = () => {
+    if (stressAnimRef.current) cancelAnimationFrame(stressAnimRef.current);
+    if (stressTimerRef.current) clearInterval(stressTimerRef.current);
+    const gl = stressGlRef.current;
+    if (gl) {
+      const ext = gl.getExtension('WEBGL_lose_context');
+      if (ext) ext.loseContext();
+    }
+    stressGlRef.current = null;
+    setStressActive(false);
+    setStressCountdown(0);
+    axios.post('/api/system/stress/stop').catch(() => {});
+  };
+
+  const handleStressTest = async () => {
+    if (stressActive) { stopStress(); return; }
+    const DURATION = 15;
+    setStressActive(true);
+    setStressCountdown(DURATION);
+
+    // WebGL GPU hammer — run a complex fragment shader in a tight loop
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024; canvas.height = 1024;
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (gl) {
+        stressGlRef.current = gl;
+        const vs = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vs, `attribute vec2 p; void main(){gl_Position=vec4(p,0,1);}`);
+        gl.compileShader(vs);
+        const fs = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fs, `
+          precision highp float;
+          uniform float t;
+          void main(){
+            vec2 uv=gl_FragCoord.xy/1024.0;
+            float v=0.0;
+            for(int i=0;i<128;i++){
+              float fi=float(i);
+              v+=sin(uv.x*fi+t)*cos(uv.y*fi-t)*sqrt(abs(sin(fi*0.1+t)));
+            }
+            gl_FragColor=vec4(sin(v),cos(v),v*0.5,1.0);
+          }`);
+        gl.compileShader(fs);
+        const prog = gl.createProgram();
+        gl.attachShader(prog, vs); gl.attachShader(prog, fs);
+        gl.linkProgram(prog); gl.useProgram(prog);
+        const buf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+        const loc = gl.getAttribLocation(prog, 'p');
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+        const tLoc = gl.getUniformLocation(prog, 't');
+        const gpuLoop = (ts) => {
+          if (!stressGlRef.current) return;
+          gl.uniform1f(tLoc, ts * 0.001);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          gl.finish();
+          stressAnimRef.current = requestAnimationFrame(gpuLoop);
+        };
+        stressAnimRef.current = requestAnimationFrame(gpuLoop);
+      }
+    } catch(e) { console.warn('WebGL GPU stress unavailable:', e); }
+
+    try {
+      await axios.post('/api/system/stress', { duration: DURATION });
+    } catch(e) { console.warn('CPU stress API error:', e); }
+
+    let remaining = DURATION;
+    stressTimerRef.current = setInterval(() => {
+      remaining -= 1;
+      setStressCountdown(remaining);
+      if (remaining <= 0) stopStress();
+    }, 1000);
   };
 
   const fetchThermalMetrics = async () => {
@@ -414,44 +496,109 @@ function ThermalsPage({ onBack }) {
           </button>
         </div>
 
-        {/* Custom Speed Input Box & Slider */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px', background: 'rgba(0, 0, 0, 0.3)', padding: '16px', borderRadius: '12px' }}>
-          <div className="slider-control" style={{ background: 'none', padding: 0 }}>
-            <span style={{ color: '#a4b0be', minWidth: '140px', fontSize: '0.9em' }}>Slider Speed ({manualSpeed}%):</span>
-            <input 
-              type="range" 
-              min="0" 
-              max="100" 
-              value={manualSpeed}
-              onChange={(e) => {
-                const val = parseInt(e.target.value);
-                setManualSpeed(val);
-                setCustomInputSpeed(val.toString());
-              }}
-              className="fan-slider"
-            />
-            <button 
-              className="btn-apply"
-              onClick={() => handleSetFan('manual', manualSpeed)}
-            >
-              Set Slider Speed
-            </button>
+        {/* Hardware Fan Levels - Dell Latitude only has 4 discrete steps */}
+        <div style={{ marginTop: '16px', background: 'rgba(0, 0, 0, 0.3)', padding: '16px', borderRadius: '12px' }}>
+          <div style={{ color: '#a4b0be', fontSize: '0.82em', marginBottom: '12px', letterSpacing: '0.5px' }}>
+            ⚙️ HARDWARE FAN LEVELS — Dell Latitude has 4 discrete RPM steps (not continuous)
           </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+            {[
+              { label: '💤 Off', pct: 0, rpm: '~0', level: 0, color: '#636e72' },
+              { label: '🌿 Silent', pct: 25, rpm: '~2400', level: 1, color: '#00b894' },
+              { label: '⚖️ Balanced', pct: 60, rpm: '~3700', level: 2, color: '#0984e3' },
+              { label: '🚀 Turbo', pct: 100, rpm: '~5300', level: 3, color: '#e17055' },
+            ].map(({ label, pct, rpm, level, color }) => (
+              <button
+                key={level}
+                onClick={() => { setManualSpeed(pct); handleSetFan('manual', pct); }}
+                style={{
+                  background: manualSpeed === pct && metrics.mode === 'manual'
+                    ? `${color}33`
+                    : 'rgba(0,0,0,0.4)',
+                  border: `2px solid ${manualSpeed === pct && metrics.mode === 'manual' ? color : 'rgba(255,255,255,0.1)'}`,
+                  borderRadius: '10px',
+                  padding: '14px 8px',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.2s ease',
+                  fontSize: '0.9em',
+                  fontWeight: '600'
+                }}
+              >
+                <span style={{ fontSize: '1.1em' }}>{label}</span>
+                <span style={{ fontSize: '0.75em', color: '#a4b0be' }}>{rpm} RPM</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-          <form onSubmit={handleCustomInputApply} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: '#a4b0be', fontSize: '0.9em', minWidth: '140px' }}>Enter Exact % (0-100):</span>
-            <input 
-              type="number" 
-              min="0"
-              max="100"
-              value={customInputSpeed}
-              onChange={(e) => setCustomInputSpeed(e.target.value)}
-              style={{ padding: '8px 14px', background: 'rgba(0, 0, 0, 0.5)', border: '1px solid rgba(0, 255, 255, 0.3)', borderRadius: '8px', color: '#00ffff', fontWeight: 'bold', width: '100px', fontSize: '1em' }}
-            />
-            <button type="submit" className="btn-apply" style={{ background: '#2ed573' }}>
-              Lock Exact %
+        {/* Stress Test */}
+        <div style={{
+          marginTop: '16px',
+          background: stressActive
+            ? 'linear-gradient(135deg, rgba(214,48,49,0.15), rgba(253,121,168,0.1))'
+            : 'rgba(0,0,0,0.3)',
+          border: stressActive ? '1px solid rgba(214,48,49,0.5)' : '1px solid rgba(255,255,255,0.05)',
+          padding: '16px',
+          borderRadius: '12px',
+          transition: 'all 0.4s ease'
+        }}>
+          <div style={{ color: '#a4b0be', fontSize: '0.82em', marginBottom: '12px', letterSpacing: '0.5px' }}>
+            🔥 SYSTEM STRESS TEST — CPU ALL CORES + GPU SHADER BURN
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+            <button
+              onClick={handleStressTest}
+              style={{
+                background: stressActive
+                  ? 'linear-gradient(135deg, #d63031, #e17055)'
+                  : 'linear-gradient(135deg, #6c5ce7, #a29bfe)',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '14px 28px',
+                color: '#fff',
+                fontWeight: '700',
+                fontSize: '1em',
+                cursor: 'pointer',
+                letterSpacing: '0.5px',
+                boxShadow: stressActive ? '0 0 20px rgba(214,48,49,0.5)' : '0 0 20px rgba(108,92,231,0.4)',
+                transition: 'all 0.3s ease',
+                animation: stressActive ? 'pulse 1s ease-in-out infinite' : 'none'
+              }}
+            >
+              {stressActive ? `⛔ STOP (${stressCountdown}s)` : '🔥 Launch 15s Burst'}
             </button>
-          </form>
+            {stressActive && (
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '0.82em', color: '#a4b0be' }}>
+                  <span>CPU + GPU Burn</span>
+                  <span style={{ color: '#e17055', fontWeight: 'bold' }}>{stressCountdown}s remaining</span>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: '6px', height: '8px', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${(stressCountdown / 15) * 100}%`,
+                    background: 'linear-gradient(90deg, #e17055, #d63031)',
+                    borderRadius: '6px',
+                    transition: 'width 1s linear',
+                    boxShadow: '0 0 8px rgba(214,48,49,0.6)'
+                  }} />
+                </div>
+                <div style={{ marginTop: '6px', fontSize: '0.78em', color: '#636e72' }}>
+                  Watch CPU temp spike → auto fan curve will respond ↑
+                </div>
+              </div>
+            )}
+            {!stressActive && (
+              <span style={{ color: '#636e72', fontSize: '0.82em' }}>
+                Hammers all CPU cores + iGPU shader for 15s. Temp will spike fast.
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>
