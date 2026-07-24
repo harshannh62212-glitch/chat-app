@@ -5,7 +5,9 @@ import { filterContent } from '../utils/contentFilter';
 import { checkRateLimit } from '../utils/rateLimiter';
 import GiphyPanel from './GiphyPanel';
 
-const socket = io(import.meta.env.VITE_API_URL || 'https://starter-taste-lamp-wit.trycloudflare.com', {
+const envUrl = import.meta.env.VITE_API_URL;
+const socketUrl = (envUrl && envUrl.trim() !== '') ? envUrl : 'https://starter-taste-lamp-wit.trycloudflare.com';
+const socket = io(socketUrl, {
   autoConnect: true
 });
 

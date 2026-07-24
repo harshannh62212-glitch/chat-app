@@ -7,7 +7,8 @@ import axios from 'axios';
 import './styles/App.css';
 
 const DEFAULT_API_URL = 'https://starter-taste-lamp-wit.trycloudflare.com';
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || DEFAULT_API_URL;
+const envUrl = import.meta.env.VITE_API_URL;
+axios.defaults.baseURL = (envUrl && envUrl.trim() !== '') ? envUrl : DEFAULT_API_URL;
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
