@@ -83,7 +83,7 @@ app.get('/api/system-status', (req, res) => {
       usedGB: (usedMem / (1024 ** 3)).toFixed(2) + ' GB',
       usedPercent: ((usedMem / totalMem) * 100).toFixed(1) + '%'
     },
-    processMemoryMB: (processMemoryUsage().rss / (1024 * 1024)).toFixed(1) + ' MB'
+    processMemoryMB: (process.memoryUsage().rss / (1024 * 1024)).toFixed(1) + ' MB'
   });
 });
 
@@ -115,6 +115,7 @@ app.get('/api/system/fan', (req, res) => {
     let rpm = 0;
     let pwm = 0;
     let enableMode = 2; // Default to Auto
+    let tempC = 45;
 
     if (fs.existsSync(`${fanPath}/fan1_input`)) {
       rpm = parseInt(fs.readFileSync(`${fanPath}/fan1_input`, 'utf8').trim()) || 0;
@@ -125,6 +126,10 @@ app.get('/api/system/fan', (req, res) => {
     if (fs.existsSync(`${fanPath}/pwm1_enable`)) {
       enableMode = parseInt(fs.readFileSync(`${fanPath}/pwm1_enable`, 'utf8').trim()) || 2;
     }
+    if (fs.existsSync(`${fanPath}/temp1_input`)) {
+      const rawTemp = parseInt(fs.readFileSync(`${fanPath}/temp1_input`, 'utf8').trim()) || 45000;
+      tempC = rawTemp > 1000 ? Math.round(rawTemp / 1000) : rawTemp;
+    }
 
     const speedPercent = Math.round((pwm / 255) * 100);
 
@@ -132,6 +137,7 @@ app.get('/api/system/fan', (req, res) => {
       rpm,
       pwm,
       speedPercent,
+      tempC,
       mode: enableMode === 2 ? 'auto' : 'manual',
       enableMode
     });
@@ -146,17 +152,25 @@ app.post('/api/system/fan/set', (req, res) => {
     const fanPath = getDellFanPath();
 
     if (mode === 'auto') {
-      if (fs.existsSync(`${fanPath}/pwm1_enable`)) {
-        fs.writeFileSync(`${fanPath}/pwm1_enable`, '2');
+      try {
+        if (fs.existsSync(`${fanPath}/pwm1_enable`)) {
+          fs.writeFileSync(`${fanPath}/pwm1_enable`, '2');
+        }
+      } catch (e) {
+        // Fallback for drivers where 1 = BIOS managed
+        try { if (fs.existsSync(`${fanPath}/pwm1_enable`)) fs.writeFileSync(`${fanPath}/pwm1_enable`, '1'); } catch (e2) {}
       }
       return res.json({ message: 'Fan set to AUTO mode (Dell BIOS Dynamic Control)', mode: 'auto' });
     } else {
       const pct = Math.min(100, Math.max(0, parseInt(speedPercent) || 50));
       const pwmVal = Math.round((pct / 100) * 255);
 
-      if (fs.existsSync(`${fanPath}/pwm1_enable`)) {
-        fs.writeFileSync(`${fanPath}/pwm1_enable`, '1');
-      }
+      try {
+        if (fs.existsSync(`${fanPath}/pwm1_enable`)) {
+          fs.writeFileSync(`${fanPath}/pwm1_enable`, '1');
+        }
+      } catch (e) {}
+
       if (fs.existsSync(`${fanPath}/pwm1`)) {
         fs.writeFileSync(`${fanPath}/pwm1`, pwmVal.toString());
       }

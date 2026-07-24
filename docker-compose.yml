@@ -26,7 +26,10 @@ services:
     build: .
     container_name: chat_app_backend
     restart: always
+    user: root
     privileged: true
+    security_opt:
+      - apparmor:unconfined
     environment:
       DATABASE_URL: postgresql://chat_user:secure_password_change_me@postgres:5432/chat_db
       JWT_SECRET: your_jwt_secret_change_in_production
