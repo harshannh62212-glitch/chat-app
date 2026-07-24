@@ -5,10 +5,12 @@ import { filterContent } from '../utils/contentFilter';
 import { checkRateLimit } from '../utils/rateLimiter';
 import GiphyPanel from './GiphyPanel';
 
-const envUrl = import.meta.env.VITE_API_URL;
-const socketUrl = (envUrl && envUrl.trim() !== '') ? envUrl : 'https://starter-taste-lamp-wit.trycloudflare.com';
+const socketUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? window.location.origin : 'http://localhost:8000');
 const socket = io(socketUrl, {
-  autoConnect: true
+  autoConnect: true,
+  extraHeaders: {
+    'bypass-tunnel-reminder': 'true'
+  }
 });
 
 function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {

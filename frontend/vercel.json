@@ -1,6 +1,17 @@
 {
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "https://starter-taste-lamp-wit.trycloudflare.com/api/:path*"
+    },
+    {
+      "source": "/socket.io/:path*",
+      "destination": "https://starter-taste-lamp-wit.trycloudflare.com/socket.io/:path*"
+    },
+    {
+      "source": "/((?!api|socket.io).*)",
+      "destination": "/index.html"
+    }
   ]
 }
