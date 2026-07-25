@@ -804,24 +804,63 @@ setTimeout(moderationTick, 4000);
 function optimizeCpuGovernor() {
   try {
     const cpufreqPath = '/sys/devices/system/cpu';
+    
+    // 1. Enable Turbo Boost (Intel P-State)
+    const noTurboFile = '/sys/devices/system/cpu/intel_pstate/no_turbo';
+    if (fs.existsSync(noTurboFile)) {
+      try {
+        fs.writeFileSync(noTurboFile, '0');
+        console.log('[SYSTEM] Intel Turbo Boost enabled (no_turbo = 0)');
+      } catch (e) {
+        console.warn('[SYSTEM] Failed to enable Turbo Boost:', e.message);
+      }
+    }
+
     if (fs.existsSync(cpufreqPath)) {
       const cpus = fs.readdirSync(cpufreqPath).filter(name => name.startsWith('cpu') && /^\d+$/.test(name.slice(3)));
       for (const cpu of cpus) {
         const govFile = `${cpufreqPath}/${cpu}/cpufreq/scaling_governor`;
         if (fs.existsSync(govFile)) {
-          fs.writeFileSync(govFile, 'powersave');
+          try {
+            fs.writeFileSync(govFile, 'powersave');
+          } catch (e) {}
+        }
+        
+        const eppFile = `${cpufreqPath}/${cpu}/cpufreq/energy_performance_preference`;
+        if (fs.existsSync(eppFile)) {
+          try {
+            fs.writeFileSync(eppFile, 'balance_performance');
+          } catch (e) {}
         }
       }
-      console.log('[SYSTEM] CPU Scaling Governors set to powersave for maximum efficiency.');
+      console.log('[SYSTEM] CPU Scaling Governors set to powersave with balance_performance preference for maximum efficiency and turbo boost responsiveness.');
     }
   } catch (e) {
-    console.warn('[SYSTEM] Failed to set CPU governor:', e.message);
+    console.warn('[SYSTEM] Failed to set CPU governor optimizations:', e.message);
+  }
+}
+
+function optimizeRamAndVirtualMemory() {
+  try {
+    const swappinessFile = '/proc/sys/vm/swappiness';
+    if (fs.existsSync(swappinessFile)) {
+      fs.writeFileSync(swappinessFile, '10');
+      console.log('[SYSTEM] RAM Swappiness set to 10 to prefer physical RAM performance.');
+    }
+    const cachePressureFile = '/proc/sys/vm/vfs_cache_pressure';
+    if (fs.existsSync(cachePressureFile)) {
+      fs.writeFileSync(cachePressureFile, '50');
+      console.log('[SYSTEM] VFS Cache Pressure set to 50 to optimize file caching in RAM.');
+    }
+  } catch (e) {
+    console.warn('[SYSTEM] Failed to apply RAM/VM optimizations (requires root):', e.message);
   }
 }
 
 (async () => {
   try {
     optimizeCpuGovernor();
+    optimizeRamAndVirtualMemory();
     await initDB();
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
