@@ -25,7 +25,8 @@ function ThermalsPage({ onBack }) {
     batteryStatus: 'Full',
     watts: '12.5 W',
     acOnline: true,
-    lowBatteryAutoSaveTriggered: false
+    lowBatteryAutoSaveTriggered: false,
+    batteryHealth: null
   });
 
   const [manualSpeed, setManualSpeed] = useState(50);
@@ -176,7 +177,8 @@ function ThermalsPage({ onBack }) {
         batteryStatus: powerData.batteryStatus || 'Full',
         watts: powerData.watts || '12.5 W',
         acOnline: powerData.acOnline !== undefined ? powerData.acOnline : true,
-        lowBatteryAutoSaveTriggered: !!powerData.lowBatteryAutoSaveTriggered
+        lowBatteryAutoSaveTriggered: !!powerData.lowBatteryAutoSaveTriggered,
+        batteryHealth: powerData.health || null
       });
 
       setHistory(prev => [...prev.slice(-29), newPoint]);
@@ -393,9 +395,26 @@ function ThermalsPage({ onBack }) {
         <div className="thermal-card highlight-green">
           <div className="card-label">Battery Level</div>
           <div className="card-val" style={{ color: metrics.batteryPercent <= 15 ? '#ff4757' : '#2ed573' }}>
-            🔋 {metrics.batteryPercent}% ({metrics.batteryStatus})
+            🔋 {metrics.batteryPercent}%
           </div>
-          <div className="card-sub">Auto-save trigger at 15%</div>
+          <div style={{ fontSize: '0.85em', color: '#fff', marginTop: '4px', fontWeight: 'bold' }}>
+            {metrics.batteryStatus} {metrics.batteryHealth && !metrics.acOnline && metrics.batteryHealth.minutesTo15 !== null && (
+              <span style={{ color: '#ffa502', marginLeft: '6px' }}>
+                ({metrics.batteryHealth.minutesTo15} mins to 15%)
+              </span>
+            )}
+          </div>
+          <div className="card-sub" style={{ marginTop: '8px', lineHeight: '1.4' }}>
+            {metrics.batteryHealth ? (
+              <>
+                Health: <span style={{ color: metrics.batteryHealth.healthPercent < 50 ? '#ff4757' : '#2ed573', fontWeight: 'bold' }}>{metrics.batteryHealth.healthPercent}%</span> ({metrics.batteryHealth.chargeFull_mAh} / {metrics.batteryHealth.chargeFullDesign_mAh} mAh)
+                <br />
+                Cycles: {metrics.batteryHealth.cycleCount} • {metrics.batteryHealth.manufacturer}
+              </>
+            ) : (
+              'Auto-save trigger at 15%'
+            )}
+          </div>
         </div>
 
         <div className="thermal-card highlight-cyan">
