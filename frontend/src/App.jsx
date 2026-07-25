@@ -19,6 +19,9 @@ function App() {
   const [showThermals, setShowThermals] = useState(window.location.pathname === '/thermals');
   const [showModeration, setShowModeration] = useState(window.location.pathname === '/moderation');
   const [loadingApp, setLoadingApp] = useState(true);
+  const [moderationPassword, setModerationPassword] = useState('');
+  const [moderationUnlocked, setModerationUnlocked] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => {
     const handlePopState = () => {
@@ -28,6 +31,14 @@ function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  useEffect(() => {
+    if (!showModeration) {
+      setModerationUnlocked(false);
+      setModerationPassword('');
+      setPasswordError('');
+    }
+  }, [showModeration]);
 
   useEffect(() => {
     loadCustomBannedWords();
@@ -103,21 +114,70 @@ function App() {
         <ThermalsPage onBack={() => { window.history.pushState({}, '', '/'); setShowThermals(false); }} />
       ) : showModeration ? (
         currentUser && currentUser.is_admin ? (
-          <div className="moderation-page-container" style={{ padding: '20px', background: '#0f1015', minHeight: '100vh', color: '#fff' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
-              <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '1.8em', margin: 0 }}>🛡️ Global Moderation Panel</h1>
-              <button 
-                onClick={() => { window.history.pushState({}, '', '/'); setShowModeration(false); }}
-                style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer' }}
+          !moderationUnlocked ? (
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0f1015', color: '#fff', fontFamily: "'Outfit', sans-serif" }}>
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (moderationPassword === 'Target143@') {
+                    setModerationUnlocked(true);
+                    setPasswordError('');
+                  } else {
+                    setPasswordError('Invalid key code. Access denied.');
+                  }
+                }}
+                className="welcome-island" 
+                style={{ width: '100%', maxWidth: '400px', padding: '40px', background: 'rgba(255,255,255,0.02)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', gap: '20px' }}
               >
-                Back to Portal
-              </button>
+                <div style={{ textAlign: 'center' }}>
+                  <span style={{ fontSize: '3em' }}>🛡️</span>
+                  <h2 style={{ fontSize: '1.8em', margin: '10px 0 5px 0', fontWeight: '800' }}>Admin Gateway</h2>
+                  <p style={{ color: '#a4b0be', fontSize: '0.9em', margin: 0 }}>Enter administrative authorization credentials.</p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <input 
+                    type="password" 
+                    placeholder="Access Password" 
+                    value={moderationPassword} 
+                    onChange={(e) => setModerationPassword(e.target.value)}
+                    style={{ width: '100%', padding: '14px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', fontSize: '1em', outline: 'none' }}
+                  />
+                  {passwordError && <span style={{ color: '#ff4757', fontSize: '0.85em', fontWeight: 'bold' }}>{passwordError}</span>}
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button 
+                    type="button"
+                    onClick={() => { window.history.pushState({}, '', '/'); setShowModeration(false); }}
+                    style={{ flex: 1, padding: '12px', background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    style={{ flex: 1, padding: '12px', background: '#5865f2', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    Unlock
+                  </button>
+                </div>
+              </form>
             </div>
-            <AdminPanel currentUser={currentUser} onSelectServer={(srv) => {
-              window.history.pushState({}, '', '/');
-              setShowModeration(false);
-            }} />
-          </div>
+          ) : (
+            <div className="moderation-page-container" style={{ padding: '20px', background: '#0f1015', minHeight: '100vh', color: '#fff' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
+                <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '1.8em', margin: 0 }}>🛡️ Global Moderation Panel</h1>
+                <button 
+                  onClick={() => { window.history.pushState({}, '', '/'); setShowModeration(false); }}
+                  style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer' }}
+                >
+                  Back to Portal
+                </button>
+              </div>
+              <AdminPanel currentUser={currentUser} onSelectServer={(srv) => {
+                window.history.pushState({}, '', '/');
+                setShowModeration(false);
+              }} />
+            </div>
+          )
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0f1015', color: '#ff4757', textAlign: 'center', fontFamily: "'Outfit', sans-serif" }}>
             <h1>🚫 Access Denied</h1>

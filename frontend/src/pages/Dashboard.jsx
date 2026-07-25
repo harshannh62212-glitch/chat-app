@@ -98,18 +98,7 @@ function Dashboard({ user, setUser, onLogout }) {
           🧭
         </div>
 
-        {user.is_admin && (
-          <div 
-            className="rail-icon admin-icon"
-            onClick={() => { 
-              window.history.pushState({}, '', '/moderation');
-              window.dispatchEvent(new Event('popstate'));
-            }}
-            title="Admin Moderation"
-          >
-            🛡️
-          </div>
-        )}
+
       </div>
 
       {/* 2. Sub-Sidebar Column (List for selected tab/view) */}
