@@ -260,6 +260,7 @@ let currentFanState = {
   manualPercent: 55,
   targetPwm: 140
 };
+let systemStatusState = { status: 'active' };
 
 let lastAppliedPwm = null;
 let lastAppliedEnableMode = null;
@@ -385,6 +386,21 @@ function applyFanHardwareState() {
 setInterval(() => {
   applyFanHardwareState();
 }, 500);
+
+app.get('/api/system/status', (req, res) => {
+  res.json(systemStatusState);
+});
+
+app.post('/api/system/status', (req, res) => {
+  const { status } = req.body;
+  if (status === 'active' || status === 'sleeping') {
+    systemStatusState.status = status;
+    io.emit('system-status', systemStatusState);
+    console.log(`[SYSTEM] System status changed to: ${status}`);
+    return res.json({ message: `Status updated to ${status}` });
+  }
+  res.status(400).json({ error: 'Invalid status' });
+});
 
 app.get('/api/system/fan', (req, res) => {
   try {
