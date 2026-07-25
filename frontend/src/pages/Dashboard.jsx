@@ -100,8 +100,11 @@ function Dashboard({ user, setUser, onLogout }) {
 
         {user.is_admin && (
           <div 
-            className={`rail-icon admin-icon ${activeTab === 'admin' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('admin'); setSelectedServer(null); setSelectedDM(null); }}
+            className="rail-icon admin-icon"
+            onClick={() => { 
+              window.history.pushState({}, '', '/moderation');
+              window.dispatchEvent(new Event('popstate'));
+            }}
             title="Admin Moderation"
           >
             🛡️
@@ -121,11 +124,6 @@ function Dashboard({ user, setUser, onLogout }) {
             ) : activeTab === 'discovery' ? (
               <div className="brand-header-title">
                 <h3>Server Discovery</h3>
-                <span className="brand-subtext">wired-io</span>
-              </div>
-            ) : activeTab === 'admin' ? (
-              <div className="brand-header-title">
-                <h3>Admin Panel</h3>
                 <span className="brand-subtext">wired-io</span>
               </div>
             ) : (
@@ -149,11 +147,7 @@ function Dashboard({ user, setUser, onLogout }) {
               <Discovery currentUser={user} />
             )}
 
-            {activeTab === 'admin' && (
-              <div className="admin-menu-placeholder">
-                <p>Welcome to Moderation Console. Use the main screen to moderate users, servers, and word filters.</p>
-              </div>
-            )}
+
           </div>
 
           {/* User Profile Bar at the bottom of sub-sidebar */}
@@ -187,16 +181,7 @@ function Dashboard({ user, setUser, onLogout }) {
           />
         )}
 
-        {activeTab === 'admin' && (
-          <AdminPanel 
-            currentUser={user}
-            onSelectServer={(srv) => {
-              setSelectedServer(srv);
-              setSelectedDM(null);
-              setActiveTab('servers');
-            }}
-          />
-        )}
+
 
         {activeTab === 'dms' && !selectedDM && (
           <FriendsPanel 
@@ -207,7 +192,7 @@ function Dashboard({ user, setUser, onLogout }) {
           />
         )}
 
-        {activeTab !== 'dms' && !selectedServer && !selectedDM && activeTab !== 'admin' && (
+        {activeTab !== 'dms' && !selectedServer && !selectedDM && (
           <div className="welcome-container welcome-island">
             <div className="welcome-brand" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
               <Logo width={260} variant="full" />

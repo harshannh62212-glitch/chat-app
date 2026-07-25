@@ -47,7 +47,15 @@ services:
       - .:/app
       - /app/node_modules
       - /sys:/sys
-
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel run chat-app
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - chat_network
 volumes:
   postgres_data:
 

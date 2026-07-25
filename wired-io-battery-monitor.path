@@ -1,0 +1,12 @@
+[Unit]
+Description=Wired-IO Battery Level Monitor (watches /sys/class/power_supply/BAT0/capacity)
+Documentation=https://wired-io.vercel.app
+After=upower.service
+
+[Path]
+# Watch for changes to battery capacity file
+PathChanged=/sys/class/power_supply/BAT0/capacity
+Unit=wired-io-battery-check.service
+
+[Install]
+WantedBy=multi-user.target

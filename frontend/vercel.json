@@ -2,11 +2,11 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "https://starter-taste-lamp-wit.trycloudflare.com/api/$1"
+      "dest": "https://specification-guide-software-automation.trycloudflare.com/api/$1"
     },
     {
       "src": "/socket.io/(.*)",
-      "dest": "https://starter-taste-lamp-wit.trycloudflare.com/socket.io/$1"
+      "dest": "https://specification-guide-software-automation.trycloudflare.com/socket.io/$1"
     },
     {
       "handle": "filesystem"

@@ -1,0 +1,17 @@
+[Unit]
+Description=Wired-IO Low Battery Auto-Save & Hibernate Guardian
+Documentation=https://wired-io.vercel.app
+After=multi-user.target upower.service docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/wired-io-battery-guardian.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wired-io-battery
+# Must run as root to access sysfs, docker, and systemctl hibernate
+User=root
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

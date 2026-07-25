@@ -3,11 +3,12 @@ const cors = require('cors');
 const http = require('http');
 const socketIO = require('socket.io');
 require('dotenv').config();
+const fetch = globalThis.fetch || require('node-fetch');
 const authRoutes = require('./routes/auth');
 const serverRoutes = require('./routes/servers');
 const messageRoutes = require('./routes/messages');
 const userRoutes = require('./routes/users');
-const { initDB } = require('./db/database');
+const { initDB, query } = require('./db/database');
 const { filterContent } = require('./utils/contentFilter');
 
 const app = express();
@@ -96,19 +97,83 @@ function getPowerSupplyInfo() {
 
     if (watts <= 0 || isNaN(watts)) watts = 12.5;
 
-    // Low-Battery Auto-Save Protection Daemon (Triggers under 15% battery)
-    if (batteryPercent <= 15 && batteryStatus.toLowerCase() === 'discharging') {
+    // ── Low-Battery Auto-Save Guardian (Real Implementation) ─────────────────
+    // Triggers when battery ≤ 15% and discharging.
+    // Calls the host-side wired-io-battery-guardian.sh via systemd on the host.
+    if (batteryPercent <= 15 && batteryStatus.toLowerCase() === 'discharging' && !acOnline) {
       lowBatteryAutoSaveTriggered = true;
-      try {
-        const snapshot = {
-          timestamp: new Date().toISOString(),
-          batteryPercent,
-          batteryStatus,
-          watts: watts.toFixed(1) + ' W',
-          savedState: 'Database connections and user session states saved automatically before battery depletion.'
-        };
-        fs.writeFileSync('/app/low_battery_auto_save_snapshot.json', JSON.stringify(snapshot, null, 2));
-      } catch (e) {}
+      // Trigger the host systemd guardian service if not already running
+      // Use a flag file to avoid retriggering every 2s poll cycle
+      const triggerFlagPath = '/app/low_battery_guardian_triggered.flag';
+      const alreadyTriggered = fs.existsSync(triggerFlagPath);
+      if (!alreadyTriggered) {
+        fs.writeFileSync(triggerFlagPath, new Date().toISOString());
+        try {
+          // Fire the real host-side systemd service via nsenter into PID 1 namespace
+          execSync(
+            'nsenter -t 1 -m -u -i -n -- systemctl start wired-io-battery-guardian.service',
+            { timeout: 5000 }
+          );
+          console.log(`[BATTERY GUARDIAN] Triggered at ${batteryPercent}% — state save + hibernate initiated`);
+        } catch (e) {
+          // Fallback: run the script directly on the host via nsenter
+          try {
+            execSync(
+              'nsenter -t 1 -m -u -i -n -- /usr/local/bin/wired-io-battery-guardian.sh &',
+              { timeout: 3000 }
+            );
+            console.log(`[BATTERY GUARDIAN] Fallback direct execution triggered`);
+          } catch (e2) {
+            console.error('[BATTERY GUARDIAN] Failed to trigger guardian:', e2.message);
+          }
+        }
+      }
+    } else {
+      // If battery recovered (charging), remove the trigger flag so it can fire again next time
+      const triggerFlagPath = '/app/low_battery_guardian_triggered.flag';
+      if (fs.existsSync(triggerFlagPath) && (acOnline || batteryPercent > 20)) {
+        fs.unlinkSync(triggerFlagPath);
+      }
+    }
+  } catch (e) {}
+
+  // ── Battery Health ──────────────────────────────────────────────────────────
+  let healthPercent = 100;
+  let chargeFull = 0;
+  let chargeFullDesign = 0;
+  let chargeNow = 0;
+  let cycleCount = 0;
+  let manufacturer = '';
+  let modelName = '';
+  let minutesTo15 = null;
+
+  try {
+    const batPath = '/sys/class/power_supply/BAT0';
+    if (fs.existsSync(`${batPath}/charge_full`)) {
+      chargeFull = parseInt(fs.readFileSync(`${batPath}/charge_full`, 'utf8').trim()) || 0;
+      chargeFullDesign = parseInt(fs.readFileSync(`${batPath}/charge_full_design`, 'utf8').trim()) || 1;
+      chargeNow = parseInt(fs.readFileSync(`${batPath}/charge_now`, 'utf8').trim()) || 0;
+      if (chargeFullDesign > 0) healthPercent = Math.min(100, Math.round((chargeFull / chargeFullDesign) * 100));
+    }
+    if (fs.existsSync(`${batPath}/cycle_count`)) {
+      cycleCount = parseInt(fs.readFileSync(`${batPath}/cycle_count`, 'utf8').trim()) || 0;
+    }
+    if (fs.existsSync(`${batPath}/manufacturer`)) {
+      manufacturer = fs.readFileSync(`${batPath}/manufacturer`, 'utf8').trim();
+    }
+    if (fs.existsSync(`${batPath}/model_name`)) {
+      modelName = fs.readFileSync(`${batPath}/model_name`, 'utf8').trim();
+    }
+    // Time to 15%: current_now in µA, charge in µAh → time(h) = delta_charge / current
+    if (!acOnline && batteryStatus.toLowerCase() === 'discharging') {
+      const rawCurrent = fs.existsSync(`${batPath}/current_now`)
+        ? parseInt(fs.readFileSync(`${batPath}/current_now`, 'utf8').trim()) || 0
+        : 0;
+      if (rawCurrent > 0 && chargeFull > 0) {
+        const charge15pct = chargeFull * 0.15;
+        const chargeNeededToDrain = chargeNow - charge15pct;
+        minutesTo15 = chargeNeededToDrain > 0 ? Math.round((chargeNeededToDrain / rawCurrent) * 60) : 0;
+      }
     }
   } catch (e) {}
 
@@ -118,9 +183,20 @@ function getPowerSupplyInfo() {
     watts: watts.toFixed(1) + ' W',
     wattsVal: parseFloat(watts.toFixed(1)),
     acOnline,
-    lowBatteryAutoSaveTriggered
+    lowBatteryAutoSaveTriggered,
+    health: {
+      healthPercent,
+      chargeFull_mAh: Math.round(chargeFull / 1000),
+      chargeFullDesign_mAh: Math.round(chargeFullDesign / 1000),
+      chargeNow_mAh: Math.round(chargeNow / 1000),
+      cycleCount,
+      manufacturer,
+      modelName,
+      minutesTo15
+    }
   };
 }
+
 
 // Comprehensive System Status Endpoint
 app.get('/api/system-status', (req, res) => {
@@ -180,9 +256,9 @@ function getDellFanPath() {
 
 // Dell Hardware Fan Control State & Smart Thermal Daemon Engine
 let currentFanState = {
-  mode: 'auto', // 'auto' (our smart curve), 'manual', or 'bios_auto'
-  manualPercent: 50,
-  targetPwm: 128
+  mode: 'manual', // 'auto' (our smart curve), 'manual', or 'bios_auto'
+  manualPercent: 55,
+  targetPwm: 140
 };
 
 let lastAppliedPwm = null;
@@ -246,9 +322,12 @@ function readCpuTempC(fanPath) {
   return tempC;
 }
 
+let tickCount = 0;
+
 function applyFanHardwareState() {
   try {
     const fanPath = getDellFanPath();
+    tickCount++;
 
     if (currentFanState.mode === 'bios_auto') {
       enableDellBiosFanControl();
@@ -257,14 +336,6 @@ function applyFanHardwareState() {
         lastAppliedEnableMode = '2';
       }
       return;
-    }
-
-    // Kill BIOS EC control every single tick — EC re-enables itself within ~1-2s otherwise
-    disableDellBiosFanControl();
-
-    // Force pwm1_enable=1 unconditionally
-    if (fs.existsSync(`${fanPath}/pwm1_enable`)) {
-      fs.writeFileSync(`${fanPath}/pwm1_enable`, '1');
     }
 
     let targetPwm = currentFanState.targetPwm;
@@ -285,12 +356,27 @@ function applyFanHardwareState() {
       currentFanState.targetPwm = targetPwm;
     }
 
-    // Primary: use i8k ioctl path (kernel SMM — EC actually respects this)
-    const i8kSuccess = setFanViaDellSMM(targetPwm);
+    const stateChanged = (targetPwm !== lastAppliedPwm) || (lastAppliedBiosMode !== 'disabled');
+    const periodicTick = (tickCount % 10 === 0);
 
-    // Fallback: also write sysfs directly
-    if (fs.existsSync(`${fanPath}/pwm1`)) {
-      fs.writeFileSync(`${fanPath}/pwm1`, targetPwm.toString());
+    if (stateChanged || periodicTick) {
+      // Kill BIOS EC control
+      disableDellBiosFanControl();
+      lastAppliedBiosMode = 'disabled';
+
+      // Force pwm1_enable=1 unconditionally
+      if (fs.existsSync(`${fanPath}/pwm1_enable`)) {
+        fs.writeFileSync(`${fanPath}/pwm1_enable`, '1');
+      }
+
+      // Primary: use i8k ioctl path (kernel SMM — EC actually respects this)
+      setFanViaDellSMM(targetPwm);
+      lastAppliedPwm = targetPwm;
+
+      // Fallback: also write sysfs directly
+      if (fs.existsSync(`${fanPath}/pwm1`)) {
+        fs.writeFileSync(`${fanPath}/pwm1`, targetPwm.toString());
+      }
     }
   } catch (e) {}
 }
@@ -438,15 +524,21 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-message', (data) => {
-    const { senderId, content, serverId, dmWith } = data;
+    const { senderId, content, serverId, dmWith, username, avatar_url, chatroom_id } = data;
     const filteredContent = filterContent(content);
 
     if (serverId) {
       io.to(`server-${serverId}`).emit('new-message', {
+        id: data.id || Math.random().toString(),
         senderId,
+        sender_id: senderId,
+        username: username || 'Unknown',
+        avatar_url: avatar_url || '',
         content: filteredContent,
         serverId,
-        timestamp: new Date(),
+        chatroom_id,
+        created_at: data.created_at || new Date().toISOString(),
+        timestamp: data.created_at || new Date().toISOString(),
         isDM: false
       });
     } else if (dmWith) {
@@ -476,8 +568,164 @@ io.on('connection', (socket) => {
   });
 });
 
-module.exports = { io };
 const PORT = process.env.PORT || 5000;
+
+// Gemini AI Moderation Daemon
+async function runGeminiModeration() {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return;
+  }
+
+  try {
+    // 1. Moderate Messages (server messages and direct messages)
+    const serverMsgs = await query(
+      "SELECT id, sender_id, content FROM server_messages WHERE is_moderated = false LIMIT 50"
+    );
+    const directMsgs = await query(
+      "SELECT id, sender_id, content FROM direct_messages WHERE is_moderated = false LIMIT 50"
+    );
+
+    const allMsgs = [
+      ...serverMsgs.rows.map(m => ({ id: m.id, type: 'server', sender_id: m.sender_id, content: m.content })),
+      ...directMsgs.rows.map(m => ({ id: m.id, type: 'dm', sender_id: m.sender_id, content: m.content }))
+    ];
+
+    if (allMsgs.length > 0) {
+      console.log(`[AI MODERATOR] Scanning ${allMsgs.length} messages...`);
+      const messagesPayload = allMsgs.map(m => ({ id: m.id, content: m.content }));
+      
+      const prompt = `You are an AI safety moderator. Analyze the following list of chat messages and identify which ones contain inappropriate content (hate speech, harassment, graphic violence, pornography, extreme profanity/abusive language, or deliberate bypasses of word filters such as 'fuckk', 'f.u.c.k', 'b!tch', etc.).
+      
+      Respond ONLY with a JSON array containing the IDs of the messages that violate these rules. If no messages violate the rules, return an empty array [].
+      
+      Messages to check:
+      ${JSON.stringify(messagesPayload)}
+      
+      Response format:
+      [ "msgId1", "msgId2" ]`;
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      });
+
+      if (response.ok) {
+        const json = await response.json();
+        const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+        try {
+          const flaggedIds = JSON.parse(textResponse.trim());
+          if (Array.isArray(flaggedIds) && flaggedIds.length > 0) {
+            console.warn(`[AI MODERATOR] Flagged messages:`, flaggedIds);
+            for (const id of flaggedIds) {
+              const msg = allMsgs.find(m => m.id.toString() === id.toString());
+              if (msg) {
+                console.warn(`[AI MODERATOR] Deleting violating message ID: ${msg.id} from sender: ${msg.sender_id}`);
+                // Delete the message
+                if (msg.type === 'server') {
+                  await query("DELETE FROM server_messages WHERE id = $1", [msg.id]);
+                } else {
+                  await query("DELETE FROM direct_messages WHERE id = $1", [msg.id]);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[AI MODERATOR] Failed to parse textResponse JSON:', textResponse, e.message);
+        }
+      } else {
+        console.error('[AI MODERATOR] API response error:', response.statusText);
+      }
+
+      // Mark processed messages as moderated
+      const processedServerIds = allMsgs.filter(m => m.type === 'server').map(m => m.id);
+      const processedDmIds = allMsgs.filter(m => m.type === 'dm').map(m => m.id);
+      if (processedServerIds.length > 0) {
+        await query("UPDATE server_messages SET is_moderated = true WHERE id = ANY($1)", [processedServerIds]);
+      }
+      if (processedDmIds.length > 0) {
+        await query("UPDATE direct_messages SET is_moderated = true WHERE id = ANY($1)", [processedDmIds]);
+      }
+    }
+
+    // 2. Moderate User Profile Pictures (PFPs)
+    const unmoderatedUsers = await query(
+      "SELECT id, username, avatar_url FROM users WHERE is_moderated = false AND avatar_url IS NOT NULL AND avatar_url <> '' LIMIT 10"
+    );
+
+    if (unmoderatedUsers.rows.length > 0) {
+      console.log(`[AI MODERATOR] Scanning ${unmoderatedUsers.rows.length} user profile pictures...`);
+      for (const u of unmoderatedUsers.rows) {
+        const imagePart = await downloadImageAsBase64(u.avatar_url);
+        if (!imagePart) {
+          await query("UPDATE users SET is_moderated = true WHERE id = $1", [u.id]);
+          continue;
+        }
+
+        const promptText = `Analyze this user profile picture. Is this image appropriate for a general-audience chat platform? It should not contain nudity, sexually suggestive content, hate symbols, graphic violence, drugs/weapons, or harassment. Respond with JSON: {"appropriate": true} or {"appropriate": false, "reason": "reason"}.`;
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                imagePart,
+                { text: promptText }
+              ]
+            }],
+            generationConfig: { responseMimeType: 'application/json' }
+          })
+        });
+
+        if (response.ok) {
+          const json = await response.json();
+          const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+          try {
+            const resData = JSON.parse(textResponse.trim());
+            if (resData.appropriate === false) {
+              console.warn(`[AI MODERATOR] User ${u.username} (${u.id}) has inappropriate avatar. Reason: ${resData.reason}. Resetting user avatar.`);
+              await query("UPDATE users SET avatar_url = '' WHERE id = $1", [u.id]);
+            }
+          } catch (e) {
+            console.error('[AI MODERATOR] Failed to parse PFP check response:', textResponse, e.message);
+          }
+        }
+        await query("UPDATE users SET is_moderated = true WHERE id = $1", [u.id]);
+      }
+    }
+  } catch (err) {
+    console.error('[AI MODERATOR] Error in moderation loop:', err.message);
+  }
+}
+
+// Helper to download image as base64 for Gemini multimodal input
+async function downloadImageAsBase64(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const mimeType = res.headers.get('content-type') || 'image/jpeg';
+    return {
+      inlineData: {
+        data: buffer.toString('base64'),
+        mimeType
+      }
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+// Start the moderation interval (every 5 seconds)
+setInterval(() => {
+  runGeminiModeration();
+}, 5000);
 
 (async () => {
   try {

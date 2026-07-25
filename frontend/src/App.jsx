@@ -11,16 +11,19 @@ axios.defaults.baseURL = import.meta.env.PROD ? '' : 'http://localhost:8000';
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
 
 import ThermalsPage from './pages/ThermalsPage';
+import AdminPanel from './components/AdminPanel';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
   const [showThermals, setShowThermals] = useState(window.location.pathname === '/thermals');
+  const [showModeration, setShowModeration] = useState(window.location.pathname === '/moderation');
   const [loadingApp, setLoadingApp] = useState(true);
 
   useEffect(() => {
     const handlePopState = () => {
       setShowThermals(window.location.pathname === '/thermals');
+      setShowModeration(window.location.pathname === '/moderation');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -78,7 +81,7 @@ function App() {
   };
 
   return (
-    <div className={`app ${showThermals ? 'thermals-view' : currentUser ? 'dashboard-view' : 'public-view'}`}>
+    <div className={`app ${showThermals ? 'thermals-view' : showModeration ? 'moderation-view' : currentUser ? 'dashboard-view' : 'public-view'}`}>
       {currentUser && currentUser.is_banned ? (
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw', background: '#0f1015', color: '#ff4757', textAlign: 'center', padding: '20px', fontFamily: "'Outfit', sans-serif" }}>
           <div className="welcome-island" style={{ maxWidth: '500px', padding: '40px', background: 'rgba(255, 71, 87, 0.04)', borderRadius: '24px', border: '1px solid rgba(255, 71, 87, 0.15)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
@@ -98,6 +101,30 @@ function App() {
         </div>
       ) : showThermals ? (
         <ThermalsPage onBack={() => { window.history.pushState({}, '', '/'); setShowThermals(false); }} />
+      ) : showModeration ? (
+        currentUser && currentUser.is_admin ? (
+          <div className="moderation-page-container" style={{ padding: '20px', background: '#0f1015', minHeight: '100vh', color: '#fff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
+              <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '1.8em', margin: 0 }}>🛡️ Global Moderation Panel</h1>
+              <button 
+                onClick={() => { window.history.pushState({}, '', '/'); setShowModeration(false); }}
+                style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer' }}
+              >
+                Back to Portal
+              </button>
+            </div>
+            <AdminPanel currentUser={currentUser} onSelectServer={(srv) => {
+              window.history.pushState({}, '', '/');
+              setShowModeration(false);
+            }} />
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0f1015', color: '#ff4757', textAlign: 'center', fontFamily: "'Outfit', sans-serif" }}>
+            <h1>🚫 Access Denied</h1>
+            <p style={{ color: '#a4b0be' }}>You must be logged in as an administrator to view this page.</p>
+            <button onClick={() => { window.history.pushState({}, '', '/'); setShowModeration(false); }} style={{ marginTop: '20px', padding: '10px 20px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer' }}>Back to Home</button>
+          </div>
+        )
       ) : currentUser ? (
         <Dashboard 
           user={currentUser} 

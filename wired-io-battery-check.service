@@ -1,0 +1,20 @@
+[Unit]
+Description=Wired-IO Battery Check (fires when capacity file changes)
+After=upower.service docker.service
+
+[Service]
+Type=oneshot
+# Read current battery level and trigger guardian if <= 15% and discharging
+ExecStart=/bin/bash -c '\
+  CAPACITY=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || echo 100); \
+  STATUS=$(cat /sys/class/power_supply/BAT0/status 2>/dev/null || echo Charging); \
+  AC=$(cat /sys/class/power_supply/AC/online 2>/dev/null || echo 1); \
+  echo "Battery check: ${CAPACITY}% / ${STATUS} / AC=${AC}"; \
+  if [ "${CAPACITY}" -le 15 ] && [ "${STATUS}" = "Discharging" ] && [ "${AC}" = "0" ]; then \
+    echo "THRESHOLD HIT — triggering battery guardian"; \
+    systemctl start wired-io-battery-guardian.service; \
+  fi'
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wired-io-battery-check
+User=root

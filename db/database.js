@@ -144,6 +144,9 @@ async function createTables() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS timeout_until TIMESTAMP;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT false;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
+      ALTER TABLE server_messages ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
+      ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
     `);
 
     // Seed Administrator role

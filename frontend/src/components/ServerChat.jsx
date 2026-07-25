@@ -84,7 +84,10 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
 
     const handleNewMessage = (msgData) => {
       if (msgData.serverId === server.id || msgData.chatroom_id === selectedChatroom.id) {
-        setMessages(prev => [...prev, msgData]);
+        setMessages(prev => {
+          if (prev.some(m => m.id === msgData.id)) return prev;
+          return [...prev, msgData];
+        });
       }
     };
 
@@ -124,10 +127,9 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
 
       const newMsg = res.data;
       socket.emit('send-message', {
-        senderId: currentUser.id,
-        content: filteredContent,
-        serverId: server.id,
-        chatroom_id: selectedChatroom.id
+        ...newMsg,
+        senderId: currentUser.id, // compatibility fallback
+        serverId: server.id
       });
       setMessages(prev => {
         if (prev.some(m => m.id === newMsg.id)) return prev;
