@@ -91,10 +91,16 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
       }
     };
 
+    const handleMessageDeleted = (data) => {
+      setMessages(prev => prev.filter(m => m.id.toString() !== data.id.toString()));
+    };
+
     socket.on('new-message', handleNewMessage);
+    socket.on('message-deleted', handleMessageDeleted);
 
     return () => {
       socket.off('new-message', handleNewMessage);
+      socket.off('message-deleted', handleMessageDeleted);
     };
   }, [server.id, selectedChatroom]);
 

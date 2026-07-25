@@ -631,6 +631,7 @@ async function runGeminiModeration() {
                 } else {
                   await query("DELETE FROM direct_messages WHERE id = $1", [msg.id]);
                 }
+                io.emit('message-deleted', { id: msg.id, type: msg.type });
               }
             }
           }
