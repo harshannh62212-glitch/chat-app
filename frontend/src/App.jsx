@@ -42,14 +42,12 @@ function App() {
 
   const [serverSleeping, setServerSleeping] = useState(false);
   const [batteryInfo, setBatteryInfo] = useState(null);
-  const [backendOffline, setBackendOffline] = useState(false);
 
   useEffect(() => {
     const checkSystemStatus = async () => {
       try {
         const res = await axios.get('/api/system/status');
         if (res.data) {
-          setBackendOffline(false);
           if (res.data.status === 'sleeping') {
             setServerSleeping(true);
             localStorage.setItem('server_sleeping', 'true');
@@ -62,7 +60,6 @@ function App() {
           }
         }
       } catch (err) {
-        setBackendOffline(true);
         if (localStorage.getItem('server_sleeping') === 'true') {
           setServerSleeping(true);
         }
@@ -70,24 +67,6 @@ function App() {
     };
     checkSystemStatus();
     const interval = setInterval(checkSystemStatus, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const pingServer = async () => {
-      try {
-        const res = await axios.get('/ping', { timeout: 5000 });
-        if (res.data === 'pong-32bytes-payload-status-okay') {
-          setBackendOffline(false);
-        } else {
-          setBackendOffline(true);
-        }
-      } catch (err) {
-        setBackendOffline(true);
-      }
-    };
-    pingServer();
-    const interval = setInterval(pingServer, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -156,30 +135,7 @@ function App() {
           <span><strong>Notice:</strong> The host server is running on battery backup (Discharging: {batteryInfo.percent}%). It will automatically hibernate if battery drops under 20%.</span>
         </div>
       )}
-      {backendOffline ? (
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw', background: '#0f1015', color: '#ff4757', textAlign: 'center', padding: '20px', fontFamily: "'Outfit', sans-serif" }}>
-          <div className="welcome-island" style={{ maxWidth: '500px', padding: '40px', background: 'rgba(255, 71, 87, 0.04)', borderRadius: '24px', border: '1px solid rgba(255, 71, 87, 0.15)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
-            <span style={{ fontSize: '3.5em' }}>🔌</span>
-            <h1 style={{ fontSize: '2.2em', fontWeight: '800', letterSpacing: '1px', margin: 0, color: '#fff' }}>SERVER OFFLINE</h1>
-            <p style={{ fontSize: '1.1em', color: '#a4b0be', lineHeight: '1.6', margin: 0 }}>
-              Server is down, we will try to get it back up ASAP.
-            </p>
-            {serverSleeping && (
-              <p style={{ fontSize: '0.95em', color: '#ff9f43', fontStyle: 'italic', margin: 0 }}>
-                (Reason: Host server has entered low-battery hibernation sleep)
-              </p>
-            )}
-            <button 
-              onClick={() => window.location.reload()}
-              style={{ marginTop: '10px', padding: '12px 28px', background: '#5865f2', color: '#fff', border: 'none', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1em', boxShadow: '0 8px 20px rgba(88, 101, 242, 0.3)', transition: 'transform 0.2s' }}
-              onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
-              onMouseLeave={(e) => e.target.style.transform = 'none'}
-            >
-              Retry Connection
-            </button>
-          </div>
-        </div>
-      ) : currentUser && currentUser.is_banned ? (
+      {currentUser && currentUser.is_banned ? (
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw', background: '#0f1015', color: '#ff4757', textAlign: 'center', padding: '20px', fontFamily: "'Outfit', sans-serif" }}>
           <div className="welcome-island" style={{ maxWidth: '500px', padding: '40px', background: 'rgba(255, 71, 87, 0.04)', borderRadius: '24px', border: '1px solid rgba(255, 71, 87, 0.15)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
             <h1 style={{ fontSize: '2.5em', fontWeight: '800', letterSpacing: '1px', margin: 0 }}>🚫 ACCESS DENIED</h1>

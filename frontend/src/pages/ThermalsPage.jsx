@@ -61,7 +61,7 @@ function ThermalsPage({ onBack }) {
       sessionStorage.setItem('thermals_unlocked', 'true');
       setAuthError('');
     } else {
-      setAuthError('Incorrect Access Code. Required: 1516');
+      setAuthError('Incorrect Access Code.');
     }
   };
 
