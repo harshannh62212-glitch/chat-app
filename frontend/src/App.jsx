@@ -41,17 +41,23 @@ function App() {
   }, [showModeration]);
 
   const [serverSleeping, setServerSleeping] = useState(false);
+  const [batteryInfo, setBatteryInfo] = useState(null);
 
   useEffect(() => {
     const checkSystemStatus = async () => {
       try {
         const res = await axios.get('/api/system/status');
-        if (res.data && res.data.status === 'sleeping') {
-          setServerSleeping(true);
-          localStorage.setItem('server_sleeping', 'true');
-        } else {
-          setServerSleeping(false);
-          localStorage.setItem('server_sleeping', 'false');
+        if (res.data) {
+          if (res.data.status === 'sleeping') {
+            setServerSleeping(true);
+            localStorage.setItem('server_sleeping', 'true');
+          } else {
+            setServerSleeping(false);
+            localStorage.setItem('server_sleeping', 'false');
+          }
+          if (res.data.battery) {
+            setBatteryInfo(res.data.battery);
+          }
         }
       } catch (err) {
         if (localStorage.getItem('server_sleeping') === 'true') {
@@ -121,6 +127,12 @@ function App() {
         <div style={{ background: '#ff9f43', color: '#000', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '0.95em', fontFamily: "'Outfit', sans-serif", display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', zIndex: 9999, position: 'relative' }}>
           <span>💤</span>
           <span><strong>Notice:</strong> The host server has entered low-battery hibernation mode. Features are restricted until the server is powered back on.</span>
+        </div>
+      )}
+      {!serverSleeping && batteryInfo && !batteryInfo.isCharging && (
+        <div style={{ background: '#ee5253', color: '#fff', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '0.95em', fontFamily: "'Outfit', sans-serif", display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', zIndex: 9999, position: 'relative' }}>
+          <span>🔌</span>
+          <span><strong>Notice:</strong> The host server is running on battery backup (Discharging: {batteryInfo.percent}%). It will automatically hibernate if battery drops under 20%.</span>
         </div>
       )}
       {currentUser && currentUser.is_banned ? (
@@ -220,6 +232,7 @@ function App() {
           user={currentUser} 
           setUser={setCurrentUser} 
           onLogout={handleLogout} 
+          batteryInfo={batteryInfo}
         />
       ) : showAuth ? (
         <Auth onLogin={handleLogin} onBack={() => setShowAuth(false)} />

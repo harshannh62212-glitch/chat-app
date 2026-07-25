@@ -323,6 +323,16 @@ function readCpuTempC(fanPath) {
   return tempC;
 }
 
+function readCpuFanRpm(fanPath) {
+  try {
+    if (fs.existsSync(`${fanPath}/fan1_input`)) {
+      return parseInt(fs.readFileSync(`${fanPath}/fan1_input`, 'utf8').trim()) || 0;
+    }
+  } catch (e) {}
+  return 0;
+}
+
+
 let tickCount = 0;
 
 function applyFanHardwareState() {
@@ -357,7 +367,18 @@ function applyFanHardwareState() {
       currentFanState.targetPwm = targetPwm;
     }
 
-    const stateChanged = (targetPwm !== lastAppliedPwm) || (lastAppliedBiosMode !== 'disabled');
+    const currentRpm = readCpuFanRpm(fanPath);
+    let rpmUnstable = false;
+
+    // Check fan stability on the 5-second tick
+    if (tickCount % 10 === 0 && currentFanState.mode !== 'bios_auto' && targetPwm > 0) {
+      if (currentRpm < 1000) {
+        console.warn(`[FAN WATCHDOG] Warning: Fan RPM is unstable (${currentRpm} RPM). Re-applying manual SMM override...`);
+        rpmUnstable = true;
+      }
+    }
+
+    const stateChanged = (targetPwm !== lastAppliedPwm) || (lastAppliedBiosMode !== 'disabled') || rpmUnstable;
     const periodicTick = (tickCount % 10 === 0);
 
     if (stateChanged || periodicTick) {
@@ -387,8 +408,27 @@ setInterval(() => {
   applyFanHardwareState();
 }, 500);
 
+function getBatteryInfo() {
+  let percent = 100;
+  let status = 'Unknown';
+  let isCharging = true;
+  try {
+    if (fs.existsSync('/sys/class/power_supply/BAT0/capacity')) {
+      percent = parseInt(fs.readFileSync('/sys/class/power_supply/BAT0/capacity', 'utf8').trim()) || 100;
+    }
+    if (fs.existsSync('/sys/class/power_supply/BAT0/status')) {
+      status = fs.readFileSync('/sys/class/power_supply/BAT0/status', 'utf8').trim();
+      isCharging = (status === 'Charging' || status === 'Full');
+    }
+  } catch (e) {}
+  return { percent, status, isCharging };
+}
+
 app.get('/api/system/status', (req, res) => {
-  res.json(systemStatusState);
+  res.json({
+    status: systemStatusState.status,
+    battery: getBatteryInfo()
+  });
 });
 
 app.post('/api/system/status', (req, res) => {
@@ -744,8 +784,27 @@ setInterval(() => {
   runGeminiModeration();
 }, 5000);
 
+function optimizeCpuGovernor() {
+  try {
+    const cpufreqPath = '/sys/devices/system/cpu';
+    if (fs.existsSync(cpufreqPath)) {
+      const cpus = fs.readdirSync(cpufreqPath).filter(name => name.startsWith('cpu') && /^\d+$/.test(name.slice(3)));
+      for (const cpu of cpus) {
+        const govFile = `${cpufreqPath}/${cpu}/cpufreq/scaling_governor`;
+        if (fs.existsSync(govFile)) {
+          fs.writeFileSync(govFile, 'powersave');
+        }
+      }
+      console.log('[SYSTEM] CPU Scaling Governors set to powersave for maximum efficiency.');
+    }
+  } catch (e) {
+    console.warn('[SYSTEM] Failed to set CPU governor:', e.message);
+  }
+}
+
 (async () => {
   try {
+    optimizeCpuGovernor();
     await initDB();
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

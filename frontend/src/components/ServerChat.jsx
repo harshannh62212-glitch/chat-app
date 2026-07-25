@@ -13,7 +13,7 @@ const socket = io(socketUrl, {
   }
 });
 
-function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
+function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInfo }) {
   const [chatrooms, setChatrooms] = useState([]);
   const [selectedChatroom, setSelectedChatroom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -171,7 +171,18 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM }) {
   return (
     <div className="server-chat">
       <div className="chat-header">
-        <h2>{server.name} {selectedChatroom && <span className="channel-hash"># {selectedChatroom.name}</span>}</h2>
+        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {server.name} 
+          {selectedChatroom && <span className="channel-hash"># {selectedChatroom.name}</span>}
+          {batteryInfo && (
+            <span 
+              style={{ fontSize: '0.55em', padding: '1px 5px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#b9bbbe', fontWeight: 'normal', fontFamily: "'Outfit', sans-serif" }}
+              title={`Server Battery: ${batteryInfo.percent}% (${batteryInfo.status})`}
+            >
+              {batteryInfo.isCharging ? '⚡' : '🔋'} {batteryInfo.percent}%
+            </span>
+          )}
+        </h2>
         <div className="header-info">
           <span className="chat-header-brand" style={{ color: '#00ffff', fontWeight: 'bold', letterSpacing: '0.5px', fontSize: '0.85em', textTransform: 'uppercase', marginRight: '10px' }}>wired-io</span>
           <span>{members.length} members</span>

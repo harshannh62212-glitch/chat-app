@@ -10,7 +10,7 @@ import FriendsPanel from '../components/FriendsPanel';
 import Logo from '../components/Logo';
 import '../styles/Dashboard.css';
 
-function Dashboard({ user, setUser, onLogout }) {
+function Dashboard({ user, setUser, onLogout, batteryInfo }) {
   const [activeTab, setActiveTab] = useState('servers');
   const [selectedServer, setSelectedServer] = useState(null);
   const [selectedDM, setSelectedDM] = useState(null);
@@ -116,8 +116,18 @@ function Dashboard({ user, setUser, onLogout }) {
                 <span className="brand-subtext">wired-io</span>
               </div>
             ) : (
-              <div className="brand-header-title">
-                <h3>wired-io</h3>
+              <div className="brand-header-title" style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <h3 style={{ margin: 0 }}>wired-io</h3>
+                  {batteryInfo && (
+                    <span 
+                      style={{ fontSize: '0.75em', padding: '2px 6px', borderRadius: '10px', background: batteryInfo.isCharging ? 'rgba(46, 204, 113, 0.15)' : 'rgba(231, 76, 60, 0.15)', color: batteryInfo.isCharging ? '#2ecc71' : '#e74c3c', fontWeight: 'bold', fontFamily: "'Outfit', sans-serif" }}
+                      title={`Host Server Battery: ${batteryInfo.percent}% (${batteryInfo.status})`}
+                    >
+                      {batteryInfo.isCharging ? '⚡' : '🔋'} {batteryInfo.percent}%
+                    </span>
+                  )}
+                </div>
                 <span className="brand-subtext">Main Lobby</span>
               </div>
             )}
@@ -159,6 +169,7 @@ function Dashboard({ user, setUser, onLogout }) {
               setSelectedDM(otherUser);
               setActiveTab('dms');
             }}
+            batteryInfo={batteryInfo}
           />
         )}
 
