@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://starter-taste-lamp-wit.trycloudflare.com/api/$1"
+      "destination": "https://specification-guide-software-automation.trycloudflare.com/api/$1"
     },
     {
       "source": "/socket.io/(.*)",
-      "destination": "https://starter-taste-lamp-wit.trycloudflare.com/socket.io/$1"
+      "destination": "https://specification-guide-software-automation.trycloudflare.com/socket.io/$1"
     },
     {
       "source": "/(.*)",
