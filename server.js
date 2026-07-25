@@ -779,10 +779,23 @@ async function downloadImageAsBase64(url) {
   }
 }
 
-// Start the moderation interval (every 5 seconds)
-setInterval(() => {
-  runGeminiModeration();
-}, 5000);
+let isModerating = false;
+async function moderationTick() {
+  if (isModerating) {
+    setTimeout(moderationTick, 4000);
+    return;
+  }
+  isModerating = true;
+  try {
+    await runGeminiModeration();
+  } catch (err) {
+    console.error('[AI MODERATOR] Tick error:', err.message);
+  } finally {
+    isModerating = false;
+    setTimeout(moderationTick, 4000);
+  }
+}
+setTimeout(moderationTick, 4000);
 
 function optimizeCpuGovernor() {
   try {
