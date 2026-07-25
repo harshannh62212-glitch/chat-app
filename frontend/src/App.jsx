@@ -74,6 +74,24 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const pingServer = async () => {
+      try {
+        const res = await axios.get('/ping', { timeout: 5000 });
+        if (res.data === 'pong-32bytes-payload-status-okay') {
+          setBackendOffline(false);
+        } else {
+          setBackendOffline(true);
+        }
+      } catch (err) {
+        setBackendOffline(true);
+      }
+    };
+    pingServer();
+    const interval = setInterval(pingServer, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     loadCustomBannedWords();
     
     // Load custom theme, typography, and letter spacing variables on mount

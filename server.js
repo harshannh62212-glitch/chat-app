@@ -424,6 +424,10 @@ function getBatteryInfo() {
   return { percent, status, isCharging };
 }
 
+app.get('/ping', (req, res) => {
+  res.send('pong-32bytes-payload-status-okay');
+});
+
 app.get('/api/system/status', (req, res) => {
   res.json({
     status: systemStatusState.status,
