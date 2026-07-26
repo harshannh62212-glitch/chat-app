@@ -56,6 +56,8 @@ services:
         condition: service_started
     networks:
       - chat_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - .:/app
       - /app/node_modules
