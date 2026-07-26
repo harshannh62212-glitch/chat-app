@@ -772,9 +772,76 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('send-message', (data) => {
+  socket.on('send-message', async (data) => {
     const { senderId, content, serverId, dmWith, username, avatar_url, chatroom_id } = data;
     const filteredContent = filterContent(content);
+
+    // Synchronous Active Chat Moderation (Llama 3.2 with Gemini fallback)
+    let isAppropriate = true;
+    let ollamaSuccess = false;
+
+    try {
+      const prompt = `You are an AI chat safety moderator. Analyze the following message and determine if it violates safety guidelines (hate speech, harassment, graphic violence, pornography, extreme profanity, or deliberate bypasses of word filters): "${filteredContent}"
+      
+      Respond with a JSON object in this exact format:
+      {
+        "appropriate": true or false
+      }`;
+
+      const response = await fetch('http://host.docker.internal:11434/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'llama3.2',
+          prompt: prompt,
+          format: 'json',
+          stream: false
+        })
+      });
+
+      if (response.ok) {
+        const json = await response.json();
+        const parsed = JSON.parse(json.response.trim());
+        if (parsed && typeof parsed.appropriate === 'boolean') {
+          isAppropriate = parsed.appropriate;
+          ollamaSuccess = true;
+        }
+      }
+    } catch (err) {
+      // Local model failed, fallback to Gemini
+    }
+
+    if (!ollamaSuccess) {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (apiKey) {
+        try {
+          const prompt = `You are an AI chat safety moderator. Analyze the following message and determine if it violates safety guidelines: "${filteredContent}"
+          Respond with JSON: {"appropriate": true} or {"appropriate": false}`;
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { responseMimeType: 'application/json' }
+            })
+          });
+          if (response.ok) {
+            const json = await response.json();
+            const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const parsed = JSON.parse(textResponse.trim());
+            if (parsed && typeof parsed.appropriate === 'boolean') {
+              isAppropriate = parsed.appropriate;
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (!isAppropriate) {
+      console.warn(`[SYNC MODERATOR] Discarding violating message: "${filteredContent}"`);
+      socket.emit('message-blocked', { error: 'Your message was flagged by AI moderation.' });
+      return;
+    }
 
     if (serverId) {
       io.to(`server-${serverId}`).emit('new-message', {
