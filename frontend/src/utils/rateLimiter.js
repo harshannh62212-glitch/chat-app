@@ -11,7 +11,7 @@ export function checkRateLimit(isAdmin) {
   if (isAdmin) return true;
   
   const now = Date.now();
-  if (now - lastSentTime < 1000) {
+  if (now - lastSentTime < 200) {
     return false;
   }
   

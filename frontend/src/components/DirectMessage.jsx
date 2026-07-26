@@ -126,7 +126,7 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
     if (!messageInput.trim()) return;
 
     if (!checkRateLimit(currentUser.is_admin)) {
-      alert('Slow down! You can only send 1 message per second.');
+      alert('Slow down! You are sending messages too fast.');
       return;
     }
 
@@ -157,7 +157,7 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
 
   const handleSelectGif = async (gifUrl) => {
     if (!checkRateLimit(currentUser.is_admin)) {
-      alert('Slow down! You can only send 1 message per second.');
+      alert('Slow down! You are sending messages too fast.');
       return;
     }
 
