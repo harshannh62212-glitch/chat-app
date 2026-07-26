@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Server Status</title>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      transition: background-color 0.5s ease;
+      background: linear-gradient(135deg, hsl(210, 30%, 20%), hsl(210, 30%, 35%));
+      color: #fff;
+    }
+    .status-box {
+      text-align: center;
+      padding: 2rem 3rem;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+    h1 {
+      margin: 0 0 1rem;
+      font-size: 2.5rem;
+    }
+    p {
+      margin: 0;
+      font-size: 1.2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="status-box">
+    <h1 id="status-title">Checking…</h1>
+    <p id="status-details"></p>
+  </div>
+
+  <script>
+    // Fetch the health endpoint and update UI based on response
+    fetch('/api/health')
+      .then((res) => {
+        if (!res.ok) throw new Error('Network response was not ok');
+        return res.json();
+      })
+      .then((data) => {
+        if (data.status === 'ok') {
+          document.body.style.backgroundColor = '#28a745'; // green
+          document.getElementById('status-title').textContent = '✅ Server is UP';
+          document.getElementById('status-details').textContent = 'All systems operational.';
+        } else {
+          throw new Error('Unexpected status');
+        }
+      })
+      .catch(() => {
+        document.body.style.backgroundColor = '#dc3545'; // red
+        document.getElementById('status-title').textContent = '❌ Server DOWN';
+        document.getElementById('status-details').textContent =
+          'Unable to reach the health endpoint. Please investigate.';
+      });
+  </script>
+</body>
+</html>

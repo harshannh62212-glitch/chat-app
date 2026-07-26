@@ -9,6 +9,8 @@ function ThermalsPage({ onBack }) {
   });
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState('');
+  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
 
   const [metrics, setMetrics] = useState({
     tempC: 45,
@@ -20,6 +22,13 @@ function ThermalsPage({ onBack }) {
     ramTotalGB: '24 GB',
     ramPercent: '4.5%',
     cpuLoad: '0.20',
+    cpuUtil: 15,
+    gpuUtil: 5,
+    ramClockSpeed: '2133 MHz',
+    memoryBandwidth: '12.4 GB/s',
+    currentWh: 35.2,
+    totalWh: 42.0,
+    batteryTimeLeft: '3h 15m',
     uptime: '18h 30m',
     batteryPercent: 100,
     batteryStatus: 'Full',
@@ -36,23 +45,8 @@ function ThermalsPage({ onBack }) {
   const stressGlRef = useRef(null);
   const stressAnimRef = useRef(null);
   const stressTimerRef = useRef(null);
-  const [history, setHistory] = useState(() => {
-    const initial = [];
-    const now = Date.now();
-    for (let i = 20; i >= 0; i--) {
-      initial.push({
-        time: new Date(now - i * 2000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        tempC: 45 + Math.floor(Math.sin(i) * 3),
-        rpm: 1200 + Math.floor(Math.cos(i) * 100),
-        speedPercent: 40 + Math.floor(Math.sin(i) * 10),
-        ramPercent: 4.5
-      });
-    }
-    return initial;
-  });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const canvasRef = useRef(null);
 
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
@@ -153,25 +147,23 @@ function ThermalsPage({ onBack }) {
       const sysData = sysRes.data || {};
       const powerData = sysData.power || {};
 
-      const newPoint = {
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      setMetrics({
         tempC: fanData.tempC || 45,
         rpm: fanData.rpm || 0,
-        speedPercent: fanData.speedPercent || 0,
-        ramPercent: parseFloat(sysData.memory?.usedPercent) || 4.5,
-        cpuLoad: parseFloat(sysData.cpuLoadAverage?.['1min']) * 20 || 10
-      };
-
-      setMetrics({
-        tempC: newPoint.tempC,
-        rpm: newPoint.rpm,
         pwm: fanData.pwm || 0,
-        speedPercent: newPoint.speedPercent,
+        speedPercent: fanData.speedPercent || 0,
         mode: fanData.mode || 'auto',
         ramUsedGB: sysData.memory?.usedGB || '1.0 GB',
         ramTotalGB: sysData.memory?.totalGB || '24 GB',
         ramPercent: sysData.memory?.usedPercent || '4.5%',
         cpuLoad: sysData.cpuLoadAverage?.['1min'] || '0.20',
+        cpuUtil: sysData.cpuUtil || 15,
+        gpuUtil: sysData.gpuUtil || 5,
+        ramClockSpeed: sysData.ramClockSpeed || '2133 MHz',
+        memoryBandwidth: sysData.memoryBandwidth || '12.4 GB/s',
+        currentWh: powerData.currentWh || 0,
+        totalWh: powerData.totalWh || 0,
+        batteryTimeLeft: powerData.batteryTimeLeft || '',
         uptime: `${Math.floor((sysData.uptimeSeconds || 0) / 3600)}h ${Math.floor(((sysData.uptimeSeconds || 0) % 3600) / 60)}m`,
         batteryPercent: powerData.batteryPercent !== undefined ? powerData.batteryPercent : 100,
         batteryStatus: powerData.batteryStatus || 'Full',
@@ -180,12 +172,36 @@ function ThermalsPage({ onBack }) {
         lowBatteryAutoSaveTriggered: !!powerData.lowBatteryAutoSaveTriggered,
         batteryHealth: powerData.health || null
       });
-
-      setHistory(prev => [...prev.slice(-29), newPoint]);
     } catch (err) {
       console.error('Failed to fetch thermals:', err);
     }
   };
+
+  const handleRescan = async () => {
+    setIsScanning(true);
+    await fetchThermalMetrics();
+    setTimeout(() => {
+      setIsScanning(false);
+    }, 1000);
+  };
+
+  // Poll health status for the top‑right status bar
+  useEffect(() => {
+    const fetchHealth = async () => {
+      try {
+        const res = await fetch('/healthStatus.json');
+        const data = await res.json();
+        const el = document.getElementById('health-status');
+        if (el) el.textContent = data.ok ? '🟢 OK' : `🔴 ${data.error || 'DOWN'}`;
+      } catch (e) {
+        const el = document.getElementById('health-status');
+        if (el) el.textContent = '⚠️ Unavailable';
+      }
+    };
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (isUnlocked) {
@@ -194,88 +210,6 @@ function ThermalsPage({ onBack }) {
       return () => clearInterval(interval);
     }
   }, [isUnlocked]);
-
-  // Draw Animated Curve Line Chart
-  useEffect(() => {
-    if (!isUnlocked) return;
-    const canvas = canvasRef.current;
-    if (!canvas || history.length < 2) return;
-    const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
-
-    ctx.clearRect(0, 0, width, height);
-
-    // Draw Grid Lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-    ctx.lineWidth = 1;
-    for (let y = 0; y <= height; y += height / 4) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
-
-    const stepX = width / (history.length - 1);
-
-    // Draw Temperature Curve (Red/Orange Neon)
-    drawCurve(ctx, history.map(h => h.tempC), stepX, height, '#ff4757', 'rgba(255, 71, 87, 0.2)', 0, 100);
-
-    // Draw Fan Speed Curve (Cyan Neon)
-    drawCurve(ctx, history.map(h => h.speedPercent), stepX, height, '#00ffff', 'rgba(0, 255, 255, 0.15)', 0, 100);
-
-    // Draw RAM % Curve (Purple Neon)
-    drawCurve(ctx, history.map(h => h.ramPercent), stepX, height, '#a55eea', 'rgba(165, 94, 234, 0.12)', 0, 100);
-
-  }, [history, isUnlocked]);
-
-  const drawCurve = (ctx, data, stepX, height, color, fillColor, minVal, maxVal) => {
-    if (data.length < 2) return;
-    ctx.save();
-    ctx.beginPath();
-
-    const getY = (val) => {
-      const normalized = Math.min(1, Math.max(0, (val - minVal) / (maxVal - minVal)));
-      return height - (normalized * (height - 40) + 20);
-    };
-
-    ctx.moveTo(0, getY(data[0]));
-
-    for (let i = 0; i < data.length - 1; i++) {
-      const x0 = i * stepX;
-      const y0 = getY(data[i]);
-      const x1 = (i + 1) * stepX;
-      const y1 = getY(data[i + 1]);
-      const cpX = (x0 + x1) / 2;
-
-      ctx.bezierCurveTo(cpX, y0, cpX, y1, x1, y1);
-    }
-
-    // Line Glow & Stroke
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
-    ctx.stroke();
-
-    // Draw Glowing Data Points
-    for (let i = 0; i < data.length; i++) {
-      const x = i * stepX;
-      const y = getY(data[i]);
-      ctx.beginPath();
-      ctx.arc(x, y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-    }
-
-    // Area Fill
-    ctx.lineTo((data.length - 1) * stepX, height);
-    ctx.lineTo(0, height);
-    ctx.closePath();
-    ctx.fillStyle = fillColor;
-    ctx.fill();
-    ctx.restore();
-  };
 
   const handleSetFan = async (mode, speedPercent) => {
     try {
@@ -334,6 +268,10 @@ function ThermalsPage({ onBack }) {
 
   return (
     <div className="thermals-container">
+      {/* Status Bar */}
+      <div style={{ position: 'absolute', top: '12px', right: '12px', padding: '6px 12px', background: '#222', color: '#0f0', borderRadius: '8px', fontSize: '0.9em', zIndex: 1000 }}>
+        <span id="health-status">Checking…</span>
+      </div>
       <div className="thermals-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           {onBack && (
@@ -346,6 +284,14 @@ function ThermalsPage({ onBack }) {
         <div style={{ textAlign: 'right' }}>
           <h2 style={{ margin: 0, fontSize: '1.4em', color: '#00ffff' }}>🔥 Custom Thermal & Fan Curve Engine</h2>
           <span style={{ fontSize: '0.8em', color: '#a4b0be' }}>Dell BIOS Fan Curves Disabled • 1s Software Daemon Enforcer Active</span>
+          {/* Rescan Button */}
+          <button onClick={handleRescan} disabled={isScanning} style={{ marginLeft: '8px', padding: '4px 8px', background: '#00ffff', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+            {isScanning ? 'Scanning…' : 'Rescan'}
+          </button>
+          {/* Advanced Mode Toggle */}
+          <button onClick={() => setIsAdvancedMode(!isAdvancedMode)} style={{ marginLeft: '8px', padding: '4px 8px', background: isAdvancedMode ? '#2ed573' : '#ff4757', color: '#000', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+            {isAdvancedMode ? 'Basic Mode' : 'Advanced Mode'}
+          </button>
         </div>
       </div>
 
@@ -376,7 +322,7 @@ function ThermalsPage({ onBack }) {
 
       {/* Metrics Cards Grid */}
       <div className="thermals-grid">
-        <div className="thermal-card highlight-red">
+        <div className={`thermal-card highlight-red ${metrics.tempC >= 90 ? 'flashing' : ''}`}>
           <div className="card-label">CPU Temperature</div>
           <div className="card-val" style={{ color: metrics.tempC > 70 ? '#ff4757' : '#ffa502' }}>
             🌡️ {metrics.tempC} °C
@@ -384,15 +330,42 @@ function ThermalsPage({ onBack }) {
           <div className="card-sub">Intel Core i5-7300U</div>
         </div>
 
-        <div className="thermal-card highlight-cyan">
-          <div className="card-label">Power Pulled (Watts)</div>
-          <div className="card-val" style={{ color: '#00ffff' }}>
-            ⚡ {metrics.watts}
-          </div>
-          <div className="card-sub">{metrics.acOnline ? '🔌 AC Power Online' : '🔋 Running on Battery'}</div>
+        <div className={`thermal-card highlight-cyan ${metrics.cpuUtil > 90 ? 'flashing' : ''}`}>
+          <div className="card-label">CPU Utilization</div>
+          <div className="card-val" style={{ color: '#00ffff' }}>{metrics.cpuUtil}%</div>
         </div>
 
-        <div className="thermal-card highlight-green">
+        <div className={`thermal-card highlight-cyan ${metrics.gpuUtil > 90 ? 'flashing' : ''}`}>
+          <div className="card-label">GPU Utilization</div>
+          <div className="card-val" style={{ color: '#00ffff' }}>{metrics.gpuUtil}%</div>
+        </div>
+
+        <div className={`thermal-card highlight-cyan ${parseInt(metrics.ramPercent) > 90 ? 'flashing' : ''}`}>
+          <div className="card-label">RAM Usage</div>
+          <div className="card-val" style={{ color: '#a55eea' }}>{metrics.ramPercent}</div>
+          <div className="card-sub">{metrics.ramUsedGB} / {metrics.ramTotalGB}</div>
+        </div>
+
+        {isAdvancedMode && (
+          <>
+            <div className={`thermal-card highlight-cyan ${metrics.ramClockSpeed && parseInt(metrics.ramClockSpeed) > 3000 ? 'flashing' : ''}`}>
+              <div className="card-label">RAM Clock Speed</div>
+              <div className="card-val" style={{ color: '#a55eea' }}>{metrics.ramClockSpeed}</div>
+            </div>
+
+            <div className={`thermal-card highlight-cyan ${metrics.memoryBandwidth && parseFloat(metrics.memoryBandwidth) > 30 ? 'flashing' : ''}`}>
+              <div className="card-label">Memory Bandwidth</div>
+              <div className="card-val" style={{ color: '#a55eea' }}>{metrics.memoryBandwidth}</div>
+            </div>
+          </>
+        )}
+
+        <div className={`thermal-card highlight-cyan ${metrics.rpm > 5000 ? 'flashing' : ''}`}>
+          <div className="card-label">Fan RPM</div>
+          <div className="card-val" style={{ color: '#70a1ff' }}>{metrics.rpm} RPM</div>
+        </div>
+
+        <div className={`thermal-card highlight-green ${metrics.batteryPercent <= 15 ? 'flashing' : ''}`}>
           <div className="card-label">Battery Level</div>
           <div className="card-val" style={{ color: metrics.batteryPercent <= 15 ? '#ff4757' : '#2ed573' }}>
             🔋 {metrics.batteryPercent}%
@@ -417,45 +390,32 @@ function ThermalsPage({ onBack }) {
           </div>
         </div>
 
-        <div className="thermal-card highlight-cyan">
-          <div className="card-label">Fan Speed (%)</div>
-          <div className="card-val" style={{ color: '#70a1ff' }}>
-            🌀 {metrics.speedPercent}%
-          </div>
-          <div className="card-sub">{metrics.mode === 'auto' ? 'Custom Smart Curve (Active)' : metrics.mode === 'bios_auto' ? 'Dell BIOS Default' : `Manual Locked (${metrics.speedPercent}%)`}</div>
-        </div>
+        {isAdvancedMode && (
+          <>
+            <div className={`thermal-card highlight-green ${metrics.batteryTimeLeft && metrics.batteryTimeLeft.includes('Charging') ? 'flashing' : ''}`}>
+              <div className="card-label">Battery Time Left</div>
+              <div className="card-val" style={{ color: '#2ed573' }}>{metrics.batteryTimeLeft}</div>
+            </div>
 
-        <div className="thermal-card highlight-purple">
-          <div className="card-label">RAM Memory Usage</div>
-          <div className="card-val" style={{ color: '#a55eea' }}>
-            🧠 {metrics.ramUsedGB} / {metrics.ramTotalGB}
-          </div>
-          <div className="card-sub">{metrics.ramPercent} Total RAM Used</div>
-        </div>
+            <div className={`thermal-card highlight-green ${metrics.currentWh && metrics.currentWh < 10 ? 'flashing' : ''}`}>
+              <div className="card-label">Current Wh</div>
+              <div className="card-val" style={{ color: '#2ed573' }}>{metrics.currentWh} Wh</div>
+            </div>
 
-        <div className="thermal-card highlight-green">
+            <div className={`thermal-card highlight-green ${metrics.totalWh && metrics.totalWh < 20 ? 'flashing' : ''}`}>
+              <div className="card-label">Total Wh</div>
+              <div className="card-val" style={{ color: '#totalWh' }}>{metrics.totalWh} Wh</div>
+            </div>
+          </>
+        )}
+
+        <div className={`thermal-card highlight-green ${metrics.uptime && parseInt(metrics.uptime.split('h')[0]) > 48 ? 'flashing' : ''}`}>
           <div className="card-label">System Uptime</div>
           <div className="card-val" style={{ color: '#2ed573' }}>
             ⏱️ {metrics.uptime}
           </div>
           <div className="card-sub">Dell Latitude 5290</div>
         </div>
-      </div>
-
-      {/* Real-time Animated Curve Chart */}
-      <div className="chart-container">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <h3 style={{ margin: 0, color: '#fff', fontSize: '1.1em', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            📈 Live Real-time Thermal & Fan Curves (Updating every 2s)
-          </h3>
-          <div style={{ display: 'flex', gap: '16px', fontSize: '0.85em', fontWeight: 'bold' }}>
-            <span style={{ color: '#ff4757' }}>● CPU Temp (°C)</span>
-            <span style={{ color: '#00ffff' }}>● Fan Speed (%)</span>
-            <span style={{ color: '#a55eea' }}>● RAM Usage (%)</span>
-          </div>
-        </div>
-
-        <canvas ref={canvasRef} width={900} height={220} className="thermal-canvas" />
       </div>
 
       {/* Fan Controller Console */}

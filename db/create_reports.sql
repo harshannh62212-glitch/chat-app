@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS reports (
+  id SERIAL PRIMARY KEY,
+  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  description TEXT NOT NULL,
+  screenshot_url TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'open',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

@@ -175,7 +175,16 @@ html, body {
 }
 
 .thermal-card.highlight-red { border-left: 4px solid #ff4757; }
-.thermal-card.highlight-cyan { border-left: 4px solid #00ffff; }
+.flashing {
+  animation: flash 1s ease-in-out infinite;
+}
+
+@keyframes flash {
+  0% { background-color: rgba(255,0,0,0.2); }
+  50% { background-color: rgba(255,0,0,0.5); }
+  100% { background-color: rgba(255,0,0,0.2); }
+}
+
 .thermal-card.highlight-purple { border-left: 4px solid #a55eea; }
 .thermal-card.highlight-green { border-left: 4px solid #2ed573; }
 

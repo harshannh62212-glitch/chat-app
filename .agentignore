@@ -1,0 +1,25 @@
+# Dependencies & Builds
+node_modules/
+dist/
+build/
+.next/
+venv/
+.venv/
+
+# Lock files (HUGE token drainers)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+poetry.lock
+
+# Media & Assets
+*.png
+*.jpg
+*.svg
+*.pdf
+*.mp4
+*.zip
+
+# Databases & Logs
+*.sqlite
+*.log
