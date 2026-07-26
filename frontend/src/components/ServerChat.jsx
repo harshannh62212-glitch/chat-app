@@ -115,7 +115,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     if (!messageInput.trim() || !selectedChatroom) return;
 
     if (!checkRateLimit(currentUser.is_admin)) {
-      alert('Slow down! You are sending messages too fast.');
+      alert('Slow down! You can only send 1 message per second.');
       return;
     }
 
@@ -150,7 +150,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
   const handleSelectGif = async (gifUrl) => {
     if (!checkRateLimit(currentUser.is_admin)) {
-      alert('Slow down! You are sending messages too fast.');
+      alert('Slow down! You can only send 1 message per second.');
       return;
     }
 
