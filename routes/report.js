@@ -26,9 +26,9 @@ router.post('/report', authMiddleware, async (req, res) => {
 router.get('/admin/reports', authMiddleware, adminCheck, async (req, res) => {
   try {
     const result = await query(
-      `SELECT r.id, r.user_id, u.username, r.description, r.screenshot_url, r.status, r.created_at
+      `SELECT r.id, r.user_id, COALESCE(u.username, 'Anonymous') AS username, r.description, r.screenshot_url, r.status, r.created_at
        FROM reports r
-       JOIN users u ON r.user_id = u.id
+       LEFT JOIN users u ON r.user_id = u.id
        ORDER BY r.created_at DESC`
     );
     res.json(result.rows);
@@ -116,6 +116,63 @@ router.post('/global-report', authMiddleware, async (req, res) => {
     });
   } catch (err) {
     console.error('Failed to insert global report:', err);
+    res.status(500).json({ error: 'Failed to submit bug report' });
+  }
+});
+
+// POST /public-report - public bug report (no auth required)
+router.post('/public-report', async (req, res) => {
+  const { description } = req.body;
+  if (!description || !description.trim()) {
+    return res.status(400).json({ error: 'Description is required' });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (apiKey) {
+    try {
+      const prompt = `You are a software bug report triage assistant. Read the user's description and evaluate if it contains a legitimate bug, glitch, system error, UI issue, crash, performance problem, or technical defect.
+      
+      If it is a real technical problem description, respond with 'LEGITIMATE'.
+      If it is spam, test, casual chatter, nonsense, gibberish, or anything stupid/silly (e.g., 'hello', 'test', 'asdf', 'you suck', 'silly app', 'yo'), respond with 'SPAM'.
+
+      User description: "${description.trim()}"
+
+      Respond with a JSON object in this exact format:
+      {
+        "evaluation": "LEGITIMATE" or "SPAM"
+      }`;
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      });
+
+      if (response.ok) {
+        const json = await response.json();
+        const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const parsed = JSON.parse(textResponse.trim());
+        if (parsed && parsed.evaluation === 'SPAM') {
+          // Discard it (delete it) and return a 400 bad request rejecting it
+          return res.status(400).json({ error: 'AI classified your report as SPAM or casual chatter. Discarding.' });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to evaluate public report with Gemini:', err);
+    }
+  }
+
+  try {
+    await query(
+      `INSERT INTO reports (user_id, description, status, ai_evaluation) VALUES ($1, $2, $3, $4)`,
+      [null, description.trim(), 'open', 'LEGITIMATE']
+    );
+    res.json({ message: 'Bug report submitted successfully!' });
+  } catch (err) {
+    console.error('Failed to insert public report:', err);
     res.status(500).json({ error: 'Failed to submit bug report' });
   }
 });

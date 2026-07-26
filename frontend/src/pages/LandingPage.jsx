@@ -1,10 +1,42 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Logo from '../components/Logo';
+import axios from 'axios';
 import '../styles/LandingPage.css';
 
 function LandingPage({ onEnterPortal }) {
+  const [showPublicReportModal, setShowPublicReportModal] = useState(false);
+  const [bugDescription, setBugDescription] = useState('');
+  const [bugSubmitting, setBugSubmitting] = useState(false);
+  const [bugMessage, setBugMessage] = useState('');
+  const [bugError, setBugError] = useState('');
+
   const handleFeatureClick = () => {
     onEnterPortal();
+  };
+
+  const handlePublicReportSubmit = async (e) => {
+    e.preventDefault();
+    if (!bugDescription.trim()) return;
+
+    setBugSubmitting(true);
+    setBugMessage('');
+    setBugError('');
+
+    try {
+      const res = await axios.post('/api/public-report', {
+        description: bugDescription
+      });
+      setBugMessage(res.data.message || 'Thank you! Your report has been submitted.');
+      setBugDescription('');
+      setTimeout(() => {
+        setShowPublicReportModal(false);
+        setBugMessage('');
+      }, 2500);
+    } catch (err) {
+      setBugError(err.response?.data?.error || 'Failed to submit report. Please try again.');
+    } finally {
+      setBugSubmitting(false);
+    }
   };
 
   return (
@@ -159,6 +191,21 @@ function LandingPage({ onEnterPortal }) {
         </div>
       </section>
 
+      {/* Non-Logged In Users Section */}
+      <section className="landing-nonlogged-section" style={{ padding: '80px 20px', background: 'rgba(255,255,255,0.01)', borderTop: '1px solid rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.04)', textAlign: 'center' }}>
+        <h3 style={{ fontSize: '24px', letterSpacing: '2px', color: '#ff4757', margin: 0, fontWeight: 'bold' }}>NON-LOGGED IN USERS</h3>
+        <p className="section-desc" style={{ maxWidth: '600px', margin: '16px auto 32px', color: 'rgba(255,255,255,0.6)', fontSize: '15px', lineHeight: '1.6' }}>
+          Encountered a bug or system glitch before launching the portal? Submit a public report. Our AI engine evaluates all submissions in real-time and discards casual chatter immediately.
+        </p>
+        <button 
+          className="btn-primary" 
+          onClick={() => setShowPublicReportModal(true)}
+          style={{ background: '#ff4757', border: 'none', padding: '14px 32px', fontSize: '14px', borderRadius: '30px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 20px rgba(255, 71, 87, 0.3)' }}
+        >
+          🪲 Submit Public Bug Report
+        </button>
+      </section>
+
       {/* CTA Showcase Banner */}
       <section className="landing-cta-banner" id="about">
         <div className="cta-banner-content">
@@ -189,6 +236,115 @@ function LandingPage({ onEnterPortal }) {
           </div>
         </div>
       </footer>
+
+      {/* Public Report Modal */}
+      {showPublicReportModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999
+          }}
+          onClick={() => setShowPublicReportModal(false)}
+        >
+          <div 
+            style={{
+              background: 'rgba(30, 30, 40, 0.95)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '16px',
+              padding: '32px',
+              width: '90%',
+              maxWidth: '480px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+              color: '#fff',
+              position: 'relative'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '20px', fontFamily: "'Outfit', sans-serif" }}>Submit Public Bug Report</h3>
+            <p style={{ margin: '0 0 20px 0', color: 'rgba(255,255,255,0.6)', fontSize: '13px', lineHeight: '1.5' }}>
+              Describe the bug or system glitch you encountered. Our AI system will evaluate your report in real-time. Casual chatter, greeting, or spam will be discarded immediately.
+            </p>
+            
+            <form onSubmit={handlePublicReportSubmit}>
+              <textarea 
+                value={bugDescription}
+                onChange={e => setBugDescription(e.target.value)}
+                placeholder="Describe what happened, step-by-step..."
+                required
+                rows={5}
+                style={{
+                  width: '100%',
+                  background: 'rgba(0, 0, 0, 0.3)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  fontFamily: 'inherit',
+                  resize: 'none',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+              
+              {bugMessage && (
+                <div style={{ marginTop: '12px', color: '#2ecc71', fontSize: '13px', fontWeight: 'bold' }}>
+                  {bugMessage}
+                </div>
+              )}
+              {bugError && (
+                <div style={{ marginTop: '12px', color: '#e74c3c', fontSize: '13px', fontWeight: 'bold' }}>
+                  {bugError}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+                <button 
+                  type="button"
+                  onClick={() => setShowPublicReportModal(false)}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#fff',
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '13px'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  disabled={bugSubmitting || !bugDescription.trim()}
+                  style={{
+                    background: '#ff4757',
+                    border: 'none',
+                    color: '#fff',
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 'bold',
+                    opacity: bugSubmitting || !bugDescription.trim() ? 0.5 : 1
+                  }}
+                >
+                  {bugSubmitting ? 'Evaluating...' : 'Submit'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
