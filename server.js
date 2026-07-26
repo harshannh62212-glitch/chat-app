@@ -193,6 +193,9 @@ function getPowerSupplyInfo() {
   let watts = 12.5;
   let acOnline = true;
   let lowBatteryAutoSaveTriggered = false;
+  let voltage = 12.0;
+  let current = 1.0;
+
 
   try {
     const batPath = '/sys/class/power_supply/BAT0';
@@ -209,8 +212,7 @@ function getPowerSupplyInfo() {
       batteryStatus = fs.readFileSync(`${batPath}/status`, 'utf8').trim();
     }
 
-    let voltage = 12.0;
-    let current = 1.0;
+
 
     if (fs.existsSync(`${batPath}/voltage_now`)) {
       const rawV = parseInt(fs.readFileSync(`${batPath}/voltage_now`, 'utf8').trim());
@@ -231,7 +233,7 @@ function getPowerSupplyInfo() {
     // ── Low-Battery Auto-Save Guardian (Real Implementation) ─────────────────
     // Triggers when battery ≤ 15% and discharging.
     // Calls the host-side wired-io-battery-guardian.sh via systemd on the host.
-    if (batteryPercent <= 15 && batteryStatus.toLowerCase() === 'discharging' && !acOnline) {
+    if (batteryPercent <= 15 && batteryStatus && batteryStatus.toLowerCase() === 'discharging' && !acOnline) {
       lowBatteryAutoSaveTriggered = true;
       // Trigger the host systemd guardian service if not already running
       // Use a flag file to avoid retriggering every 2s poll cycle
