@@ -136,7 +136,7 @@ app.use('/api/servers', serverRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
-app.use(reportRoutes);
+app.use('/api', reportRoutes);
 
 const os = require('os');
 

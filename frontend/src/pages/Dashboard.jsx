@@ -89,40 +89,6 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
 
   return (
     <div className="dashboard discord-layout" style={{ position: 'relative' }}>
-      {/* Global Bug Report Button at the top right */}
-      <button 
-        className="global-bug-report-btn"
-        onClick={() => setShowGlobalReportModal(true)}
-        style={{
-          position: 'absolute',
-          top: '12px',
-          right: '16px',
-          zIndex: 1000,
-          background: 'rgba(255, 71, 87, 0.15)',
-          border: '1px solid rgba(255, 71, 87, 0.3)',
-          color: '#ff4757',
-          padding: '8px 14px',
-          borderRadius: '20px',
-          fontSize: '13px',
-          fontWeight: 'bold',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          transition: 'background 0.2s, transform 0.2s'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'rgba(255, 71, 87, 0.3)';
-          e.currentTarget.style.transform = 'scale(1.05)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'rgba(255, 71, 87, 0.15)';
-          e.currentTarget.style.transform = 'scale(1)';
-        }}
-      >
-        🪲 Report Bug
-      </button>
-
       {/* 1. Leftmost Server Rail (Narrow Icon Column) */}
       <div className="discord-server-rail">
 
@@ -171,6 +137,37 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
           🧭
         </div>
 
+        {/* Global Bug Report Button at the bottom of the server rail */}
+        <div 
+          className="rail-icon bug-report-rail-btn"
+          onClick={() => setShowGlobalReportModal(true)}
+          title="Report Bug / System Glitch"
+          style={{
+            marginTop: 'auto',
+            background: 'rgba(255, 71, 87, 0.1)',
+            border: '1px solid rgba(255, 71, 87, 0.2)',
+            color: '#ff4757',
+            marginBottom: '16px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '20px',
+            transition: 'background 0.2s, transform 0.2s, border-radius 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 71, 87, 0.25)';
+            e.currentTarget.style.transform = 'scale(1.15)';
+            e.currentTarget.style.borderRadius = '16px';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 71, 87, 0.1)';
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.borderRadius = '50%';
+          }}
+        >
+          🪲
+        </div>
 
       </div>
 
