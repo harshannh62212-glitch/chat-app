@@ -1,7 +1,6 @@
 const express = require('express');
 const { query } = require('../db/database');
-const { authMiddleware } = require('../middleware/auth');
-const { adminCheck } = require('../middleware/adminCheck'); // if separate file, else import from admin.js
+const { authMiddleware, adminCheck } = require('../middleware/auth');
 
 const router = express.Router();
 
