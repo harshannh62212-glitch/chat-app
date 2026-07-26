@@ -155,29 +155,54 @@ router.post('/global-report', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /public-report - public bug report (no auth required, disposes spam immediately)
+// POST /public-report - public bug report (no auth required, optimistic: accepts then evaluates async)
 router.post('/public-report', async (req, res) => {
   const { description } = req.body;
   if (!description || !description.trim()) {
     return res.status(400).json({ error: 'Description is required' });
   }
 
-  const aiEvaluation = await evaluateReport(description);
-  if (aiEvaluation === 'SPAM') {
-    // "evaluate using ai if its something stupid delete it" -> discard the write entirely!
-    console.log(`[SPAM FILTER] Discarding public spam report: "${description.trim()}"`);
-    return res.status(400).json({ error: 'AI classified your report as SPAM or casual chatter. Discarding.' });
+  // Quick basic sanity check (no AI, instant) - reject obviously empty/short inputs
+  const trimmed = description.trim();
+  if (trimmed.length < 10) {
+    return res.status(400).json({ error: 'Please provide more detail in your bug report.' });
   }
 
+  // INSERT immediately so the user gets instant feedback
+  let reportId;
   try {
-    await query(
-      `INSERT INTO reports (user_id, description, status, ai_evaluation) VALUES ($1, $2, $3, $4)`,
-      [null, description.trim(), 'open', aiEvaluation]
+    const result = await query(
+      `INSERT INTO reports (user_id, description, status, ai_evaluation) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [null, trimmed, 'pending', 'pending']
     );
-    res.json({ message: 'Bug report submitted successfully!' });
+    reportId = result.rows[0]?.id;
+    res.json({ message: 'Bug report received! Our team will review it shortly.' });
   } catch (err) {
     console.error('Failed to insert public report:', err);
-    res.status(500).json({ error: 'Failed to submit bug report' });
+    return res.status(500).json({ error: 'Failed to submit bug report' });
+  }
+
+  // AI evaluation happens AFTER response is sent (non-blocking)
+  if (reportId) {
+    setImmediate(async () => {
+      try {
+        const aiEvaluation = await evaluateReport(trimmed);
+        if (aiEvaluation === 'SPAM') {
+          // Delete the row — spam is discarded silently
+          await query(`DELETE FROM reports WHERE id = $1`, [reportId]);
+          console.log(`[SPAM FILTER] Async-deleted spam report id=${reportId}: "${trimmed.substring(0, 60)}"`);
+        } else {
+          // Update status to open now that AI confirmed it's legitimate
+          await query(
+            `UPDATE reports SET status = 'open', ai_evaluation = $1 WHERE id = $2`,
+            [aiEvaluation, reportId]
+          );
+        }
+      } catch (err) {
+        console.error(`[SPAM FILTER] Async evaluation failed for report ${reportId}:`, err.message);
+        // Leave as 'pending' — admin can review manually
+      }
+    });
   }
 });
 
