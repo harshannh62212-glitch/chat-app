@@ -2,18 +2,28 @@ process.env.UV_THREADPOOL_SIZE = 16;
 
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
+const { initDB } = require('./db/database');
 
 if (cluster.isPrimary || cluster.isMaster) {
   console.log(`[CLUSTER] Master ${process.pid} is running. Spawning ${numCPUs} workers...`);
-  for (let i = 0; i < numCPUs; i++) {
-    cluster.fork();
-  }
+  (async () => {
+    try {
+      await initDB();
+      for (let i = 0; i < numCPUs; i++) {
+        cluster.fork();
+      }
+    } catch (err) {
+      console.error('[CLUSTER] Failed to initialize database on master:', err);
+      process.exit(1);
+    }
+  })();
   cluster.on('exit', (worker, code, signal) => {
     console.warn(`[CLUSTER] Worker ${worker.process.pid} died. Spawning replacement...`);
     cluster.fork();
   });
   return; // Stop execution on master process
 }
+
 
 const express = require('express');
 
@@ -1040,7 +1050,6 @@ function optimizeRamAndVirtualMemory() {
   try {
     optimizeCpuGovernor();
     optimizeRamAndVirtualMemory();
-    await initDB();
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
