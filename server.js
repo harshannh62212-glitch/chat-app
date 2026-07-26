@@ -116,12 +116,15 @@ const pino = require('pino');
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
 
+app.set('trust proxy', 1);
+
 // Rate limiting – max 100 requests per 15 minutes per IP
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: 'Too many requests, please try again later.' }
 }));
 
