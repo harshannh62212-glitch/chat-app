@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: secure_password_change_me
     ports:
       - "5432:5432"
-    command: ["postgres", "-c", "max_connections=500", "-c", "shared_buffers=128MB", "-c", "work_mem=8MB", "-c", "effective_cache_size=4GB"]
+    command: ["postgres", "-c", "max_connections=500", "-c", "shared_buffers=3GB", "-c", "work_mem=64MB", "-c", "effective_cache_size=8GB", "-c", "maintenance_work_mem=512MB"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U chat_user -d chat_db"]
       interval: 3s
@@ -42,6 +42,7 @@ services:
       CLIENT_URL: "*"
       UV_THREADPOOL_SIZE: 16
       REDIS_URL: redis://redis:6379
+      NODE_OPTIONS: "--max-old-space-size=2048"
     ports:
       - "8000:8000"
     depends_on:
