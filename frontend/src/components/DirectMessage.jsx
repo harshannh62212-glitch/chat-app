@@ -3,6 +3,8 @@ import axios from 'axios';
 import { filterContent } from '../utils/contentFilter';
 import { checkRateLimit } from '../utils/rateLimiter';
 import GiphyPanel from './GiphyPanel';
+import ReportButton from './ReportButton';
+
 
 function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
   const [messages, setMessages] = useState([]);
@@ -285,6 +287,7 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
                         🗑️
                       </button>
                     )}
+                    <ReportButton messageId={msg.id} />
                   </div>
                   {msg.content.startsWith('http') && msg.content.includes('giphy.com') ? (
                     <img src={msg.content} className="message-gif" alt="GIF" />

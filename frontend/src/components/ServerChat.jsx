@@ -4,6 +4,8 @@ import { io } from 'socket.io-client';
 import { filterContent } from '../utils/contentFilter';
 import { checkRateLimit } from '../utils/rateLimiter';
 import GiphyPanel from './GiphyPanel';
+import ReportButton from './ReportButton';
+
 
 const socketUrl = import.meta.env.PROD ? window.location.origin : 'http://localhost:8000';
 const socket = io(socketUrl, {
@@ -271,6 +273,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                           🗑️
                         </button>
                       )}
+                      <ReportButton messageId={msg.id} />
                     </div>
                     {msg.content.startsWith('http') && msg.content.includes('giphy.com') ? (
                       <img src={msg.content} className="message-gif" alt="GIF" />

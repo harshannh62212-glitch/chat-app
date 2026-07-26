@@ -13,6 +13,7 @@ const authRoutes = require('./routes/auth');
 const serverRoutes = require('./routes/servers');
 const messageRoutes = require('./routes/messages');
 const userRoutes = require('./routes/users');
+const reportRoutes = require('./routes/report');
 const { initDB, query } = require('./db/database');
 const { filterContent } = require('./utils/contentFilter');
 require('./backend/scripts/healthCheck');
@@ -82,6 +83,7 @@ app.use('/api/servers', serverRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
+app.use(reportRoutes);
 
 const os = require('os');
 

@@ -6,6 +6,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
   const [activeSubTab, setActiveSubTab] = useState('users');
   const [users, setUsers] = useState([]);
   const [servers, setServers] = useState([]);
+  const [reports, setReports] = useState([]);
   const [words, setWords] = useState([]);
   const [newWord, setNewWord] = useState('');
   const [timeoutMinutes, setTimeoutMinutes] = useState({});
@@ -54,6 +55,9 @@ function AdminPanel({ currentUser, onSelectServer }) {
       } else if (activeSubTab === 'words') {
         const res = await axios.get('/api/admin/banned-words');
         setWords((res.data || []).map(w => w.word || w));
+      } else if (activeSubTab === 'reports') {
+        const res = await axios.get('/api/admin/reports');
+        setReports(res.data || []);
       } else if (activeSubTab === 'system') {
         const res = await axios.get('/api/system-status');
         setSystemStatus(res.data);
@@ -186,6 +190,16 @@ function AdminPanel({ currentUser, onSelectServer }) {
     }
   };
 
+  const handleResolveReport = async (reportId) => {
+    try {
+      await axios.patch(`/api/admin/reports/${reportId}`, { status: 'resolved' });
+      setMessage('Report marked as resolved');
+      fetchData();
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to update report status');
+    }
+  };
+
   return (
     <div className="admin-panel">
       <div className="admin-header">
@@ -209,6 +223,12 @@ function AdminPanel({ currentUser, onSelectServer }) {
             onClick={() => setActiveSubTab('words')}
           >
             Filter Blacklist
+          </button>
+          <button 
+            className={`admin-subtab ${activeSubTab === 'reports' ? 'active' : ''}`}
+            onClick={() => setActiveSubTab('reports')}
+          >
+            🚩 Reports
           </button>
           <button 
             className={`admin-subtab ${activeSubTab === 'system' ? 'active' : ''}`}
@@ -490,6 +510,48 @@ function AdminPanel({ currentUser, onSelectServer }) {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {activeSubTab === 'reports' && (
+              <div className="admin-section">
+                <h3>User Bug/Issue Reports</h3>
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Reporter</th>
+                      <th>Description</th>
+                      <th>Date</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reports.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" style={{ textAlign: 'center' }}>No reports found.</td>
+                      </tr>
+                    ) : (
+                      reports.map(r => (
+                        <tr key={r.id}>
+                          <td className="bold">{r.username}</td>
+                          <td>{r.description}</td>
+                          <td>{new Date(r.created_at).toLocaleDateString()}</td>
+                          <td>
+                            <span className={`status-badge ${r.status === 'resolved' ? 'active' : 'ban'}`}>
+                              {r.status.toUpperCase()}
+                            </span>
+                          </td>
+                          <td>
+                            {r.status !== 'resolved' && (
+                              <button className="btn-green" onClick={() => handleResolveReport(r.id)}>Resolve</button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             )}
           </>

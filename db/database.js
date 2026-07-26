@@ -163,6 +163,18 @@ async function createTables() {
       );
     `);
 
+    // Reports table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS reports (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+        description TEXT NOT NULL,
+        screenshot_url TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'open',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Archive tables for banned users
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.archived_users (
