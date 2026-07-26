@@ -931,7 +931,7 @@ async function downloadImageAsBase64(url) {
 let isModerating = false;
 async function moderationTick() {
   if (isModerating) {
-    setTimeout(moderationTick, 4000);
+    setTimeout(moderationTick, 30000);
     return;
   }
   isModerating = true;
@@ -941,10 +941,10 @@ async function moderationTick() {
     console.error('[AI MODERATOR] Tick error:', err.message);
   } finally {
     isModerating = false;
-    setTimeout(moderationTick, 4000);
+    setTimeout(moderationTick, 30000);
   }
 }
-setTimeout(moderationTick, 4000);
+setTimeout(moderationTick, 30000);
 
 function optimizeCpuGovernor() {
   try {
