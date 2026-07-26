@@ -30,6 +30,7 @@ function sendSMS(message) {
     .create({ body: message, from, to })
     .then(() => console.log('SMS sent'))
     .catch(err => console.error('SMS send error:', err.message));
+}
 module.exports = { sendSMS };
 
 
