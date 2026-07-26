@@ -30,6 +30,10 @@ services:
     privileged: true
     security_opt:
       - apparmor:unconfined
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     environment:
       DATABASE_URL: postgresql://chat_user:secure_password_change_me@postgres:5432/chat_db
       JWT_SECRET: your_jwt_secret_change_in_production
@@ -37,17 +41,35 @@ services:
       NODE_ENV: production
       CLIENT_URL: "*"
       UV_THREADPOOL_SIZE: 16
+      REDIS_URL: redis://redis:6379
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - chat_network
     volumes:
       - .:/app
       - /app/node_modules
       - /sys:/sys
+
+  redis:
+    image: redis:7-alpine
+    container_name: chat_app_redis
+    restart: always
+    command: redis-server --maxclients 10000 --save ""
+    ports:
+      - "6379:6379"
+    networks:
+      - chat_network
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared

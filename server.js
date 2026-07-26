@@ -1,5 +1,22 @@
 process.env.UV_THREADPOOL_SIZE = 16;
+
+const cluster = require('cluster');
+const numCPUs = require('os').cpus().length;
+
+if (cluster.isPrimary || cluster.isMaster) {
+  console.log(`[CLUSTER] Master ${process.pid} is running. Spawning ${numCPUs} workers...`);
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork();
+  }
+  cluster.on('exit', (worker, code, signal) => {
+    console.warn(`[CLUSTER] Worker ${worker.process.pid} died. Spawning replacement...`);
+    cluster.fork();
+  });
+  return; // Stop execution on master process
+}
+
 const express = require('express');
+
 const cors = require('cors');
 const http = require('http');
 const path = require('path');
@@ -41,6 +58,20 @@ const io = socketIO(server, {
   pingTimeout: 60000,
   pingInterval: 25000
 });
+
+const { createClient } = require('redis');
+const { createAdapter } = require('@socket.io/redis-adapter');
+
+const pubClient = createClient({ url: process.env.REDIS_URL || 'redis://redis:6379' });
+const subClient = pubClient.duplicate();
+
+Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
+  io.adapter(createAdapter(pubClient, subClient));
+  console.log(`[SOCKET.IO] Redis adapter configured on worker process ${process.pid}`);
+}).catch(err => {
+  console.error('[SOCKET.IO] Redis adapter connection failed:', err);
+});
+
 
 app.use(helmet({
   contentSecurityPolicy: false,
