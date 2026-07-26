@@ -54,4 +54,70 @@ router.patch('/admin/reports/:id', authMiddleware, adminCheck, async (req, res) 
   }
 });
 
+// POST /api/global-report - user submits a global bug/glitch report (with Gemini AI evaluation)
+router.post('/global-report', authMiddleware, async (req, res) => {
+  const { description } = req.body;
+  if (!description || !description.trim()) {
+    return res.status(400).json({ error: 'Description is required' });
+  }
+
+  let aiEvaluation = 'unevaluated';
+  let reportStatus = 'open';
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (apiKey) {
+    try {
+      const prompt = `You are a software bug report triage assistant. Read the user's description and evaluate if it contains a legitimate bug, glitch, system error, UI issue, crash, performance problem, or technical defect (e.g., 'the screen freezes', 'can't send DMs', 'getting 502 error', 'the delete button does not work').
+      
+      If it is a real technical problem description, respond with 'LEGITIMATE'.
+      If it is spam, test, greeting, casual chatter, gibberish, or nonsense (e.g., 'hello', 'test', 'asdf', 'yo', 'great app'), respond with 'SPAM'.
+
+      User description: "${description.trim()}"
+
+      Respond with a JSON object in this exact format:
+      {
+        "evaluation": "LEGITIMATE" or "SPAM"
+      }`;
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' }
+        })
+      });
+
+      if (response.ok) {
+        const json = await response.json();
+        const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const parsed = JSON.parse(textResponse.trim());
+        if (parsed && (parsed.evaluation === 'LEGITIMATE' || parsed.evaluation === 'SPAM')) {
+          aiEvaluation = parsed.evaluation;
+          if (aiEvaluation === 'SPAM') {
+            reportStatus = 'rejected';
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to evaluate report with Gemini:', err);
+    }
+  }
+
+  try {
+    await query(
+      `INSERT INTO reports (user_id, description, status, ai_evaluation) VALUES ($1, $2, $3, $4)`,
+      [req.userId, description.trim(), reportStatus, aiEvaluation]
+    );
+    res.json({ 
+      message: 'Bug report submitted successfully', 
+      ai_evaluation: aiEvaluation,
+      status: reportStatus
+    });
+  } catch (err) {
+    console.error('Failed to insert global report:', err);
+    res.status(500).json({ error: 'Failed to submit bug report' });
+  }
+});
+
 module.exports = router;

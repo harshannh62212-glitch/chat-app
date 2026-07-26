@@ -522,6 +522,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
                       <th>Reporter</th>
                       <th>Description</th>
                       <th>Date</th>
+                      <th>AI Evaluation</th>
                       <th>Status</th>
                       <th>Actions</th>
                     </tr>
@@ -529,7 +530,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
                   <tbody>
                     {reports.length === 0 ? (
                       <tr>
-                        <td colSpan="5" style={{ textAlign: 'center' }}>No reports found.</td>
+                        <td colSpan="6" style={{ textAlign: 'center' }}>No reports found.</td>
                       </tr>
                     ) : (
                       reports.map(r => (
@@ -538,12 +539,17 @@ function AdminPanel({ currentUser, onSelectServer }) {
                           <td>{r.description}</td>
                           <td>{new Date(r.created_at).toLocaleDateString()}</td>
                           <td>
-                            <span className={`status-badge ${r.status === 'resolved' ? 'active' : 'ban'}`}>
+                            <span className={`status-badge ${r.ai_evaluation === 'LEGITIMATE' ? 'active' : r.ai_evaluation === 'SPAM' ? 'ban' : 'timeout'}`}>
+                              {r.ai_evaluation ? r.ai_evaluation.toUpperCase() : 'UNEVALUATED'}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`status-badge ${r.status === 'resolved' ? 'active' : r.status === 'rejected' ? 'status-badge' : 'ban'}`}>
                               {r.status.toUpperCase()}
                             </span>
                           </td>
                           <td>
-                            {r.status !== 'resolved' && (
+                            {r.status !== 'resolved' && r.status !== 'rejected' && (
                               <button className="btn-green" onClick={() => handleResolveReport(r.id)}>Resolve</button>
                             )}
                           </td>

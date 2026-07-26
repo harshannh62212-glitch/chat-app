@@ -147,6 +147,7 @@ async function createTables() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
       ALTER TABLE server_messages ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
       ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS ai_evaluation VARCHAR(20) DEFAULT 'unevaluated';
     `);
 
     // Seed Administrator role
@@ -171,6 +172,7 @@ async function createTables() {
         description TEXT NOT NULL,
         screenshot_url TEXT,
         status VARCHAR(20) NOT NULL DEFAULT 'open',
+        ai_evaluation VARCHAR(20) NOT NULL DEFAULT 'unevaluated',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);

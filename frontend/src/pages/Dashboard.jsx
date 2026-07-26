@@ -19,6 +19,13 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
   const [servers, setServers] = useState([]);
   const [notifications, setNotifications] = useState([]);
 
+  const [showGlobalReportModal, setShowGlobalReportModal] = useState(false);
+  const [bugDescription, setBugDescription] = useState('');
+  const [bugSubmitting, setBugSubmitting] = useState(false);
+  const [bugSuccess, setBugSuccess] = useState(false);
+  const [bugError, setBugError] = useState('');
+
+
   const fetchUserServers = async () => {
     try {
       const res = await axios.get('/api/servers/my-servers');
@@ -49,10 +56,76 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
     setShowNewServerModal(false);
   };
 
+  const handleGlobalReportSubmit = async (e) => {
+    e.preventDefault();
+    if (!bugDescription.trim()) return;
+
+    setBugSubmitting(true);
+    setBugError('');
+    setBugSuccess(false);
+
+    try {
+      const res = await axios.post('/api/global-report', {
+        description: bugDescription,
+      });
+      
+      if (res.data.status === 'rejected') {
+        setBugError('AI classified your report as SPAM/test. Please enter a valid defect description.');
+      } else {
+        setBugSuccess(true);
+        setBugDescription('');
+        setTimeout(() => {
+          setShowGlobalReportModal(false);
+          setBugSuccess(false);
+        }, 2500);
+      }
+    } catch (err) {
+      setBugError(err.response?.data?.error || 'Failed to submit report. Please try again.');
+    } finally {
+      setBugSubmitting(false);
+    }
+  };
+
+
   return (
-    <div className="dashboard discord-layout">
+    <div className="dashboard discord-layout" style={{ position: 'relative' }}>
+      {/* Global Bug Report Button at the top right */}
+      <button 
+        className="global-bug-report-btn"
+        onClick={() => setShowGlobalReportModal(true)}
+        style={{
+          position: 'absolute',
+          top: '12px',
+          right: '16px',
+          zIndex: 1000,
+          background: 'rgba(255, 71, 87, 0.15)',
+          border: '1px solid rgba(255, 71, 87, 0.3)',
+          color: '#ff4757',
+          padding: '8px 14px',
+          borderRadius: '20px',
+          fontSize: '13px',
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          transition: 'background 0.2s, transform 0.2s'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(255, 71, 87, 0.3)';
+          e.currentTarget.style.transform = 'scale(1.05)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(255, 71, 87, 0.15)';
+          e.currentTarget.style.transform = 'scale(1)';
+        }}
+      >
+        🪲 Report Bug
+      </button>
+
       {/* 1. Leftmost Server Rail (Narrow Icon Column) */}
       <div className="discord-server-rail">
+
         <div className="brand-logo-container">
           <Logo width={36} height={36} />
         </div>
@@ -252,6 +325,120 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
           </div>
         ))}
       </div>
+
+      {showGlobalReportModal && (
+        <div
+          className="report-modal-overlay"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999,
+            backdropFilter: 'blur(4px)',
+          }}
+          onClick={() => setShowGlobalReportModal(false)}
+        >
+          <div
+            className="report-modal-content"
+            style={{
+              background: '#1e272e',
+              border: '1px solid rgba(0, 255, 255, 0.2)',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '90%',
+              maxWidth: '400px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+              color: '#fff',
+              fontFamily: 'inherit',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px', color: '#ff4757' }}>
+              🪲 Report App Bug / Glitch
+            </h3>
+            
+            {bugSuccess ? (
+              <div style={{ color: '#2ed573', textAlign: 'center', padding: '16px 0' }}>
+                <div style={{ fontSize: '24px', marginBottom: '8px' }}>✓</div>
+                Report submitted and evaluated by AI!
+              </div>
+            ) : (
+              <form onSubmit={handleGlobalReportSubmit}>
+                <p style={{ fontSize: '13px', color: '#a4b0be', margin: '0 0 16px 0' }}>
+                  Describe the bug or system glitch you encountered. Our AI system will evaluate your report in real-time.
+                </p>
+                
+                {bugError && (
+                  <div style={{ background: 'rgba(255, 71, 87, 0.1)', border: '1px solid #ff4757', color: '#ff4757', borderRadius: '6px', padding: '8px 12px', fontSize: '12px', marginBottom: '12px' }}>
+                    {bugError}
+                  </div>
+                )}
+
+                <textarea
+                  required
+                  placeholder="Describe the issue (e.g., the chat app shows a 502 error when sending files)..."
+                  value={bugDescription}
+                  onChange={(e) => setBugDescription(e.target.value)}
+                  style={{
+                    width: '95%',
+                    height: '100px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    resize: 'none',
+                    outline: 'none',
+                    marginBottom: '16px',
+                  }}
+                />
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowGlobalReportModal(false)}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={bugSubmitting || !bugDescription.trim()}
+                    style={{
+                      background: '#ff4757',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 'bold',
+                      opacity: bugSubmitting || !bugDescription.trim() ? 0.5 : 1,
+                    }}
+                  >
+                    {bugSubmitting ? 'Submitting...' : 'Submit Report'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
