@@ -48,7 +48,7 @@ services:
       REDIS_URL: redis://redis:6379
       NODE_OPTIONS: "--max-old-space-size=2048"
     ports:
-      - "80:8000"
+      - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,6 +74,16 @@ services:
       nofile:
         soft: 65535
         hard: 65535
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel run chat-app
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - chat_network
 volumes:
   postgres_data:
 
