@@ -36,6 +36,7 @@ services:
       PORT: 8000
       NODE_ENV: production
       CLIENT_URL: "*"
+      UV_THREADPOOL_SIZE: 16
     ports:
       - "8000:8000"
     depends_on:
