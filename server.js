@@ -690,7 +690,7 @@ let stressProcs = [];
 function killStressProcs() {
   stressProcs.forEach(p => { try { p.kill('SIGKILL'); } catch(e) {} });
   stressProcs = [];
-  try { execSync('pkill -f "stress-ng" 2>/dev/null; pkill -f "dd if=/dev/zero" 2>/dev/null; true'); } catch(e) {}
+  try { execSync('pkill -f "stress-ng" 2>/dev/null; pkill -f "dd if=/dev/zero" 2>/dev/null; pkill -f "bc" 2>/dev/null; pkill -f "4\\*a" 2>/dev/null; true'); } catch(e) {}
 }
 
 app.post('/api/system/stress', (req, res) => {
