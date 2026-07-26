@@ -45,7 +45,7 @@ const messageRoutes = require('./routes/messages');
 const userRoutes = require('./routes/users');
 const reportRoutes = require('./routes/report');
 const { query } = require('./db/database');
-const { filterContent } = require('./utils/contentFilter');
+const { filterContent, containsBannedWords } = require('./utils/contentFilter');
 require('./backend/scripts/healthCheck');
 const app = express();
 const server = http.createServer(app);
@@ -771,16 +771,19 @@ async function evaluateMessageAsync(id, content, type) {
   const prompt = `You are a strict content safety moderator for a real-time chat platform. Analyze the following message and determine if it is appropriate.
 
 Flag as INAPPROPRIATE (respond false) if the message contains ANY of:
-- Profanity or cuss words (fuck, shit, ass, bitch, cunt, dick, bastard, damn, hell used offensively, etc.)
+- Profanity or cuss words (fuck, shit, ass, bitch, cunt, dick, cock, etc.)
+- Sexual content, pornographic references, or NSFW material (porn, nude, naked, sex, blowjob, orgasm, masturbate, OnlyFans, hentai, etc.)
+- Requests for or sharing of explicit/adult content (nude pics, sex videos, cam links, etc.)
 - Racial slurs, ethnic slurs, or hate speech targeting any group
 - Harassment, bullying, threats, or personal attacks
-- Sexual content, graphic violence, or self-harm content
-- Deliberate character substitutions to bypass filters (e.g., f*ck, $hit, a$$)
+- Graphic violence or self-harm content
+- Drug promotion or illegal activity
+- Deliberate character substitutions to bypass filters (f*ck, $hit, a$$, pr0n, s3x, n00ds, etc.)
 - Spam or repeated nonsense intended to disrupt
 
 Allow APPROPRIATE (respond true) if the message is:
 - Normal conversation, questions, or technical discussion
-- Mild expressions of frustration that do not contain slurs or profanity
+- Mild expressions of frustration without slurs or explicit content
 
 Message to evaluate: "${content}"
 
@@ -875,6 +878,20 @@ io.on('connection', (socket) => {
 
   socket.on('send-message', (data) => {
     const { senderId, content, serverId, dmWith, username, avatar_url, chatroom_id } = data;
+
+    // ── Layer 1: Instant keyword/pattern block (no AI, zero latency) ──
+    const { blocked, reason } = containsBannedWords(content);
+    if (blocked) {
+      console.log(`[CONTENT BLOCK] Blocked message from ${username || senderId} — reason: ${reason}`);
+      // Notify only the sender — no one else sees this
+      socket.emit('message-blocked', {
+        reason: 'Your message contains content that is not allowed on this platform.',
+        id: data.id
+      });
+      return; // Stop — do NOT broadcast
+    }
+
+    // ── Layer 2: Clean the text (replace any remaining mild terms with ***) ──
     const filteredContent = filterContent(content);
 
     if (serverId) {
@@ -891,7 +908,7 @@ io.on('connection', (socket) => {
         timestamp: data.created_at || new Date().toISOString(),
         isDM: false
       });
-      // Evaluate in the background asynchronously
+      // ── Layer 3: AI async eval (catches context/bypass attempts the keyword list missed) ──
       evaluateMessageAsync(data.id, filteredContent, 'server');
     } else if (dmWith) {
       io.to(`user-${dmWith}`).emit('new-dm', {
@@ -904,7 +921,7 @@ io.on('connection', (socket) => {
         content: filteredContent,
         timestamp: new Date()
       });
-      // Evaluate in the background asynchronously
+      // ── Layer 3: AI async eval ──
       evaluateMessageAsync(data.id, filteredContent, 'dm');
     }
   });
