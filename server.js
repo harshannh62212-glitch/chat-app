@@ -3,6 +3,8 @@ const cors = require('cors');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const helmet = require('helmet');
+
 const STATUS_FILE = path.resolve(__dirname, 'public', 'healthStatus.json');
 const publicDir = path.resolve(__dirname, 'public');
 if (!fs.existsSync(publicDir)) { fs.mkdirSync(publicDir, { recursive: true }); }
@@ -19,8 +21,14 @@ const { filterContent } = require('./utils/contentFilter');
 require('./backend/scripts/healthCheck');
 const app = express();
 const server = http.createServer(app);
+const corsWhitelist = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['*'];
+
 const allowedOrigin = (origin, callback) => {
-  callback(null, true);
+  if (!origin || corsWhitelist.includes('*') || corsWhitelist.includes(origin)) {
+    callback(null, true);
+  } else {
+    callback(new Error('Not allowed by CORS'));
+  }
 };
 
 const io = socketIO(server, {
@@ -33,10 +41,22 @@ const io = socketIO(server, {
   pingInterval: 25000
 });
 
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
 app.use((req, res, next) => {
-  const origin = req.headers.origin || '*';
-  res.header('Access-Control-Allow-Origin', origin);
-  res.header('Access-Control-Allow-Credentials', 'true');
+  const origin = req.headers.origin;
+  const isWhitelisted = corsWhitelist.includes('*') || corsWhitelist.includes(origin);
+  
+  if (isWhitelisted && origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  } else if (corsWhitelist.includes('*')) {
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, bypass-tunnel-reminder');
   if (req.method === 'OPTIONS') {
@@ -53,15 +73,6 @@ const rateLimit = require('express-rate-limit');
 const pino = require('pino');
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
-// CORS whitelist – set env var CORS_ORIGIN (comma‑separated) or allow all in dev
-const corsWhitelist = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['*'];
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (corsWhitelist.includes('*') || corsWhitelist.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin || '*');
-  }
-  next();
-});
 
 // Rate limiting – max 100 requests per 15 minutes per IP
 app.use(rateLimit({
