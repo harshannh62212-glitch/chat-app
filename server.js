@@ -44,7 +44,7 @@ const serverRoutes = require('./routes/servers');
 const messageRoutes = require('./routes/messages');
 const userRoutes = require('./routes/users');
 const reportRoutes = require('./routes/report');
-const { initDB, query } = require('./db/database');
+const { query } = require('./db/database');
 const { filterContent } = require('./utils/contentFilter');
 require('./backend/scripts/healthCheck');
 const app = express();
