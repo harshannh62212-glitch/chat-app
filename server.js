@@ -821,11 +821,6 @@ const PORT = process.env.PORT || 5000;
 
 // Gemini AI Moderation Daemon
 async function runGeminiModeration() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return;
-  }
-
   try {
     // 1. Moderate Messages (server messages and direct messages)
     const serverMsgs = await query(
@@ -834,12 +829,12 @@ async function runGeminiModeration() {
     const directMsgs = await query(
       "SELECT id, sender_id, content FROM direct_messages WHERE is_moderated = false LIMIT 50"
     );
-
+ 
     const allMsgs = [
       ...serverMsgs.rows.map(m => ({ id: m.id, type: 'server', sender_id: m.sender_id, content: m.content })),
       ...directMsgs.rows.map(m => ({ id: m.id, type: 'dm', sender_id: m.sender_id, content: m.content }))
     ];
-
+ 
     if (allMsgs.length > 0) {
       console.log(`[AI MODERATOR] Scanning ${allMsgs.length} messages...`);
       const messagesPayload = allMsgs.map(m => ({ id: m.id, content: m.content }));
@@ -853,42 +848,75 @@ async function runGeminiModeration() {
       
       Response format:
       [ "msgId1", "msgId2" ]`;
+ 
+      let flaggedIds = null;
+      let aiSource = 'OLLAMA';
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json' }
-        })
-      });
+      // Try local Ollama (Llama 3.2) first
+      try {
+        const response = await fetch('http://host.docker.internal:11434/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'llama3.2',
+            prompt: prompt,
+            format: 'json',
+            stream: false
+          })
+        });
 
-      if (response.ok) {
-        const json = await response.json();
-        const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-        try {
-          const flaggedIds = JSON.parse(textResponse.trim());
-          if (Array.isArray(flaggedIds) && flaggedIds.length > 0) {
-            console.warn(`[AI MODERATOR] Flagged messages:`, flaggedIds);
-            for (const id of flaggedIds) {
-              const msg = allMsgs.find(m => m.id.toString() === id.toString());
-              if (msg) {
-                console.warn(`[AI MODERATOR] Deleting violating message ID: ${msg.id} from sender: ${msg.sender_id}`);
-                // Delete the message
-                if (msg.type === 'server') {
-                  await query("DELETE FROM server_messages WHERE id = $1", [msg.id]);
-                } else {
-                  await query("DELETE FROM direct_messages WHERE id = $1", [msg.id]);
-                }
-                io.emit('message-deleted', { id: msg.id, type: msg.type });
+        if (response.ok) {
+          const json = await response.json();
+          flaggedIds = JSON.parse(json.response.trim());
+        }
+      } catch (err) {
+        console.warn('[AI MODERATOR] Local Llama 3.2 unavailable, falling back to Gemini:', err.message);
+      }
+
+      // Fallback to Gemini if Ollama failed or returned invalid results
+      if (!Array.isArray(flaggedIds)) {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (apiKey) {
+          try {
+            aiSource = 'GEMINI';
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: 'application/json' }
+              })
+            });
+
+            if (response.ok) {
+              const json = await response.json();
+              const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+              flaggedIds = JSON.parse(textResponse.trim());
+            }
+          } catch (err) {
+            console.error('[AI MODERATOR] Gemini fallback failed:', err.message);
+          }
+        }
+      }
+
+      // Execute moderation if we got a valid response from either AI
+      if (Array.isArray(flaggedIds)) {
+        if (flaggedIds.length > 0) {
+          console.warn(`[AI MODERATOR - ${aiSource}] Flagged messages:`, flaggedIds);
+          for (const id of flaggedIds) {
+            const msg = allMsgs.find(m => m.id.toString() === id.toString());
+            if (msg) {
+              console.warn(`[AI MODERATOR - ${aiSource}] Deleting violating message ID: ${msg.id} from sender: ${msg.sender_id}`);
+              // Delete the message
+              if (msg.type === 'server') {
+                await query("DELETE FROM server_messages WHERE id = $1", [msg.id]);
+              } else {
+                await query("DELETE FROM direct_messages WHERE id = $1", [msg.id]);
               }
+              io.emit('message-deleted', { id: msg.id, type: msg.type });
             }
           }
-        } catch (e) {
-          console.error('[AI MODERATOR] Failed to parse textResponse JSON:', textResponse, e.message);
         }
-      } else {
-        console.error('[AI MODERATOR] API response error:', response.statusText);
       }
 
       // Mark processed messages as moderated
