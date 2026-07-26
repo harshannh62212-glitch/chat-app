@@ -761,6 +761,92 @@ app.use((err, req, res, next) => {
 
 const connectedUsers = new Map();
 
+// Asynchronous Optimistic Moderation (Ollama Llama 3.2 with Gemini fallback)
+async function evaluateMessageAsync(id, content, type) {
+  if (!id || !content) return;
+  
+  const prompt = `You are an AI safety moderator. Analyze the following chat message and determine if it violates safety guidelines (hate speech, harassment, graphic violence, pornography, extreme profanity, or deliberate bypasses of safety filters): "${content}"
+  
+  Respond ONLY with a JSON object in this exact format:
+  {
+    "appropriate": true or false
+  }`;
+
+  let isAppropriate = true;
+  let ollamaSuccess = false;
+
+  // 1. Try local Ollama (Llama 3.2)
+  try {
+    const response = await fetch('http://host.docker.internal:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama3.2',
+        prompt: prompt,
+        format: 'json',
+        stream: false
+      })
+    });
+
+    if (response.ok) {
+      const json = await response.json();
+      const parsed = JSON.parse(json.response.trim());
+      if (parsed && typeof parsed.appropriate === 'boolean') {
+        isAppropriate = parsed.appropriate;
+        ollamaSuccess = true;
+      }
+    }
+  } catch (err) {
+    // Local model failed, fallback to Gemini
+  }
+
+  // 2. Fallback to Gemini
+  if (!ollamaSuccess) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json' }
+          })
+        });
+
+        if (response.ok) {
+          const json = await response.json();
+          const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const parsed = JSON.parse(textResponse.trim());
+          if (parsed && typeof parsed.appropriate === 'boolean') {
+            isAppropriate = parsed.appropriate;
+          }
+        }
+      } catch (err) {
+        console.error('[ASYNC MODERATOR] Gemini fallback failed:', err.message);
+      }
+    }
+  }
+
+  if (!isAppropriate) {
+    console.warn(`[ASYNC MODERATOR] Flagged and deleting violating message ID: ${id}`);
+    
+    // Delete from DB (since client might have written it by now)
+    try {
+      if (type === 'server') {
+        await query("DELETE FROM server_messages WHERE id = $1", [id]);
+      } else {
+        await query("DELETE FROM direct_messages WHERE id = $1", [id]);
+      }
+    } catch (e) {
+      console.error('[ASYNC MODERATOR] DB delete failed:', e.message);
+    }
+    
+    // Broadcast delete to all connected clients
+    io.emit('message-deleted', { id, type });
+  }
+}
+
 io.on('connection', (socket) => {
   console.log('New user connected:', socket.id);
 
@@ -772,76 +858,9 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('send-message', async (data) => {
+  socket.on('send-message', (data) => {
     const { senderId, content, serverId, dmWith, username, avatar_url, chatroom_id } = data;
     const filteredContent = filterContent(content);
-
-    // Synchronous Active Chat Moderation (Llama 3.2 with Gemini fallback)
-    let isAppropriate = true;
-    let ollamaSuccess = false;
-
-    try {
-      const prompt = `You are an AI chat safety moderator. Analyze the following message and determine if it violates safety guidelines (hate speech, harassment, graphic violence, pornography, extreme profanity, or deliberate bypasses of word filters): "${filteredContent}"
-      
-      Respond with a JSON object in this exact format:
-      {
-        "appropriate": true or false
-      }`;
-
-      const response = await fetch('http://host.docker.internal:11434/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'llama3.2',
-          prompt: prompt,
-          format: 'json',
-          stream: false
-        })
-      });
-
-      if (response.ok) {
-        const json = await response.json();
-        const parsed = JSON.parse(json.response.trim());
-        if (parsed && typeof parsed.appropriate === 'boolean') {
-          isAppropriate = parsed.appropriate;
-          ollamaSuccess = true;
-        }
-      }
-    } catch (err) {
-      // Local model failed, fallback to Gemini
-    }
-
-    if (!ollamaSuccess) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (apiKey) {
-        try {
-          const prompt = `You are an AI chat safety moderator. Analyze the following message and determine if it violates safety guidelines: "${filteredContent}"
-          Respond with JSON: {"appropriate": true} or {"appropriate": false}`;
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseMimeType: 'application/json' }
-            })
-          });
-          if (response.ok) {
-            const json = await response.json();
-            const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const parsed = JSON.parse(textResponse.trim());
-            if (parsed && typeof parsed.appropriate === 'boolean') {
-              isAppropriate = parsed.appropriate;
-            }
-          }
-        } catch (e) {}
-      }
-    }
-
-    if (!isAppropriate) {
-      console.warn(`[SYNC MODERATOR] Discarding violating message: "${filteredContent}"`);
-      socket.emit('message-blocked', { error: 'Your message was flagged by AI moderation.' });
-      return;
-    }
 
     if (serverId) {
       io.to(`server-${serverId}`).emit('new-message', {
@@ -857,6 +876,8 @@ io.on('connection', (socket) => {
         timestamp: data.created_at || new Date().toISOString(),
         isDM: false
       });
+      // Evaluate in the background asynchronously
+      evaluateMessageAsync(data.id, filteredContent, 'server');
     } else if (dmWith) {
       io.to(`user-${dmWith}`).emit('new-dm', {
         senderId,
@@ -868,6 +889,8 @@ io.on('connection', (socket) => {
         content: filteredContent,
         timestamp: new Date()
       });
+      // Evaluate in the background asynchronously
+      evaluateMessageAsync(data.id, filteredContent, 'dm');
     }
   });
 
