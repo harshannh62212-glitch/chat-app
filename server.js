@@ -764,27 +764,39 @@ app.use((err, req, res, next) => {
 
 const connectedUsers = new Map();
 
-// Asynchronous Optimistic Moderation (Ollama Llama 3.2 with Gemini fallback)
+// Asynchronous Optimistic Moderation (Ollama Llama 3.2:3b with Gemini fallback)
 async function evaluateMessageAsync(id, content, type) {
   if (!id || !content) return;
-  
-  const prompt = `You are an AI safety moderator. Analyze the following chat message and determine if it violates safety guidelines (hate speech, harassment, graphic violence, pornography, extreme profanity, or deliberate bypasses of safety filters): "${content}"
-  
-  Respond ONLY with a JSON object in this exact format:
-  {
-    "appropriate": true or false
-  }`;
+
+  const prompt = `You are a strict content safety moderator for a real-time chat platform. Analyze the following message and determine if it is appropriate.
+
+Flag as INAPPROPRIATE (respond false) if the message contains ANY of:
+- Profanity or cuss words (fuck, shit, ass, bitch, cunt, dick, bastard, damn, hell used offensively, etc.)
+- Racial slurs, ethnic slurs, or hate speech targeting any group
+- Harassment, bullying, threats, or personal attacks
+- Sexual content, graphic violence, or self-harm content
+- Deliberate character substitutions to bypass filters (e.g., f*ck, $hit, a$$)
+- Spam or repeated nonsense intended to disrupt
+
+Allow APPROPRIATE (respond true) if the message is:
+- Normal conversation, questions, or technical discussion
+- Mild expressions of frustration that do not contain slurs or profanity
+
+Message to evaluate: "${content}"
+
+Respond ONLY with this JSON:
+{ "appropriate": true or false }`;
 
   let isAppropriate = true;
   let ollamaSuccess = false;
 
-  // 1. Try local Ollama (Llama 3.2)
+  // 1. Try local Ollama (Llama 3.2:3b)
   try {
     const response = await fetch('http://host.docker.internal:11434/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama3.2',
+        model: 'llama3.2:3b',
         prompt: prompt,
         format: 'json',
         stream: false

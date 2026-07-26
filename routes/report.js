@@ -54,27 +54,33 @@ router.patch('/admin/reports/:id', authMiddleware, adminCheck, async (req, res) 
   }
 });
 
-// AI Report Evaluator helper (Local Ollama with Gemini fallback)
+// AI Report Evaluator helper (Local Ollama llama3.2:3b with Gemini fallback)
 async function evaluateReport(description) {
-  const prompt = `You are a software bug report triage assistant. Read the user's description and evaluate if it contains a legitimate bug, glitch, system error, UI issue, crash, performance problem, or technical defect.
-  
-  If it is a real technical problem description, respond with 'LEGITIMATE'.
-  If it is spam, test, casual chatter, greeting, nonsense, or anything stupid/silly (e.g., 'hello', 'test', 'asdf', 'you suck', 'silly app', 'yo'), respond with 'SPAM'.
+  const prompt = `You are a professional software QA triage assistant. You are an expert at identifying high-quality bug reports.
 
-  User description: "${description.trim()}"
+Classify as LEGITIMATE if the report contains:
+- A specific, reproducible, or descriptive technical issue
+- Clear steps to reproduce, expected vs actual behavior, or diagnostic details
+- Evidence of a genuine functional defect, UI glitch, or performance bottleneck
 
-  Respond with a JSON object in this exact format:
-  {
-    "evaluation": "LEGITIMATE" or "SPAM"
-  }`;
+Classify as SPAM if the report:
+- Contains casual greeting, idle chit-chat, or "hello"
+- Is unintelligible, nonsense characters, or repeated symbols
+- Is offensive, toxic, or abusive content
+- Is a placeholder or incomplete message (e.g., "test", "...", "bug")
 
-  // 1. Try local Ollama first
+User report: "${description.trim()}"
+
+Respond ONLY with this JSON:
+{ "evaluation": "LEGITIMATE" or "SPAM" }`;
+
+  // 1. Try local Ollama (llama3.2:3b) first
   try {
     const response = await fetch('http://host.docker.internal:11434/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'qwen2.5:0.5b',
+        model: 'llama3.2:3b',
         prompt: prompt,
         format: 'json',
         stream: false
