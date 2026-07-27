@@ -71,20 +71,20 @@ const BANNED_WORDS = [
 // ─── BYPASS PATTERNS (l33tspeak, spacing tricks, etc.) ───────────────────────
 // These regex patterns catch common attempts to evade the word filter
 const BYPASS_PATTERNS = [
-  // f*ck, f.u.c.k, f u c k, fuc k, fuuck, fvck, ph*ck
+  // f*ck, f.u.c.k, f u c k, fvck, ph*ck
   /f[\s\W_]*u[\s\W_]*c[\s\W_]*k/gi,
   /f[\s\W_]*[@a4][\s\W_]*g/gi,              // fag bypass
   /s[\s\W_]*h[\s\W_]*i[\s\W_]*t/gi,
   /b[\s\W_]*i[\s\W_]*t[\s\W_]*c[\s\W_]*h/gi,
-  /a[\s\W_]*s[\s\W_]*s/gi,
+  /(?<![a-z])a[\s\W_]*s[\s\W_]*s(?![a-z])/gi,  // ass — not 'lass', 'pass', 'class'
   /c[\s\W_]*u[\s\W_]*n[\s\W_]*t/gi,
   /d[\s\W_]*i[\s\W_]*c[\s\W_]*k/gi,
   /c[\s\W_]*o[\s\W_]*c[\s\W_]*k/gi,
   /n[\s\W_]*[i1!][\s\W_]*g[\s\W_]*g[\s\W_]*[ae@3]/gi,  // n-word bypass
   /p[\s\W_]*o[\s\W_]*r[\s\W_]*n/gi,
-  /s[\s\W_]*e[\s\W_]*x/gi,
+  /(?<![a-z])s[\s\W_]*e[\s\W_]*x(?![a-z])/gi,  // sex but NOT 'sexy' context — standalone
   /n[\s\W_]*u[\s\W_]*d[\s\W_]*[e3]/gi,
-  // l33tspeak substitutions - e.g. fvck, ph uck, fück
+  // l33tspeak substitutions
   /fv+ck/gi,
   /ph+uck/gi,
   /sh[i1!][t7]/gi,
@@ -92,6 +92,18 @@ const BYPASS_PATTERNS = [
   /\$h[i1!][t7]/gi,      // $hit
   /b[i1!][t7]ch/gi,      // b1tch
   /[ck][u*][n][t7]/gi,   // c*nt
+  // Number substitution bypasses (pr0n, n00ds, s3x)
+  /pr[o0][n]/gi,          // pr0n
+  /n[o0][o0]d[s]?/gi,    // n00ds, n0ods
+  /s[3e][x]/gi,           // s3x — standalone (won't match 'excited' since no trailing letters)
+  /p[o0]r[n]/gi,          // p0rn
+  // Literal asterisk used as vowel placeholder (f*ck, s*it, b*tch, c*nt)
+  /f\*+c?k/gi,            // f*ck, f**ck
+  /s\*+[i1]t/gi,          // s*it, s**it
+  /b\*+tch/gi,            // b*tch
+  /c\*+nt/gi,             // c*nt
+  /d\*+ck/gi,             // d*ck
+  /[a@]\*+[s$]/gi,        // a*s, a**s
 ];
 
 let customBannedWords = [];
