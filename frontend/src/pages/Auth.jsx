@@ -50,7 +50,15 @@ function Auth({ onLogin, onBack }) {
       }
     } catch (err) {
       console.error(err);
-      const errMsg = err.response?.data?.error || err.message || 'Authentication failed';
+      let errMsg = 'Authentication failed';
+      const rawError = err.response?.data?.error || err.response?.data || err.message;
+      if (rawError) {
+        if (typeof rawError === 'object') {
+          errMsg = rawError.message || rawError.error || JSON.stringify(rawError);
+        } else {
+          errMsg = String(rawError);
+        }
+      }
       setError(errMsg);
     } finally {
       setLoading(false);
