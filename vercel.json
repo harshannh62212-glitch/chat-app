@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://sphere-gotta-drives-edward.trycloudflare.com/api/$1"
+      "destination": "https://optics-ment-attempting-had.trycloudflare.com/api/$1"
     },
     {
       "source": "/socket.io/(.*)",
-      "destination": "https://sphere-gotta-drives-edward.trycloudflare.com/socket.io/$1"
+      "destination": "https://optics-ment-attempting-had.trycloudflare.com/socket.io/$1"
     },
     {
       "source": "/(.*)",
