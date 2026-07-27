@@ -69,6 +69,8 @@ const io = socketIO(server, {
   pingInterval: 25000
 });
 
+app.set('io', io); // Make io accessible in routes via req.app.get('io')
+
 const { createClient } = require('redis');
 const { createAdapter } = require('@socket.io/redis-adapter');
 

@@ -159,4 +159,82 @@ router.post('/dm', authMiddleware, async (req, res) => {
   }
 });
 
+// Delete a server message (own messages only, or admin)
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    // Fetch the message to verify ownership
+    const msgResult = await query(
+      `SELECT id, sender_id, chatroom_id FROM server_messages WHERE id = $1`,
+      [id]
+    );
+
+    if (msgResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    const msg = msgResult.rows[0];
+
+    // Check if user is the sender or an admin
+    const userResult = await query(`SELECT is_admin FROM users WHERE id = $1`, [userId]);
+    const isAdmin = userResult.rows[0]?.is_admin === true;
+
+    if (msg.sender_id !== userId && !isAdmin) {
+      return res.status(403).json({ error: 'You can only delete your own messages' });
+    }
+
+    await query(`DELETE FROM server_messages WHERE id = $1`, [id]);
+
+    // Emit real-time event so message disappears for everyone instantly
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('message-deleted', { id, type: 'server' });
+    }
+
+    res.json({ message: 'Message deleted successfully' });
+  } catch (err) {
+    console.error('Failed to delete server message:', err);
+    res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
+// Delete a direct message (own messages only)
+router.delete('/dm/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    const msgResult = await query(
+      `SELECT id, sender_id, recipient_id FROM direct_messages WHERE id = $1`,
+      [id]
+    );
+
+    if (msgResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    const msg = msgResult.rows[0];
+
+    if (msg.sender_id !== userId) {
+      return res.status(403).json({ error: 'You can only delete your own messages' });
+    }
+
+    await query(`DELETE FROM direct_messages WHERE id = $1`, [id]);
+
+    // Emit real-time event to both participants
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user-${msg.sender_id}`).emit('message-deleted', { id, type: 'dm' });
+      io.to(`user-${msg.recipient_id}`).emit('message-deleted', { id, type: 'dm' });
+    }
+
+    res.json({ message: 'Message deleted successfully' });
+  } catch (err) {
+    console.error('Failed to delete DM:', err);
+    res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
 module.exports = router;
