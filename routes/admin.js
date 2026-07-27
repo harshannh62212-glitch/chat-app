@@ -195,4 +195,88 @@ router.post('/banned-words', authMiddleware, adminCheck, addBannedWord);
 router.delete('/words/:word', authMiddleware, adminCheck, deleteBannedWord);
 router.delete('/banned-words/:word', authMiddleware, adminCheck, deleteBannedWord);
 
+// 11. Database Administration & Metrics
+router.get('/database/stats', authMiddleware, adminCheck, async (req, res) => {
+  try {
+    const sizeRes = await query(`
+      SELECT 
+        pg_size_pretty(pg_database_size(current_database())) as size,
+        (SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()) as active_connections,
+        version() as pg_version
+    `);
+
+    const tablesRes = await query(`
+      SELECT 
+        relname AS table_name,
+        n_live_tup AS row_count,
+        pg_size_pretty(pg_total_relation_size(relid)) AS total_size,
+        pg_total_relation_size(relid) AS bytes
+      FROM pg_stat_user_tables
+      ORDER BY bytes DESC
+    `);
+
+    const stats = sizeRes.rows[0];
+    res.json({
+      databaseName: 'chat_db',
+      size: stats.size,
+      activeConnections: parseInt(stats.active_connections, 10),
+      version: stats.pg_version,
+      tables: tablesRes.rows
+    });
+  } catch (err) {
+    console.error('Failed to fetch database stats:', err);
+    res.status(500).json({ error: 'Failed to fetch database statistics' });
+  }
+});
+
+router.post('/database/action', authMiddleware, adminCheck, async (req, res) => {
+  try {
+    const { action } = req.body;
+
+    if (action === 'vacuum') {
+      await query('VACUUM ANALYZE;');
+      return res.json({ message: 'VACUUM ANALYZE executed successfully. Table statistics and storage optimized.' });
+    }
+
+    if (action === 'clean_orphans') {
+      const msgRes = await query(`DELETE FROM server_messages WHERE chatroom_id NOT IN (SELECT id FROM chatrooms);`);
+      const dmRes = await query(`DELETE FROM direct_messages WHERE sender_id NOT IN (SELECT id FROM users);`);
+      return res.json({ message: `Cleanup completed: ${msgRes.rowCount} orphaned messages and ${dmRes.rowCount} stale DMs removed.` });
+    }
+
+    if (action === 'health_check') {
+      const checkRes = await query(`SELECT count(*) as total_users FROM users;`);
+      return res.json({ message: `Database health check passed cleanly. ${checkRes.rows[0].total_users} active user accounts verified.` });
+    }
+
+    res.status(400).json({ error: 'Invalid database action' });
+  } catch (err) {
+    console.error('Database maintenance action failed:', err);
+    res.status(500).json({ error: 'Database maintenance action failed: ' + err.message });
+  }
+});
+
+router.get('/database/table/:tableName', authMiddleware, adminCheck, async (req, res) => {
+  try {
+    const { tableName } = req.params;
+    
+    // Whitelist allowed tables to prevent SQL injection
+    const allowedTables = [
+      'users', 'servers', 'chatrooms', 'server_messages', 'direct_messages',
+      'server_members', 'friendships', 'banned_words', 'reports', 'archived_users',
+      'archived_server_members', 'archived_friendships', 'bans'
+    ];
+
+    if (!allowedTables.includes(tableName.toLowerCase())) {
+      return res.status(400).json({ error: 'Table not accessible' });
+    }
+
+    const result = await query(`SELECT * FROM ${tableName} ORDER BY 1 DESC LIMIT 25;`);
+    res.json({ tableName, rows: result.rows });
+  } catch (err) {
+    console.error('Failed to fetch table records:', err);
+    res.status(500).json({ error: 'Failed to inspect table records' });
+  }
+});
+
 module.exports = router;

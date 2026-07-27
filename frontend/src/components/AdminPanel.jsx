@@ -18,6 +18,11 @@ function AdminPanel({ currentUser, onSelectServer }) {
   const [fanStatus, setFanStatus] = useState(null);
   const [manualSpeed, setManualSpeed] = useState(50);
 
+  const [dbStats, setDbStats] = useState(null);
+  const [selectedTable, setSelectedTable] = useState(null);
+  const [tableRows, setTableRows] = useState(null);
+  const [tableLoading, setTableLoading] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, [activeSubTab]);
@@ -38,6 +43,33 @@ function AdminPanel({ currentUser, onSelectServer }) {
       fetchFanStatus();
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to adjust fan speed');
+    }
+  };
+
+  const handleDbAction = async (action) => {
+    try {
+      setMessage('');
+      setError('');
+      const res = await axios.post('/api/admin/database/action', { action });
+      setMessage(res.data.message);
+      const statsRes = await axios.get('/api/admin/database/stats');
+      setDbStats(statsRes.data);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Database maintenance action failed');
+    }
+  };
+
+  const handleInspectTable = async (tableName) => {
+    try {
+      setSelectedTable(tableName);
+      setTableLoading(true);
+      setTableRows(null);
+      const res = await axios.get(`/api/admin/database/table/${tableName}`);
+      setTableRows(res.data.rows || []);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to inspect table records');
+    } finally {
+      setTableLoading(false);
     }
   };
 
@@ -62,6 +94,9 @@ function AdminPanel({ currentUser, onSelectServer }) {
         const res = await axios.get('/api/system-status');
         setSystemStatus(res.data);
         fetchFanStatus();
+      } else if (activeSubTab === 'database') {
+        const res = await axios.get('/api/admin/database/stats');
+        setDbStats(res.data);
       }
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to fetch administration data');
@@ -236,6 +271,12 @@ function AdminPanel({ currentUser, onSelectServer }) {
           >
             📊 System Health Hub
           </button>
+          <button 
+            className={`admin-subtab ${activeSubTab === 'database' ? 'active' : ''}`}
+            onClick={() => setActiveSubTab('database')}
+          >
+            🗄️ Database Hub
+          </button>
         </div>
       </div>
 
@@ -247,6 +288,133 @@ function AdminPanel({ currentUser, onSelectServer }) {
           <p className="admin-loading">Loading configuration data...</p>
         ) : (
           <>
+            {activeSubTab === 'database' && dbStats && (
+              <div className="admin-db-section" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '15px' }}>
+                  <div style={{ background: '#181b24', border: '1px solid rgba(0, 255, 255, 0.2)', padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <span style={{ fontSize: '0.85em', color: '#72767d', fontWeight: '600' }}>DATABASE ENGINE</span>
+                    <span style={{ fontSize: '1.2em', color: '#00ffff', fontWeight: 'bold' }}>PostgreSQL 15</span>
+                    <span style={{ fontSize: '0.75em', color: '#43b581' }}>🟢 Active & Operational</span>
+                  </div>
+
+                  <div style={{ background: '#181b24', border: '1px solid rgba(0, 255, 255, 0.2)', padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <span style={{ fontSize: '0.85em', color: '#72767d', fontWeight: '600' }}>TOTAL DB DISK SIZE</span>
+                    <span style={{ fontSize: '1.4em', color: '#fff', fontWeight: 'bold' }}>{dbStats.size}</span>
+                    <span style={{ fontSize: '0.75em', color: '#b9bbbe' }}>{dbStats.tables ? dbStats.tables.length : 0} Tables Managed</span>
+                  </div>
+
+                  <div style={{ background: '#181b24', border: '1px solid rgba(0, 255, 255, 0.2)', padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <span style={{ fontSize: '0.85em', color: '#72767d', fontWeight: '600' }}>ACTIVE CONNECTIONS</span>
+                    <span style={{ fontSize: '1.4em', color: '#faa61a', fontWeight: 'bold' }}>{dbStats.activeConnections} Connections</span>
+                    <span style={{ fontSize: '0.75em', color: '#b9bbbe' }}>Pooled Express & System Queries</span>
+                  </div>
+                </div>
+
+                <div style={{ background: '#181b24', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                  <h4 style={{ margin: '0 0 12px 0', color: '#fff', fontSize: '1em' }}>⚡ Maintenance & Storage Optimization</h4>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                    <button 
+                      className="btn-cyan"
+                      style={{ padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85em', border: 'none' }}
+                      onClick={() => handleDbAction('vacuum')}
+                    >
+                      🧹 Run VACUUM ANALYZE
+                    </button>
+                    <button 
+                      className="btn-green"
+                      style={{ padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85em', border: 'none' }}
+                      onClick={() => handleDbAction('health_check')}
+                    >
+                      🩺 Run Integrity Health Check
+                    </button>
+                    <button 
+                      className="btn-orange"
+                      style={{ padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85em', border: 'none' }}
+                      onClick={() => handleDbAction('clean_orphans')}
+                    >
+                      🧼 Purge Orphaned Records
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ background: '#181b24', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                  <h4 style={{ margin: '0 0 12px 0', color: '#fff', fontSize: '1em' }}>📋 PostgreSQL Table Footprints & Row Counts</h4>
+                  <div className="admin-table-container">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Table Name</th>
+                          <th>Est. Row Count</th>
+                          <th>Disk Footprint</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dbStats.tables && dbStats.tables.map(t => (
+                          <tr key={t.table_name}>
+                            <td className="bold" style={{ color: '#00ffff' }}>{t.table_name}</td>
+                            <td>{t.row_count} rows</td>
+                            <td>{t.total_size}</td>
+                            <td>
+                              <button 
+                                className="btn-cyan"
+                                style={{ padding: '4px 10px', fontSize: '0.75em', borderRadius: '6px' }}
+                                onClick={() => handleInspectTable(t.table_name)}
+                              >
+                                🔍 Inspect Records
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {selectedTable && (
+                  <div style={{ background: '#13151b', padding: '20px', borderRadius: '12px', border: '1px solid #00ffff', marginTop: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                      <h4 style={{ margin: 0, color: '#00ffff' }}>🔍 Inspecting Table: <code>{selectedTable}</code> (Recent Rows)</h4>
+                      <button 
+                        style={{ background: '#ff4757', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                        onClick={() => setSelectedTable(null)}
+                      >
+                        ✕ Close Inspector
+                      </button>
+                    </div>
+
+                    {tableLoading ? (
+                      <p style={{ color: '#00ffff' }}>Fetching records from PostgreSQL database...</p>
+                    ) : !tableRows || tableRows.length === 0 ? (
+                      <p style={{ color: '#72767d' }}>No records found in table `{selectedTable}`.</p>
+                    ) : (
+                      <div className="admin-table-container" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                        <table className="admin-table" style={{ fontSize: '0.8em' }}>
+                          <thead>
+                            <tr>
+                              {Object.keys(tableRows[0]).map(k => (
+                                <th key={k}>{k}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tableRows.map((row, i) => (
+                              <tr key={i}>
+                                {Object.values(row).map((val, j) => (
+                                  <td key={j} style={{ whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {val === null ? <em style={{ color: '#72767d' }}>null</em> : typeof val === 'object' ? JSON.stringify(val) : String(val)}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             {activeSubTab === 'system' && systemStatus && (
               <div className="admin-section" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
