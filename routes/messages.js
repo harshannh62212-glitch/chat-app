@@ -106,8 +106,8 @@ router.post('/server', authMiddleware, async (req, res) => {
     const { chatroomId, content } = req.body;
     const senderId = req.userId;
 
-    if (!chatroomId || !content) {
-      return res.status(400).json({ error: 'chatroomId and content required' });
+    if (!chatroomId || !content || content.trim().length < 3) {
+      return res.status(400).json({ error: 'Message must be at least 3 characters long' });
     }
 
     const insertResult = await query(
@@ -141,8 +141,8 @@ router.post('/dm', authMiddleware, async (req, res) => {
     const { recipientId, content } = req.body;
     const senderId = req.userId;
 
-    if (!recipientId || !content) {
-      return res.status(400).json({ error: 'recipientId and content required' });
+    if (!recipientId || !content || content.trim().length < 3) {
+      return res.status(400).json({ error: 'Message must be at least 3 characters long' });
     }
 
     const insertResult = await query(

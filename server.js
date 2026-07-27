@@ -881,6 +881,14 @@ io.on('connection', (socket) => {
   socket.on('send-message', (data) => {
     const { senderId, content, serverId, dmWith, username, avatar_url, chatroom_id } = data;
 
+    if (!content || content.trim().length < 3) {
+      socket.emit('message-blocked', {
+        reason: 'Message must be at least 3 characters long.',
+        id: data.id
+      });
+      return;
+    }
+
     // ── Layer 1: Instant keyword/pattern block (no AI, zero latency) ──
     const { blocked, reason } = containsBannedWords(content);
     if (blocked) {

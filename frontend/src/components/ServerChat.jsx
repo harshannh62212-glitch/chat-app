@@ -114,6 +114,11 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     e.preventDefault();
     if (!messageInput.trim() || !selectedChatroom) return;
 
+    if (messageInput.trim().length < 3) {
+      alert('Message must be at least 3 characters long.');
+      return;
+    }
+
     if (!checkRateLimit(currentUser.is_admin)) {
       alert('Slow down! You can only send 1 message per second.');
       return;

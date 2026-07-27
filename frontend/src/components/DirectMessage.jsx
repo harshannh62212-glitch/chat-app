@@ -125,6 +125,11 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
     e.preventDefault();
     if (!messageInput.trim()) return;
 
+    if (messageInput.trim().length < 3) {
+      alert('Message must be at least 3 characters long.');
+      return;
+    }
+
     if (!checkRateLimit(currentUser.is_admin)) {
       alert('Slow down! You can only send 1 message per second.');
       return;
