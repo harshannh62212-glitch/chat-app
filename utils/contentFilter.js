@@ -114,11 +114,11 @@ const BYPASS_PATTERNS = [
   /n\*+g+[ae]/gi,                            // n*gga, n**ga
 
   // ── porn/sex/nude (strict word-boundary) ──
-  /(?:^|[\s,!?.])porn(?:$|[\s,!?.]|hub|ography|star|site)/gi,
+  /(?:^|[\s,!?.])p[\s\W_]*o[\s\W_]*r[\s\W_]*n(?:$|[\s,!?.]|hub|ography|star|site)/gi, // caught "p o r n hub"
   /p[o0]r[n]/gi,
   /pr[o0][n]/gi,
-  // sex — NOT 'Scunthorpe' (scun-THORPE), not 'sexy', not 'sexual harassment' discussion
-  /(?:^|[\s,!?.])sex(?:$|[\s,!?.]|ting|ted|ual\s+act|cam|tape)/gi,
+  // sex — NOT 'Scunthorpe' (scun-THORPE), not 'sexy', not 'external' or 'excited'
+  /(?:^|[\s,!?.])s[\s\W_]*e[\s\W_]*x(?:$|[\s,!?.]|ting|ted|ual\s+act|cam|tape)/gi,
   /s[3][x]/gi,                               // s3x
   /n[\s\W_]*u[\s\W_]*d[\s\W_]*[e3]/gi,
   /n[o0][o0]d[s]?/gi,                       // n00ds
