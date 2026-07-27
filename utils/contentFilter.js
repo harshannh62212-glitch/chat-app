@@ -6,9 +6,11 @@
 
 // ─── BANNED WORD LIST ────────────────────────────────────────────────────────
 const BANNED_WORDS = [
-  // ── Profanity ──
-  'damn', 'dammit', 'goddamn', 'hell', 'crap', 'crappy', 'piss', 'pissed',
-  'bitch', 'bitches', 'bitching', 'bastard', 'ass', 'asshole', 'assholes',
+  // Mild profanity
+  'damn', 'crap', 'piss', 'bitch', 'bastard', 'ass', 'asshole',
+  'dammit', 'goddamn', 'crappy', 'shitty',
+  // Note: 'hell' removed from standalone list — too many false positives (game difficulty, 'hello' etc.)
+  'assholes',
   'dumbass', 'jackass', 'smartass', 'lardass', 'badass',
   'fuck', 'fucker', 'fuckers', 'fucking', 'fucked', 'fuckhead', 'fuckface',
   'motherfucker', 'motherfucking', 'clusterfuck',
@@ -71,39 +73,67 @@ const BANNED_WORDS = [
 // ─── BYPASS PATTERNS (l33tspeak, spacing tricks, etc.) ───────────────────────
 // These regex patterns catch common attempts to evade the word filter
 const BYPASS_PATTERNS = [
-  // f*ck, f.u.c.k, f u c k, fvck, ph*ck
-  /f[\s\W_]*u[\s\W_]*c[\s\W_]*k/gi,
-  /f[\s\W_]*[@a4][\s\W_]*g/gi,              // fag bypass
-  /s[\s\W_]*h[\s\W_]*i[\s\W_]*t/gi,
-  /b[\s\W_]*i[\s\W_]*t[\s\W_]*c[\s\W_]*h/gi,
-  /(?<![a-z])a[\s\W_]*s[\s\W_]*s(?![a-z])/gi,  // ass — not 'lass', 'pass', 'class'
-  /c[\s\W_]*u[\s\W_]*n[\s\W_]*t/gi,
-  /d[\s\W_]*i[\s\W_]*c[\s\W_]*k/gi,
-  /c[\s\W_]*o[\s\W_]*c[\s\W_]*k/gi,
-  /n[\s\W_]*[i1!][\s\W_]*g[\s\W_]*g[\s\W_]*[ae@3]/gi,  // n-word bypass
-  /p[\s\W_]*o[\s\W_]*r[\s\W_]*n/gi,
-  /(?<![a-z])s[\s\W_]*e[\s\W_]*x(?![a-z])/gi,  // sex but NOT 'sexy' context — standalone
-  /n[\s\W_]*u[\s\W_]*d[\s\W_]*[e3]/gi,
-  // l33tspeak substitutions
+  // ── f*ck variants ──
+  /f[\s\W_]*u+[\s\W_]*c[\s\W_]*k/gi,         // fuck, f u c k, fuuck
+  /f[4@][\s\W_]*c[\s\W_]*k/gi,               // f4ck, f@ck
+  /f[\s\W_]*[@a4]+[\s\W_]*g/gi,              // fag bypass
   /fv+ck/gi,
-  /ph+uck/gi,
+  /ph+u*ck/gi,                               // phuck, phck
+  /f\*+c?k/gi,                               // f*ck, f**ck
+
+  // ── shit variants ──
+  /s[\s\W_]*h[\s\W_]*[i1!][\s\W_]*t/gi,     // s.h.i.t, sh1t
   /sh[i1!][t7]/gi,
-  /[a@4][s$5]{2}/gi,     // a$$, @ss, a55
-  /\$h[i1!][t7]/gi,      // $hit
-  /b[i1!][t7]ch/gi,      // b1tch
-  /[ck][u*][n][t7]/gi,   // c*nt
-  // Number substitution bypasses (pr0n, n00ds, s3x)
-  /pr[o0][n]/gi,          // pr0n
-  /n[o0][o0]d[s]?/gi,    // n00ds, n0ods
-  /s[3e][x]/gi,           // s3x — standalone (won't match 'excited' since no trailing letters)
-  /p[o0]r[n]/gi,          // p0rn
-  // Literal asterisk used as vowel placeholder (f*ck, s*it, b*tch, c*nt)
-  /f\*+c?k/gi,            // f*ck, f**ck
-  /s\*+[i1]t/gi,          // s*it, s**it
-  /b\*+tch/gi,            // b*tch
-  /c\*+nt/gi,             // c*nt
-  /d\*+ck/gi,             // d*ck
-  /[a@]\*+[s$]/gi,        // a*s, a**s
+  /\$h[i1!][t7]/gi,                          // $hit
+  /sh[iíï]+[a@]t/gi,                        // shiat, shïat
+  /s\*+[i1]t/gi,                             // s*it
+
+  // ── bitch variants ──
+  /b[\s\W_]*[i1!][\s\W_]*t[\s\W_]*c[\s\W_]*h/gi,
+  /b[i1!][t7]ch/gi,
+  /b\*+tch/gi,
+  /b[y][t][c][h]/gi,                        // bytch
+  /b[iíï]+tch/gi,                           // bïtch
+
+  // ── ass variants (word boundary - NOT class/pass/bass/massacre/Assassins) ──
+  // Only match 'ass' at START of word or after space/punctuation
+  /(?:^|[\s,!?.])(ass)(?:hole|hat|wipe|clown|face|head|bag|$|[\s,!?.])/gi,
+  /[a@4][s$5]{2}(?!ass|in|ign)/gi,           // a$$, @ss but not 'assign'
+
+  // ── cunt/cock/dick ──
+  /c[\s\W_]*u[\s\W_]*n[\s\W_]*t/gi,
+  /[ck]\*+nt/gi,
+  /d[\s\W_]*[i1!][\s\W_]*c[\s\W_]*k/gi,
+  /d\*+ck/gi,
+  // cock — NOT 'cockney', 'cockatoo', 'peacock' etc — only standalone or in compound slurs
+  /(?:^|[\s,!?.])cock(?:sucker|head|face|$|[\s,!?.])/gi,
+  /c[\s\W_]*o[\s\W_]*c[\s\W_]*k[\s\W_]*s[\s\W_]*u/gi,  // cocksu... (cocksucker spacing bypass)
+
+  // ── n-word variants ──
+  /n[\s\W_]*[i1!][\s\W_]*g[\s\W_]*g[\s\W_]*[ae@3*]/gi,
+  /n\*+g+[ae]/gi,                            // n*gga, n**ga
+
+  // ── porn/sex/nude (strict word-boundary) ──
+  /(?:^|[\s,!?.])porn(?:$|[\s,!?.]|hub|ography|star|site)/gi,
+  /p[o0]r[n]/gi,
+  /pr[o0][n]/gi,
+  // sex — NOT 'Scunthorpe' (scun-THORPE), not 'sexy', not 'sexual harassment' discussion
+  /(?:^|[\s,!?.])sex(?:$|[\s,!?.]|ting|ted|ual\s+act|cam|tape)/gi,
+  /s[3][x]/gi,                               // s3x
+  /n[\s\W_]*u[\s\W_]*d[\s\W_]*[e3]/gi,
+  /n[o0][o0]d[s]?/gi,                       // n00ds
+
+  // ── cunt — NOT 'Scunthorpe' (starts with 'scun') ──
+  /(?<![a-z])cunt/gi,                        // cunt but NOT scunthorpe
+
+  // ── Repeated vowel bypass (fuuuck, shiiit) ──
+  /f[uú]{2,}c?k/gi,                          // fuuuck, fuuck
+  /sh[iíï]{2,}t/gi,                          // shiiit
+  /n[iíï]{2,}g+[ae]/gi,                      // niiiiga
+
+  // ── Number/symbol substitution ──
+  /\$h[i1!][t7]/gi,
+  /[a@]\*+[s$]/gi,
 ];
 
 let customBannedWords = [];
