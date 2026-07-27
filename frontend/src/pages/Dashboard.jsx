@@ -137,13 +137,39 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
           🧭
         </div>
 
+        {user && user.is_admin && (
+          <div 
+            className="rail-icon admin-rail-btn"
+            onClick={() => {
+              window.history.pushState({}, '', '/moderation');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+            title="Admin & Database Management Hub"
+            style={{
+              marginTop: 'auto',
+              background: 'rgba(0, 255, 255, 0.12)',
+              border: '1px solid rgba(0, 255, 255, 0.3)',
+              color: '#00ffff',
+              marginBottom: '10px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '20px',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            🛡️
+          </div>
+        )}
+
         {/* Global Bug Report Button at the bottom of the server rail */}
         <div 
           className="rail-icon bug-report-rail-btn"
           onClick={() => setShowGlobalReportModal(true)}
           title="Report Bug / System Glitch"
           style={{
-            marginTop: 'auto',
+            marginTop: user && user.is_admin ? '0' : 'auto',
             background: 'rgba(255, 71, 87, 0.1)',
             border: '1px solid rgba(255, 71, 87, 0.2)',
             color: '#ff4757',
