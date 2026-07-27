@@ -98,7 +98,7 @@ const BYPASS_PATTERNS = [
   // ── ass variants (word boundary - NOT class/pass/bass/massacre/Assassins) ──
   // Only match 'ass' at START of word or after space/punctuation
   /(?:^|[\s,!?.])(ass)(?:hole|hat|wipe|clown|face|head|bag|$|[\s,!?.])/gi,
-  /[a@4][s$5]{2}(?!ass|in|ign)/gi,           // a$$, @ss but not 'assign'
+  /(?<![a-z])[a@4][s$5]{2}(?!ass|in|ign)/gi,           // a$$, @ss but not 'assign' or 'class'
 
   // ── cunt/cock/dick ──
   /c[\s\W_]*u[\s\W_]*n[\s\W_]*t/gi,
@@ -192,7 +192,11 @@ function containsBannedWords(text) {
   // Check bypass patterns first (catches l33tspeak etc.)
   for (const pattern of BYPASS_PATTERNS) {
     pattern.lastIndex = 0; // reset stateful regex
-    if (pattern.test(normalized) || pattern.test(lower)) {
+    if (pattern.test(normalized)) {
+      return { blocked: true, reason: 'bypass_pattern' };
+    }
+    pattern.lastIndex = 0; // reset stateful regex
+    if (pattern.test(lower)) {
       return { blocked: true, reason: 'bypass_pattern' };
     }
   }
