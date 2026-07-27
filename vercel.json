@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://dry-horses-stare.loca.lt/api/$1"
+      "destination": "https://announced-acquisitions-concord-favorite.trycloudflare.com/api/$1"
     },
     {
       "source": "/socket.io/(.*)",
-      "destination": "https://dry-horses-stare.loca.lt/socket.io/$1"
+      "destination": "https://announced-acquisitions-concord-favorite.trycloudflare.com/socket.io/$1"
     },
     {
       "source": "/(.*)",
