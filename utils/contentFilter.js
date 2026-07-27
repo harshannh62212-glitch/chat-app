@@ -13,6 +13,7 @@ const BANNED_WORDS = [
   'assholes',
   'dumbass', 'jackass', 'smartass', 'lardass', 'badass',
   'fuck', 'fucker', 'fuckers', 'fucking', 'fucked', 'fuckhead', 'fuckface',
+  'fck', 'fcked', 'fckin', 'fckn', 'fcker', 'fuk', 'fukk', 'fuc',
   'motherfucker', 'motherfucking', 'clusterfuck',
   'shit', 'shitty', 'shitting', 'shithead', 'bullshit', 'horseshit',
   'dick', 'dickhead', 'dickface',
@@ -73,13 +74,12 @@ const BANNED_WORDS = [
 // ─── BYPASS PATTERNS (l33tspeak, spacing tricks, etc.) ───────────────────────
 // These regex patterns catch common attempts to evade the word filter
 const BYPASS_PATTERNS = [
-  // ── f*ck variants ──
-  /f[\s\W_]*u+[\s\W_]*c[\s\W_]*k/gi,         // fuck, f u c k, fuuck
-  /f[4@][\s\W_]*c[\s\W_]*k/gi,               // f4ck, f@ck
-  /f[\s\W_]*[@a4]+[\s\W_]*g/gi,              // fag bypass
-  /fv+ck/gi,
-  /ph+u*ck/gi,                               // phuck, phck
-  /f\*+c?k/gi,                               // f*ck, f**ck
+  // ── f*ck / fck variants ──
+  /(?<![a-z])f[\s\W_]*[*@#$%.~_\-]*[\s\W_]*[u0o*@4v]*[\s\W_]*c*[\s\W_]*k+(?:ing|in|ed|er|s|z)?(?![a-z])/gi, // fck, f*ck, f.ck, f-ck, f_ck, f**k, f u c k, fuuuck
+  /(?<![a-z])f[\s\W_]*[u0o*@4v]+[\s\W_]*c*(?![a-z])/gi,                      // fuc, fuk, fukk
+  /ph[u*]*c*k+(?:ing|in|ed|er|s|z)?/gi,                                      // phuck, phck
+  /f\*+k+/gi,                                                               // f*k, f**k
+  /f[\s\W_]*[@a4]+[\s\W_]*g/gi,                                             // fag bypass
 
   // ── shit variants ──
   /s[\s\W_]*h[\s\W_]*[i1!][\s\W_]*t/gi,     // s.h.i.t, sh1t
