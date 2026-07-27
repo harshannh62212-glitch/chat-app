@@ -121,6 +121,14 @@ function App() {
     setShowAuth(false);
   };
 
+  if (loadingApp) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw', background: '#0f1015', color: '#00ffff', fontFamily: "'Outfit', sans-serif" }}>
+        <div style={{ fontSize: '1.2em', fontWeight: 'bold', letterSpacing: '1px' }}>LOADING PORTAL...</div>
+      </div>
+    );
+  }
+
   return (
     <div className={`app ${showThermals ? 'thermals-view' : showModeration ? 'moderation-view' : currentUser ? 'dashboard-view' : 'public-view'}`}>
       {serverSleeping && (
