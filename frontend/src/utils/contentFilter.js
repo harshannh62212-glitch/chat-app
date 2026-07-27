@@ -136,6 +136,34 @@ export async function loadCustomBannedWords() {
   }
 }
 
+export function containsBannedWords(text) {
+  if (!text || typeof text !== 'string') return { blocked: false, reason: null };
+  const lower = text.toLowerCase();
+
+  for (const pattern of BYPASS_PATTERNS) {
+    pattern.lastIndex = 0;
+    if (pattern.test(lower)) {
+      return { blocked: true, reason: 'bypass_pattern' };
+    }
+  }
+
+  for (const word of BANNED_WORDS) {
+    const regex = new RegExp(`(?:^|\\b)${word}(?:$|\\b)`, 'i');
+    if (regex.test(lower)) {
+      return { blocked: true, reason: `banned_word:${word}` };
+    }
+  }
+
+  for (const word of customBannedWords) {
+    const regex = new RegExp(`(?:^|\\b)${word}(?:$|\\b)`, 'i');
+    if (regex.test(lower)) {
+      return { blocked: true, reason: `custom_word:${word}` };
+    }
+  }
+
+  return { blocked: false, reason: null };
+}
+
 export function filterContent(text) {
   if (!text || typeof text !== 'string') return text;
   let filtered = text;

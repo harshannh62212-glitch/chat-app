@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const { query } = require('../db/database');
 const { authMiddleware } = require('../middleware/auth');
 
+const { containsBannedWords } = require('../utils/contentFilter');
+
 const router = express.Router();
 
 router.post('/register', async (req, res) => {
@@ -12,6 +14,17 @@ router.post('/register', async (req, res) => {
 
     if (!username || !password) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const trimmedUsername = username.trim();
+
+    if (trimmedUsername.length < 3) {
+      return res.status(400).json({ error: 'Username must be at least 3 characters long' });
+    }
+
+    const { blocked, reason } = containsBannedWords(trimmedUsername);
+    if (blocked) {
+      return res.status(400).json({ error: 'Username contains prohibited words or inappropriate content' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);

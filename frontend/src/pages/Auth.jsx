@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import Logo from '../components/Logo';
+import { containsBannedWords } from '../utils/contentFilter';
 import '../styles/Auth.css';
 
 function Auth({ onLogin, onBack }) {
@@ -31,6 +32,20 @@ function Auth({ onLogin, onBack }) {
 
     const usernameTrimmed = formData.username.trim();
     const password = formData.password;
+
+    if (isRegister) {
+      if (usernameTrimmed.length < 3) {
+        setError('Username must be at least 3 characters long.');
+        setLoading(false);
+        return;
+      }
+      const { blocked } = containsBannedWords(usernameTrimmed);
+      if (blocked) {
+        setError('Username contains prohibited words or offensive content.');
+        setLoading(false);
+        return;
+      }
+    }
 
     try {
       if (isRegister) {
