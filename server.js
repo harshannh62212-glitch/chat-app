@@ -890,9 +890,13 @@ Respond ONLY with this JSON:
 
   // 1. Try local Ollama (Llama 3.2:3b)
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1200);
+
     const response = await fetch('http://host.docker.internal:11434/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         model: 'llama3.2:3b',
         prompt: prompt,
@@ -900,6 +904,8 @@ Respond ONLY with this JSON:
         stream: false
       })
     });
+
+    clearTimeout(timeoutId);
 
     if (response.ok) {
       const json = await response.json();
@@ -918,14 +924,20 @@ Respond ONLY with this JSON:
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
       try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: { responseMimeType: 'application/json' }
           })
         });
+
+        clearTimeout(timeoutId);
 
         if (response.ok) {
           const json = await response.json();
@@ -1085,9 +1097,13 @@ async function runGeminiModeration() {
 
       // Try local Ollama (Llama 3.2) first
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
+
         const response = await fetch('http://host.docker.internal:11434/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
             model: 'llama3.2',
             prompt: prompt,
@@ -1095,6 +1111,8 @@ async function runGeminiModeration() {
             stream: false
           })
         });
+
+        clearTimeout(timeoutId);
 
         if (response.ok) {
           const json = await response.json();
@@ -1110,14 +1128,20 @@ async function runGeminiModeration() {
         if (apiKey) {
           try {
             aiSource = 'GEMINI';
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              signal: controller.signal,
               body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: { responseMimeType: 'application/json' }
               })
             });
+
+            clearTimeout(timeoutId);
 
             if (response.ok) {
               const json = await response.json();
