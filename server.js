@@ -44,6 +44,7 @@ const serverRoutes = require('./routes/servers');
 const messageRoutes = require('./routes/messages');
 const userRoutes = require('./routes/users');
 const reportRoutes = require('./routes/report');
+const spotifyRoutes = require('./routes/spotify');
 const { query } = require('./db/database');
 const { filterContent, containsBannedWords } = require('./utils/contentFilter');
 require('./backend/scripts/healthCheck');
@@ -110,6 +111,7 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'frontend/dist')));
 
 const adminRoutes = require('./routes/admin');
 
@@ -141,6 +143,7 @@ app.use('/api/servers', serverRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/spotify', spotifyRoutes);
 app.use('/api', reportRoutes);
 
 const os = require('os');
@@ -202,6 +205,8 @@ function getMemoryBandwidth() {
   return (maxBandwidth * (0.15 + usedPercent * 0.45)).toFixed(1) + ' GB/s';
 }
 
+const { execSync } = require('child_process');
+
 function getPowerSupplyInfo() {
   let batteryPercent = 100;
   let batteryStatus = 'Full';
@@ -211,39 +216,58 @@ function getPowerSupplyInfo() {
   let voltage = 12.0;
   let current = 1.0;
 
-
   try {
-    const batPath = '/sys/class/power_supply/BAT0';
-    const acPath = '/sys/class/power_supply/AC';
-
-    if (fs.existsSync(`${acPath}/online`)) {
-      acOnline = fs.readFileSync(`${acPath}/online`, 'utf8').trim() === '1';
+    if (process.platform === 'darwin') {
+      try {
+        const output = execSync('pmset -g batt', { encoding: 'utf8', timeout: 500 });
+      acOnline = output.includes("drawing from 'AC Power'");
+      
+      const percentMatch = output.match(/(\d+)%/);
+      if (percentMatch) batteryPercent = parseInt(percentMatch[1], 10);
+      
+      if (output.includes('discharging')) {
+        batteryStatus = 'Discharging';
+      } else if (output.includes('charging')) {
+        batteryStatus = 'Charging';
+      } else if (output.includes('charged') || output.includes('Full') || acOnline) {
+        batteryStatus = 'Full';
+      }
+    } catch (e) {
+      console.warn('macOS battery info helper error:', e.message);
     }
+  } else {
+    try {
+      const batPath = '/sys/class/power_supply/BAT0';
+      const acPath = '/sys/class/power_supply/AC';
 
-    if (fs.existsSync(`${batPath}/capacity`)) {
-      batteryPercent = parseInt(fs.readFileSync(`${batPath}/capacity`, 'utf8').trim()) || 100;
-    }
-    if (fs.existsSync(`${batPath}/status`)) {
-      batteryStatus = fs.readFileSync(`${batPath}/status`, 'utf8').trim();
-    }
+      if (fs.existsSync(`${acPath}/online`)) {
+        acOnline = fs.readFileSync(`${acPath}/online`, 'utf8').trim() === '1';
+      }
 
+      if (fs.existsSync(`${batPath}/capacity`)) {
+        batteryPercent = parseInt(fs.readFileSync(`${batPath}/capacity`, 'utf8').trim()) || 100;
+      }
+      if (fs.existsSync(`${batPath}/status`)) {
+        batteryStatus = fs.readFileSync(`${batPath}/status`, 'utf8').trim();
+      }
 
+      if (fs.existsSync(`${batPath}/voltage_now`)) {
+        const rawV = parseInt(fs.readFileSync(`${batPath}/voltage_now`, 'utf8').trim());
+        voltage = rawV / 1000000;
+      }
 
-    if (fs.existsSync(`${batPath}/voltage_now`)) {
-      const rawV = parseInt(fs.readFileSync(`${batPath}/voltage_now`, 'utf8').trim());
-      voltage = rawV / 1000000;
-    }
+      if (fs.existsSync(`${batPath}/power_now`)) {
+        const rawP = parseInt(fs.readFileSync(`${batPath}/power_now`, 'utf8').trim());
+        watts = rawP / 1000000;
+      } else if (fs.existsSync(`${batPath}/current_now`)) {
+        const rawC = parseInt(fs.readFileSync(`${batPath}/current_now`, 'utf8').trim());
+        current = rawC > 100000 ? rawC / 1000000 : rawC / 1000;
+        watts = voltage * current;
+      }
+    } catch (e) {}
+  }
 
-    if (fs.existsSync(`${batPath}/power_now`)) {
-      const rawP = parseInt(fs.readFileSync(`${batPath}/power_now`, 'utf8').trim());
-      watts = rawP / 1000000;
-    } else if (fs.existsSync(`${batPath}/current_now`)) {
-      const rawC = parseInt(fs.readFileSync(`${batPath}/current_now`, 'utf8').trim());
-      current = rawC > 100000 ? rawC / 1000000 : rawC / 1000;
-      watts = voltage * current;
-    }
-
-    if (watts <= 0 || isNaN(watts)) watts = 12.5;
+  if (watts <= 0 || isNaN(watts)) watts = 12.5;
 
     // ── Low-Battery Auto-Save Guardian (Real Implementation) ─────────────────
     // Triggers when battery ≤ 15% and discharging.
@@ -454,8 +478,6 @@ let lastAppliedPwm = null;
 let lastAppliedEnableMode = null;
 let lastAppliedBiosMode = null;
 
-const { execSync } = require('child_process');
-
 // Always recompile dell_smm to /usr/local/bin (outside /app volume) on every startup
 if (fs.existsSync('/app/dell_smm.c')) {
   try {
@@ -490,6 +512,10 @@ function setFanViaDellSMM(pwm) {
   return false;
 }
 
+// Simulation variables for macOS/non-Dell machines
+let simulatedTempC = 45.0;
+let simulatedRpm = 0;
+
 function enableDellBiosFanControl() {
   if (lastAppliedBiosMode === 'enabled') return;
   try {
@@ -501,6 +527,9 @@ function enableDellBiosFanControl() {
 }
 
 function readCpuTempC(fanPath) {
+  if (!fs.existsSync(fanPath)) {
+    return Math.round(simulatedTempC);
+  }
   let tempC = 45;
   try {
     if (fs.existsSync(`${fanPath}/temp1_input`)) {
@@ -512,6 +541,9 @@ function readCpuTempC(fanPath) {
 }
 
 function readCpuFanRpm(fanPath) {
+  if (!fs.existsSync(fanPath)) {
+    return simulatedRpm;
+  }
   try {
     if (fs.existsSync(`${fanPath}/fan1_input`)) {
       return parseInt(fs.readFileSync(`${fanPath}/fan1_input`, 'utf8').trim()) || 0;
@@ -526,7 +558,35 @@ let tickCount = 0;
 function applyFanHardwareState() {
   try {
     const fanPath = getDellFanPath();
+    const hasRealHardware = fs.existsSync(fanPath);
     tickCount++;
+
+    // Run Simulation Updates if no real hardware is found
+    if (!hasRealHardware) {
+      let targetSimRpm = 0;
+      if (currentFanState.mode === 'bios_auto') {
+        targetSimRpm = 2000;
+      } else if (currentFanState.mode === 'auto') {
+        if (simulatedTempC < 45) targetSimRpm = 2400;
+        else if (simulatedTempC < 55) targetSimRpm = 3000;
+        else if (simulatedTempC < 65) targetSimRpm = 3700;
+        else targetSimRpm = 5300;
+      } else { // manual
+        targetSimRpm = Math.round((currentFanState.manualPercent / 100) * 5300);
+      }
+
+      // RPM transitions smoothly towards target
+      simulatedRpm = Math.round(simulatedRpm + (targetSimRpm - simulatedRpm) * 0.15);
+
+      // Temp updates based on load (stress) & cooling (fan RPM)
+      const isStressActive = stressProcs && stressProcs.length > 0;
+      const heatAdded = isStressActive ? 3.5 : 0.4;
+      const cooling = (simulatedRpm / 5300) * 2.8;
+      
+      // Update simulated temperature
+      simulatedTempC = Math.max(38, Math.min(98, simulatedTempC + heatAdded - cooling + (Math.random() * 0.4 - 0.2)));
+      simulatedTempC = Math.round(simulatedTempC * 10) / 10;
+    }
 
     if (currentFanState.mode === 'bios_auto') {
       enableDellBiosFanControl();
@@ -600,6 +660,31 @@ function getBatteryInfo() {
   let percent = 100;
   let status = 'Unknown';
   let isCharging = true;
+  
+  if (process.platform === 'darwin') {
+    try {
+      const output = execSync('pmset -g batt', { encoding: 'utf8', timeout: 500 });
+      const acOnline = output.includes("drawing from 'AC Power'");
+      
+      const percentMatch = output.match(/(\d+)%/);
+      if (percentMatch) percent = parseInt(percentMatch[1], 10);
+      
+      if (output.includes('discharging')) {
+        status = 'Discharging';
+        isCharging = false;
+      } else if (output.includes('charging')) {
+        status = 'Charging';
+        isCharging = true;
+      } else if (output.includes('charged') || output.includes('Full') || acOnline) {
+        status = 'Full';
+        isCharging = true;
+      }
+      return { percent, status, isCharging };
+    } catch (e) {
+      console.warn('macOS battery info fallback error:', e.message);
+    }
+  }
+
   try {
     if (fs.existsSync('/sys/class/power_supply/BAT0/capacity')) {
       percent = parseInt(fs.readFileSync('/sys/class/power_supply/BAT0/capacity', 'utf8').trim()) || 100;
@@ -757,6 +842,14 @@ app.post('/api/system/stress/stop', (req, res) => {
   res.json({ message: 'Stress test stopped' });
 });
 
+// Serve index.html for React routing fallback
+app.get(/.*/, (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/ping')) {
+    return next();
+  }
+  res.sendFile(path.join(__dirname, 'frontend/dist/index.html'));
+});
+
 // Generic error handling middleware
 app.use((err, req, res, next) => {
   logger.error({ err }, 'Unhandled error');
@@ -878,12 +971,18 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('send-message', (data) => {
+  socket.on('send-message', (data, ack) => {
     const { senderId, content, serverId, dmWith, username, avatar_url, chatroom_id } = data;
 
-    if (!content || content.trim().length < 3) {
+    if (!content || content.trim().length < 2) {
+      if (typeof ack === 'function') {
+        ack({
+          success: false,
+          reason: 'Message must be at least 2 characters long.',
+        });
+      }
       socket.emit('message-blocked', {
-        reason: 'Message must be at least 3 characters long.',
+        reason: 'Message must be at least 2 characters long.',
         id: data.id
       });
       return;

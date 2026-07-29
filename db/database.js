@@ -177,6 +177,65 @@ async function createTables() {
       );
     `);
 
+    // Spotify Playlists table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS spotify_playlists (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        cover_url VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Spotify Playlist Tracks table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS spotify_playlist_tracks (
+        id SERIAL PRIMARY KEY,
+        playlist_id INTEGER NOT NULL REFERENCES spotify_playlists(id) ON DELETE CASCADE,
+        track_id VARCHAR(255) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        artist VARCHAR(255) NOT NULL,
+        album VARCHAR(255),
+        duration INTEGER,
+        preview_url TEXT,
+        cover_url TEXT,
+        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Spotify Liked Tracks table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS spotify_liked_tracks (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        track_id VARCHAR(255) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        artist VARCHAR(255) NOT NULL,
+        album VARCHAR(255),
+        duration INTEGER,
+        preview_url TEXT,
+        cover_url TEXT,
+        liked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, track_id)
+      );
+    `);
+
+    // Spotify History table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS spotify_history (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        track_id VARCHAR(255) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        artist VARCHAR(255) NOT NULL,
+        album VARCHAR(255),
+        cover_url TEXT,
+        played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Archive tables for banned users
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.archived_users (

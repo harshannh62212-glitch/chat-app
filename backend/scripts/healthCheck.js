@@ -34,7 +34,7 @@ function sendSMS(message) {
 module.exports = { sendSMS };
 
 
-const HEALTH_URL = process.env.HEALTH_URL || 'http://localhost:3000/api/health';
+const HEALTH_URL = process.env.HEALTH_URL || `http://localhost:${process.env.PORT || 8000}/api/health`;
 const STATUS_FILE = path.resolve(__dirname, '../../public/healthStatus.json');
 
 async function checkHealth() {
