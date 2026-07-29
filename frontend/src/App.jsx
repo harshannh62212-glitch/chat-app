@@ -5,7 +5,6 @@ import Dashboard from './pages/Dashboard';
 import SpotifyDashboard from './pages/SpotifyDashboard';
 import GamesDashboard from './pages/GamesDashboard';
 import LandingPage from './pages/LandingPage';
-import ProxySettings from './pages/ProxySettings';
 import axios from 'axios';
 import './styles/App.css';
 
@@ -22,7 +21,6 @@ function App() {
   const [showAuth, setShowAuth] = useState(false);
   const [showThermals, setShowThermals] = useState(window.location.pathname === '/thermals');
   const [showModeration, setShowModeration] = useState(window.location.pathname === '/moderation');
-  const [showProxyPage, setShowProxyPage] = useState(window.location.pathname === '/proxy');
   const [loadingApp, setLoadingApp] = useState(true);
   const [moderationPassword, setModerationPassword] = useState('');
   const [moderationUnlocked, setModerationUnlocked] = useState(false);
@@ -33,7 +31,6 @@ function App() {
     const handlePopState = () => {
       setShowThermals(window.location.pathname === '/thermals');
       setShowModeration(window.location.pathname === '/moderation');
-      setShowProxyPage(window.location.pathname === '/proxy');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -189,8 +186,6 @@ function App() {
             </button>
           </div>
         </div>
-      ) : showProxyPage ? (
-        <ProxySettings />
       ) : showThermals ? (
         <ThermalsPage onBack={() => { window.history.pushState({}, '', '/'); setShowThermals(false); }} />
       ) : showModeration ? (

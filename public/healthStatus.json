@@ -1,5 +1,5 @@
 {
-  "ok": false,
-  "timestamp": "2026-07-29T05:45:07.273Z",
-  "error": "read ECONNRESET"
+  "ok": true,
+  "timestamp": "2026-07-29T20:12:34.254Z",
+  "message": "OK"
 }

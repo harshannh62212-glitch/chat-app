@@ -27,6 +27,11 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Username contains prohibited words or inappropriate content' });
     }
 
+    const existing = await query('SELECT 1 FROM users WHERE LOWER(username) = LOWER($1)', [trimmedUsername]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     
     const result = await query(
@@ -76,12 +81,12 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password required' });
     }
 
-    const result = await query('SELECT * FROM users WHERE username = $1', [username]);
+    const result = await query('SELECT * FROM users WHERE LOWER(username) = LOWER($1)', [username]);
     const user = result.rows[0];
 
     if (!user) {
       // Check if user is archived (globally banned)
-      const archivedResult = await query('SELECT 1 FROM archived_users WHERE username = $1', [username]);
+      const archivedResult = await query('SELECT 1 FROM archived_users WHERE LOWER(username) = LOWER($1)', [username]);
       if (archivedResult.rows.length > 0) {
         return res.status(403).json({ error: 'Your account has been globally banned' });
       }

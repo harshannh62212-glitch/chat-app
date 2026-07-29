@@ -45,7 +45,6 @@ const messageRoutes = require('./routes/messages');
 const userRoutes = require('./routes/users');
 const reportRoutes = require('./routes/report');
 const spotifyRoutes = require('./routes/spotify');
-const proxyRoutes = require('./routes/proxy');
 const { query } = require('./db/database');
 const { filterContent, containsBannedWords } = require('./utils/contentFilter');
 require('./backend/scripts/healthCheck');
@@ -145,7 +144,6 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/spotify', spotifyRoutes);
-app.use('/api/proxy', proxyRoutes);
 app.use('/api', reportRoutes);
 
 const os = require('os');

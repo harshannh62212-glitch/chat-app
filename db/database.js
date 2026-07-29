@@ -137,6 +137,7 @@ async function createTables() {
       CREATE INDEX IF NOT EXISTS idx_server_members_user_server ON server_members(user_id, server_id);
       CREATE INDEX IF NOT EXISTS idx_chatrooms_server_id ON chatrooms(server_id);
       CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower_unique ON users(LOWER(username));
     `);
 
     // Column Migrations
