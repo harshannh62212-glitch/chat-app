@@ -58,27 +58,26 @@ router.patch('/admin/reports/:id', authMiddleware, adminCheck, async (req, res) 
 async function evaluateReport(description) {
   const prompt = `You are a professional software QA triage assistant. You are an expert at identifying high-quality bug reports.
 
-Classify as LEGITIMATE if the report contains:
-- A specific, reproducible, or descriptive technical issue
-- Clear steps to reproduce, expected vs actual behavior, or diagnostic details
-- Evidence of a genuine functional defect, UI glitch, or performance bottleneck
-
-Classify as SPAM if the report:
-- Contains casual greeting, idle chit-chat, or "hello"
-- Is unintelligible, nonsense characters, or repeated symbols
-- Is offensive, toxic, or abusive content
-- Is a placeholder or incomplete message (e.g., "test", "...", "bug")
+Classify the user's report into one of these four categories:
+1. LEGITIMATE: The report describes a specific, technical, reproducible, or descriptive functional defect, UI glitch, or performance bottleneck (e.g. "can't send DMs", "Spotify volume bar doesn't update").
+2. VAGUE: The report lacks details, is too short, or is not actionable (e.g. "broken", "it doesn't work", "please help", "error").
+3. SPAM: The report consists of casual greetings, idle chit-chat, nonsense characters, gibberish, or placeholders (e.g. "test", "hello", "...", "nice app").
+4. ABUSIVE: The report contains offensive, toxic, or abusive language.
 
 User report: "${description.trim()}"
 
-Respond ONLY with this JSON:
-{ "evaluation": "LEGITIMATE" or "SPAM" }`;
+Respond ONLY with this JSON structure:
+{ "evaluation": "LEGITIMATE" | "VAGUE" | "SPAM" | "ABUSIVE" }`;
 
-  // 1. Try local Ollama (llama3.2:3b) first
+  // 1. Try local Ollama (llama3.2:3b) with a strict timeout to prevent hangs
   try {
-    const response = await fetch('http://host.docker.internal:11434/api/generate', {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1200);
+
+    const response = await fetch('http://127.0.0.1:11434/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         model: 'llama3.2:3b',
         prompt: prompt,
@@ -87,38 +86,48 @@ Respond ONLY with this JSON:
       })
     });
 
+    clearTimeout(timeoutId);
+
     if (response.ok) {
       const json = await response.json();
       const parsed = JSON.parse(json.response.trim());
-      if (parsed && (parsed.evaluation === 'LEGITIMATE' || parsed.evaluation === 'SPAM')) {
-        console.log(`[AI EVALUATION - OLLAMA] Local model evaluated report: ${parsed.evaluation}`);
-        return parsed.evaluation;
+      const ev = parsed?.evaluation?.toUpperCase();
+      if (['LEGITIMATE', 'VAGUE', 'SPAM', 'ABUSIVE'].includes(ev)) {
+        console.log(`[AI EVALUATION - OLLAMA] Local model evaluated report: ${ev}`);
+        return ev;
       }
     }
   } catch (err) {
-    console.warn('[OLLAMA] Local model unavailable, falling back to Gemini:', err.message);
+    // Silent fail to move quickly to Gemini
   }
 
   // 2. Fallback to Gemini
   const apiKey = process.env.GEMINI_API_KEY;
   if (apiKey) {
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { responseMimeType: 'application/json' }
         })
       });
 
+      clearTimeout(timeoutId);
+
       if (response.ok) {
         const json = await response.json();
         const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
         const parsed = JSON.parse(textResponse.trim());
-        if (parsed && (parsed.evaluation === 'LEGITIMATE' || parsed.evaluation === 'SPAM')) {
-          console.log(`[AI EVALUATION - GEMINI] Gemini fallback evaluated report: ${parsed.evaluation}`);
-          return parsed.evaluation;
+        const ev = parsed?.evaluation?.toUpperCase();
+        if (['LEGITIMATE', 'VAGUE', 'SPAM', 'ABUSIVE'].includes(ev)) {
+          console.log(`[AI EVALUATION - GEMINI] Gemini fallback evaluated report: ${ev}`);
+          return ev;
         }
       }
     } catch (err) {
@@ -126,7 +135,7 @@ Respond ONLY with this JSON:
     }
   }
 
-  return 'unevaluated';
+  return 'LEGITIMATE'; // Default to legitimate to avoid false-positives when offline
 }
 
 // POST /api/global-report - user submits a global bug/glitch report (with local AI evaluation)
@@ -137,7 +146,12 @@ router.post('/global-report', authMiddleware, async (req, res) => {
   }
 
   const aiEvaluation = await evaluateReport(description);
-  const reportStatus = aiEvaluation === 'SPAM' ? 'rejected' : 'open';
+  let reportStatus = 'open';
+  if (aiEvaluation === 'SPAM' || aiEvaluation === 'ABUSIVE') {
+    reportStatus = 'rejected';
+  } else if (aiEvaluation === 'VAGUE') {
+    reportStatus = 'needs_info';
+  }
 
   try {
     await query(
@@ -162,13 +176,11 @@ router.post('/public-report', async (req, res) => {
     return res.status(400).json({ error: 'Description is required' });
   }
 
-  // Quick basic sanity check (no AI, instant) - reject obviously empty/short inputs
   const trimmed = description.trim();
   if (trimmed.length < 10) {
     return res.status(400).json({ error: 'Please provide more detail in your bug report.' });
   }
 
-  // INSERT immediately so the user gets instant feedback
   let reportId;
   try {
     const result = await query(
@@ -182,25 +194,22 @@ router.post('/public-report', async (req, res) => {
     return res.status(500).json({ error: 'Failed to submit bug report' });
   }
 
-  // AI evaluation happens AFTER response is sent (non-blocking)
   if (reportId) {
     setImmediate(async () => {
       try {
         const aiEvaluation = await evaluateReport(trimmed);
-        if (aiEvaluation === 'SPAM') {
-          // Delete the row — spam is discarded silently
+        if (aiEvaluation === 'SPAM' || aiEvaluation === 'ABUSIVE') {
           await query(`DELETE FROM reports WHERE id = $1`, [reportId]);
-          console.log(`[SPAM FILTER] Async-deleted spam report id=${reportId}: "${trimmed.substring(0, 60)}"`);
+          console.log(`[SPAM FILTER] Async-deleted spam/abusive report id=${reportId}: "${trimmed.substring(0, 60)}"`);
         } else {
-          // Update status to open now that AI confirmed it's legitimate
+          const reportStatus = aiEvaluation === 'VAGUE' ? 'needs_info' : 'open';
           await query(
-            `UPDATE reports SET status = 'open', ai_evaluation = $1 WHERE id = $2`,
-            [aiEvaluation, reportId]
+            `UPDATE reports SET status = $1, ai_evaluation = $2 WHERE id = $3`,
+            [reportStatus, aiEvaluation, reportId]
           );
         }
       } catch (err) {
         console.error(`[SPAM FILTER] Async evaluation failed for report ${reportId}:`, err.message);
-        // Leave as 'pending' — admin can review manually
       }
     });
   }
