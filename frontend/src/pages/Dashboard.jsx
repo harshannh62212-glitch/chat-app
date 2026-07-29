@@ -282,7 +282,75 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
             )}
           </div>
 
-          <div className="sub-sidebar-content">
+          <div className="sub-sidebar-content" style={{ overflowY: 'auto' }}>
+            {activeTab === 'servers' && !selectedServer && (
+              <div className="lobby-menu" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <h4 style={{ margin: '0 0 10px 0', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '1px' }}>Your Servers</h4>
+                  {servers.length === 0 ? (
+                    <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.85rem', padding: '10px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>No servers joined yet. Tap the 🧭 Discover icon to explore public servers, or tap the ➕ icon to create your own.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {servers.map(srv => (
+                        <div 
+                          key={srv.id}
+                          onClick={() => { setSelectedServer(srv); setSelectedDM(null); setActiveTab('servers'); setViewingFriends(false); }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '10px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(255,255,255,0.03)',
+                            border: '1px solid rgba(255,255,255,0.05)',
+                            cursor: 'pointer',
+                            transition: 'background 0.2s'
+                          }}
+                        >
+                          <div style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '8px',
+                            background: '#5865f2',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 'bold',
+                            color: '#fff',
+                            fontSize: '0.9rem'
+                          }}>
+                            {srv.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <span style={{ fontWeight: '600', color: '#fff', fontSize: '0.95rem' }}>{srv.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ marginTop: '8px' }}>
+                  <h4 style={{ margin: '0 0 10px 0', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '1px' }}>Quick Actions</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div 
+                      onClick={() => { setActiveTab('dms'); setSelectedServer(null); setSelectedDM(null); setViewingFriends(true); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(88, 101, 242, 0.1)', border: '1px solid rgba(88, 101, 242, 0.2)', cursor: 'pointer' }}
+                    >
+                      <span style={{ fontSize: '1.1rem' }}>💬</span>
+                      <span style={{ fontWeight: '600', color: '#fff', fontSize: '0.9rem' }}>Direct Messages / Friends</span>
+                    </div>
+
+                    <div 
+                      onClick={() => { setActiveTab('discovery'); setSelectedServer(null); setSelectedDM(null); setViewingFriends(false); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(0, 255, 255, 0.05)', border: '1px solid rgba(0, 255, 255, 0.15)', cursor: 'pointer' }}
+                    >
+                      <span style={{ fontSize: '1.1rem' }}>🧭</span>
+                      <span style={{ fontWeight: '600', color: '#fff', fontSize: '0.9rem' }}>Discover Public Servers</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {activeTab === 'dms' && (
               <DMList 
                 onSelectDM={(dm) => { setSelectedDM(dm); setViewingFriends(false); }}
