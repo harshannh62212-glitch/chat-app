@@ -729,3 +729,114 @@
 .confirm-modal-btn:hover {
   background-color: var(--spotify-green-hover);
 }
+
+/* Mobile Responsiveness for Spotify Portal */
+@media (max-width: 768px) {
+  .spotify-layout {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto auto 1fr 90px !important;
+    grid-template-areas:
+      "header"
+      "sidebar"
+      "main"
+      "player" !important;
+    height: 100vh !important;
+  }
+
+  .spotify-sidebar {
+    flex-direction: row !important;
+    padding: 8px 12px !important;
+    gap: 12px !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--glass-border) !important;
+    height: auto !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    align-items: center !important;
+    width: 100vw !important;
+  }
+
+  .sidebar-logo, .sidebar-divider, .playlists-header {
+    display: none !important;
+  }
+
+  .sidebar-menu {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+    margin: 0 !important;
+  }
+
+  .sidebar-menu-item {
+    padding: 6px 12px !important;
+    font-size: 0.85rem !important;
+  }
+
+  .sidebar-scrollable {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+    overflow-x: visible !important;
+  }
+
+  .playlist-item {
+    padding: 6px 12px !important;
+    font-size: 0.85rem !important;
+  }
+
+  /* Header adjustments */
+  .spotify-header {
+    flex-direction: column !important;
+    height: auto !important;
+    padding: 12px !important;
+    gap: 8px !important;
+  }
+
+  .header-search {
+    width: 100% !important;
+  }
+
+  .header-user {
+    width: 100% !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+  }
+
+  .chat-toggle-btn, .games-toggle-btn {
+    padding: 6px 10px !important;
+    font-size: 0.8rem !important;
+  }
+
+  /* Main Grid / Tables */
+  .cards-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .tracks-table th:nth-child(3),
+  .tracks-table td:nth-child(3) {
+    display: none !important; /* Hide album name on mobile */
+  }
+
+  /* Player adjustments */
+  .spotify-player {
+    padding: 0 8px !important;
+  }
+
+  .player-track-info {
+    width: 45% !important;
+  }
+
+  .player-controls-center {
+    width: 50% !important;
+  }
+
+  .player-actions-right {
+    display: none !important; /* Hide volume controls on mobile */
+  }
+
+  .control-buttons {
+    gap: 16px !important;
+  }
+}
+

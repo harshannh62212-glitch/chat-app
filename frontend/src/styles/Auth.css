@@ -186,3 +186,33 @@
 .toggle-auth button:hover {
   color: #00cccc;
 }
+
+/* Mobile responsive styles */
+@media (max-width: 480px) {
+  .auth-box {
+    padding: 24px 16px !important;
+    width: 92% !important;
+    max-width: 360px !important;
+    border-radius: 12px !important;
+  }
+
+  .auth-brand h1 {
+    font-size: 24px !important;
+  }
+
+  .auth-box h2 {
+    font-size: 1.3rem !important;
+    margin-bottom: 16px !important;
+  }
+
+  .auth-box input {
+    padding: 10px !important;
+    font-size: 0.9rem !important;
+  }
+
+  .auth-box button[type="submit"] {
+    padding: 10px !important;
+    font-size: 0.9rem !important;
+  }
+}
+

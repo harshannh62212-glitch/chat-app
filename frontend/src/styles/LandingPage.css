@@ -626,7 +626,10 @@
     padding: 12px 5%;
   }
   .landing-nav-links {
-    display: none; /* simple hidden for mobile mockup */
+    display: flex !important;
+  }
+  .landing-nav-link {
+    display: none !important;
   }
   .landing-hero {
     padding-top: 60px;
