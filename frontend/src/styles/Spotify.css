@@ -840,3 +840,54 @@
   }
 }
 
+/* Laptop/Desktop 16:9 Screen Optimizations */
+@media (min-width: 1024px) and (max-height: 900px) {
+  .spotify-layout {
+    grid-template-rows: 1fr 72px !important;
+  }
+
+  .spotify-sidebar {
+    padding: 16px 8px 8px 8px !important;
+    gap: 12px !important;
+  }
+
+  .sidebar-logo {
+    font-size: 1.2rem !important;
+    margin-bottom: 4px !important;
+  }
+
+  .sidebar-menu-item {
+    padding: 8px 10px !important;
+    font-size: 0.85rem !important;
+  }
+
+  .spotify-header {
+    height: 52px !important;
+    padding: 0 16px !important;
+  }
+
+  .spotify-player {
+    height: 72px !important;
+  }
+
+  .player-cover-img {
+    width: 44px !important;
+    height: 44px !important;
+  }
+
+  .spotify-card {
+    padding: 12px !important;
+  }
+
+  .card-title {
+    font-size: 0.85rem !important;
+    margin-top: 8px !important;
+  }
+
+  .card-desc {
+    font-size: 0.7rem !important;
+    margin-top: 4px !important;
+  }
+}
+
+
