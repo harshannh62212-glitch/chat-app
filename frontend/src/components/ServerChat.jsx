@@ -7,7 +7,8 @@ import GiphyPanel from './GiphyPanel';
 import ReportButton from './ReportButton';
 
 
-const socketUrl = import.meta.env.PROD ? window.location.origin : 'http://localhost:8000';
+const savedProxyTarget = localStorage.getItem('custom_proxy_target');
+const socketUrl = savedProxyTarget || (import.meta.env.PROD ? window.location.origin : 'http://localhost:8000');
 const socket = io(socketUrl, {
   autoConnect: true,
   extraHeaders: {
@@ -15,7 +16,7 @@ const socket = io(socketUrl, {
   }
 });
 
-function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInfo }) {
+function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInfo, onBack }) {
   const [chatrooms, setChatrooms] = useState([]);
   const [selectedChatroom, setSelectedChatroom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -23,6 +24,31 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   const [members, setMembers] = useState([]);
   const [showMembers, setShowMembers] = useState(true);
   const [showGiphy, setShowGiphy] = useState(false);
+
+  useEffect(() => {
+    const resolveSocketTunnel = async () => {
+      const saved = localStorage.getItem('custom_proxy_target');
+      if (!saved && import.meta.env.PROD) {
+        try {
+          const res = await fetch('/vercel.json');
+          const config = await res.json();
+          const apiRewrite = config.rewrites?.find(r => r.source === '/api/(.*)');
+          if (apiRewrite && apiRewrite.destination) {
+            const tunnel = apiRewrite.destination.split('/api/')[0];
+            if (tunnel && socket.io.uri !== tunnel) {
+              console.log('[SOCKET] Reconnecting socket directly to tunnel:', tunnel);
+              socket.io.uri = tunnel;
+              socket.disconnect().connect();
+            }
+          }
+        } catch (err) {
+          console.error('[SOCKET] Failed to resolve direct tunnel URL:', err);
+        }
+      }
+    };
+    resolveSocketTunnel();
+  }, []);
+  const [viewingChat, setViewingChat] = useState(true);
   const messagesEndRef = useRef(null);
 
   // Fetch chatrooms of the server
@@ -103,8 +129,9 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     return () => {
       socket.off('new-message', handleNewMessage);
       socket.off('message-deleted', handleMessageDeleted);
+      socket.emit('user-left', currentUser.id, server.id);
     };
-  }, [server.id, selectedChatroom]);
+  }, [selectedChatroom, server.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -114,8 +141,8 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     e.preventDefault();
     if (!messageInput.trim() || !selectedChatroom) return;
 
-    if (messageInput.trim().length < 3) {
-      alert('Message must be at least 3 characters long.');
+    if (messageInput.trim().length < 2) {
+      alert('Message must be at least 2 characters long.');
       return;
     }
 
@@ -130,6 +157,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   };
 
   const sendMsg = async (contentStr) => {
+    if (!contentStr.trim() || !selectedChatroom) return;
     const filteredContent = filterContent(contentStr);
 
     try {
@@ -141,7 +169,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       const newMsg = res.data;
       socket.emit('send-message', {
         ...newMsg,
-        senderId: currentUser.id, // compatibility fallback
+        senderId: currentUser.id,
         serverId: server.id
       });
       setMessages(prev => {
@@ -176,11 +204,39 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   };
 
   return (
-    <div className="server-chat">
+    <div className={`server-chat ${viewingChat ? 'mobile-show-chat' : 'mobile-show-rooms'}`}>
       <div className="chat-header">
         <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onBack && (
+            <button 
+              className="mobile-back-btn" 
+              onClick={() => {
+                if (viewingChat) {
+                  setViewingChat(false);
+                } else {
+                  onBack();
+                }
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#fff',
+                fontSize: '22px',
+                cursor: 'pointer',
+                marginRight: '8px',
+                display: 'none',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                transition: 'background 0.2s'
+              }}
+            >
+              ←
+            </button>
+          )}
           {server.name} 
-          {selectedChatroom && <span className="channel-hash"># {selectedChatroom.name}</span>}
+          {selectedChatroom && viewingChat && <span className="channel-hash"># {selectedChatroom.name}</span>}
           {batteryInfo && (
             <span 
               style={{ fontSize: '0.55em', padding: '1px 5px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#b9bbbe', fontWeight: 'normal', fontFamily: "'Outfit', sans-serif" }}
@@ -218,7 +274,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
               <button
                 key={room.id}
                 className={`chatroom-btn ${selectedChatroom?.id === room.id ? 'active' : ''}`}
-                onClick={() => setSelectedChatroom(room)}
+                onClick={() => { setSelectedChatroom(room); setViewingChat(true); }}
               >
                 # {room.name}
                 {room.is_general && ' (general)'}

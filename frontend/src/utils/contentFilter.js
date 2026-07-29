@@ -148,15 +148,13 @@ export function containsBannedWords(text) {
   }
 
   for (const word of BANNED_WORDS) {
-    const regex = new RegExp(`(?:^|\\b)${word}(?:$|\\b)`, 'i');
-    if (regex.test(lower)) {
+    if (lower.includes(word.toLowerCase())) {
       return { blocked: true, reason: `banned_word:${word}` };
     }
   }
 
   for (const word of customBannedWords) {
-    const regex = new RegExp(`(?:^|\\b)${word}(?:$|\\b)`, 'i');
-    if (regex.test(lower)) {
+    if (lower.includes(word.toLowerCase())) {
       return { blocked: true, reason: `custom_word:${word}` };
     }
   }
@@ -176,14 +174,16 @@ export function filterContent(text) {
 
   // Filter default words
   BANNED_WORDS.forEach(word => {
-    const regex = new RegExp(`(?:^|\\b)${word}(?:$|\\b)`, 'gi');
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'gi');
     filtered = filtered.replace(regex, match => '*'.repeat(match.length));
   });
 
   // Filter custom words
   customBannedWords.forEach(word => {
-    const regex = new RegExp(`(?:^|\\b)${word}(?:$|\\b)`, 'gi');
-    filtered = filtered.replace(regex, '*'.repeat(word.length));
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'gi');
+    filtered = filtered.replace(regex, match => '*'.repeat(match.length));
   });
 
   return filtered;

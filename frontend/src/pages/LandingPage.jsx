@@ -67,14 +67,14 @@ function LandingPage({ onEnterPortal }) {
         </div>
         <h2>
           Where teams connect.
-          <span className="gradient-text">Where ideas spark.</span>
+          <span className="gradient-text">And music streams.</span>
         </h2>
         <p className="hero-subtitle">
-          The ultimate real-time workspace for modern teams and developers. Express yourself with GIFs, personalize your theme, and moderate with advanced filters.
+          The ultimate real-time workspace for modern teams and developers, now featuring integrated Spotify-style playback. Express yourself with GIFs, stream music, and customize your experience.
         </p>
 
         <div className="hero-ctas">
-          <button className="btn-primary" onClick={onEnterPortal}>Launch App</button>
+          <button className="btn-primary" onClick={onEnterPortal}>Launch Portal</button>
           <a href="#features" className="btn-secondary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
             Explore Features
           </a>
@@ -90,7 +90,7 @@ function LandingPage({ onEnterPortal }) {
                 <span className="preview-dot yellow"></span>
                 <span className="preview-dot green"></span>
               </div>
-              <div className="preview-title">wired-io — main-lobby</div>
+              <div className="preview-title">wired-io — chat & music workspace</div>
               <div style={{ width: '40px' }}></div>
             </div>
             <img 
@@ -109,8 +109,8 @@ function LandingPage({ onEnterPortal }) {
           <div className="metric-label">Message Latency</div>
         </div>
         <div className="metric-card">
-          <div className="metric-num">99.99%</div>
-          <div className="metric-label">Uptime Guarantee</div>
+          <div className="metric-num">Millions</div>
+          <div className="metric-label">Songs Available</div>
         </div>
         <div className="metric-card">
           <div className="metric-num">100%</div>
@@ -137,9 +137,9 @@ function LandingPage({ onEnterPortal }) {
           </div>
 
           <div className="feature-card" onClick={handleFeatureClick} style={{ cursor: 'pointer' }}>
-            <div className="feature-icon-wrapper">🎬</div>
-            <h4>GIF Panel Integration</h4>
-            <p>Search and send trending animations instantly with our native Giphy system, bringing chats to life in real-time.</p>
+            <div className="feature-icon-wrapper">🎵</div>
+            <h4>Integrated Music Player</h4>
+            <p>Seamlessly stream songs, search library catalogs, create custom playlists, and play music directly from the sidebar.</p>
           </div>
 
           <div className="feature-card" onClick={handleFeatureClick} style={{ cursor: 'pointer' }}>
@@ -149,9 +149,9 @@ function LandingPage({ onEnterPortal }) {
           </div>
 
           <div className="feature-card" onClick={handleFeatureClick} style={{ cursor: 'pointer' }}>
-            <div className="feature-icon-wrapper">🛠️</div>
-            <h4>Admin Control Panel</h4>
-            <p>Power tools for workspace admins to enforce content filters, timeout users, ban abusers, and monitor channels.</p>
+            <div className="feature-icon-wrapper">🎬</div>
+            <h4>GIF Panel Integration</h4>
+            <p>Search and send trending animations instantly with our native Giphy system, bringing chats to life in real-time.</p>
           </div>
 
           <div className="feature-card" onClick={handleFeatureClick} style={{ cursor: 'pointer' }}>
@@ -177,8 +177,8 @@ function LandingPage({ onEnterPortal }) {
             <span>Vite Bundler</span>
           </div>
           <div className="tech-badge">
-            <span className="tech-icon">⚡</span>
-            <span>Supabase Backend</span>
+            <span className="tech-icon">🎵</span>
+            <span>iTunes & YT Streaming</span>
           </div>
           <div className="tech-badge">
             <span className="tech-icon">🛠️</span>

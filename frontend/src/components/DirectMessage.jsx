@@ -6,7 +6,7 @@ import GiphyPanel from './GiphyPanel';
 import ReportButton from './ReportButton';
 
 
-function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
+function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
   const [messages, setMessages] = useState([]);
   const [messageInput, setMessageInput] = useState('');
   const [showGiphy, setShowGiphy] = useState(false);
@@ -125,8 +125,8 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
     e.preventDefault();
     if (!messageInput.trim()) return;
 
-    if (messageInput.trim().length < 3) {
-      alert('Message must be at least 3 characters long.');
+    if (messageInput.trim().length < 2) {
+      alert('Message must be at least 2 characters long.');
       return;
     }
 
@@ -185,7 +185,31 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings }) {
   return (
     <div className="direct-message">
       <div className="chat-header">
-        <h2>💬 {dmUsername}</h2>
+        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onBack && (
+            <button 
+              className="mobile-back-btn" 
+              onClick={onBack}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#fff',
+                fontSize: '22px',
+                cursor: 'pointer',
+                marginRight: '8px',
+                display: 'none',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                transition: 'background 0.2s'
+              }}
+            >
+              ←
+            </button>
+          )}
+          💬 {dmUsername}
+        </h2>
         <div className="header-info">
           <span className="chat-header-brand" style={{ color: '#00ffff', fontWeight: 'bold', letterSpacing: '0.5px', fontSize: '0.85em', textTransform: 'uppercase', marginRight: '10px' }}>wired-io</span>
           <button 

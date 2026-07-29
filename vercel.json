@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://immediate-councils-robert-rug.trycloudflare.com/api/$1"
+      "destination": "https://fog-parliamentary-liable-lows.trycloudflare.com/api/$1"
     },
     {
       "source": "/socket.io/(.*)",
-      "destination": "https://immediate-councils-robert-rug.trycloudflare.com/socket.io/$1"
+      "destination": "https://fog-parliamentary-liable-lows.trycloudflare.com/socket.io/$1"
     },
     {
       "source": "/(.*)",

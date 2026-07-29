@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-function DMList({ onSelectDM, selectedDM }) {
+function DMList({ onSelectDM, selectedDM, viewingFriends, onShowFriends }) {
   const [conversations, setConversations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -53,6 +53,29 @@ function DMList({ onSelectDM, selectedDM }) {
 
   return (
     <div className="dm-list">
+      <button 
+        className={`friends-tab-btn ${viewingFriends ? 'active' : ''}`}
+        onClick={onShowFriends}
+        style={{
+          width: '100%',
+          padding: '10px 12px',
+          background: viewingFriends ? 'linear-gradient(135deg, #8a2be2 0%, #00ffff 100%)' : 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '8px',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          cursor: 'pointer',
+          marginBottom: '10px',
+          fontWeight: 'bold',
+          transition: 'all 0.2s ease',
+          boxShadow: viewingFriends ? '0 4px 15px rgba(138, 43, 226, 0.3)' : 'none'
+        }}
+      >
+        <span>👥</span> Friends List
+      </button>
+
       <button 
         className="start-dm-btn"
         onClick={() => setShowSearch(!showSearch)}

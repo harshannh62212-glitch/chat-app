@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import '../styles/FriendsPanel.css';
 
-function FriendsPanel({ currentUser, onStartDM }) {
+function FriendsPanel({ currentUser, onStartDM, onBack }) {
   const [activeSubTab, setActiveSubTab] = useState('all'); // 'all', 'pending', 'add'
   const [friends, setFriends] = useState([]);
   const [pendingIncoming, setPendingIncoming] = useState([]);
@@ -128,6 +128,28 @@ function FriendsPanel({ currentUser, onStartDM }) {
     <div className="friends-panel">
       <div className="friends-header">
         <div className="friends-tab-title">
+          {onBack && (
+            <button 
+              className="mobile-back-btn" 
+              onClick={onBack}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#fff',
+                fontSize: '22px',
+                cursor: 'pointer',
+                marginRight: '8px',
+                display: 'none',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                transition: 'background 0.2s'
+              }}
+            >
+              ←
+            </button>
+          )}
           <span>👥</span>
           <h3>Friends</h3>
         </div>

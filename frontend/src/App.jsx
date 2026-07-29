@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { loadCustomBannedWords } from './utils/contentFilter';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
+import SpotifyDashboard from './pages/SpotifyDashboard';
+import GamesDashboard from './pages/GamesDashboard';
 import LandingPage from './pages/LandingPage';
+import ProxySettings from './pages/ProxySettings';
 import axios from 'axios';
 import './styles/App.css';
 
-// In production (Vercel), always use same-origin proxy ('') so browser avoids CORS/Mixed Content errors
-axios.defaults.baseURL = import.meta.env.PROD ? '' : 'http://localhost:8000';
+// In production (Vercel), check for localstorage custom proxy target for sandbox testing
+const savedProxyTarget = localStorage.getItem('custom_proxy_target');
+axios.defaults.baseURL = savedProxyTarget || (import.meta.env.PROD ? '' : 'http://localhost:8000');
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
 
 import ThermalsPage from './pages/ThermalsPage';
@@ -18,15 +22,18 @@ function App() {
   const [showAuth, setShowAuth] = useState(false);
   const [showThermals, setShowThermals] = useState(window.location.pathname === '/thermals');
   const [showModeration, setShowModeration] = useState(window.location.pathname === '/moderation');
+  const [showProxyPage, setShowProxyPage] = useState(window.location.pathname === '/proxy');
   const [loadingApp, setLoadingApp] = useState(true);
   const [moderationPassword, setModerationPassword] = useState('');
   const [moderationUnlocked, setModerationUnlocked] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+  const [currentPortal, setCurrentPortal] = useState('chat');
 
   useEffect(() => {
     const handlePopState = () => {
       setShowThermals(window.location.pathname === '/thermals');
       setShowModeration(window.location.pathname === '/moderation');
+      setShowProxyPage(window.location.pathname === '/proxy');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -71,6 +78,28 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // Resolve direct tunnel URL in production to bypass Vercel serverless latency
+    const resolveDirectTarget = async () => {
+      const saved = localStorage.getItem('custom_proxy_target');
+      if (!saved && import.meta.env.PROD) {
+        try {
+          const res = await fetch('/vercel.json');
+          const config = await res.json();
+          const apiRewrite = config.rewrites?.find(r => r.source === '/api/(.*)');
+          if (apiRewrite && apiRewrite.destination) {
+            const tunnel = apiRewrite.destination.split('/api/')[0];
+            if (tunnel) {
+              console.log('[AXIOS] Bypassing Vercel proxy. Connecting directly to tunnel:', tunnel);
+              axios.defaults.baseURL = tunnel;
+            }
+          }
+        } catch (err) {
+          console.error('[AXIOS] Failed to resolve direct tunnel URL:', err);
+        }
+      }
+    };
+    resolveDirectTarget();
+
     loadCustomBannedWords();
     
     // Load custom theme, typography, and letter spacing variables on mount
@@ -160,6 +189,8 @@ function App() {
             </button>
           </div>
         </div>
+      ) : showProxyPage ? (
+        <ProxySettings />
       ) : showThermals ? (
         <ThermalsPage onBack={() => { window.history.pushState({}, '', '/'); setShowThermals(false); }} />
       ) : showModeration ? (
@@ -236,12 +267,31 @@ function App() {
           </div>
         )
       ) : currentUser ? (
-        <Dashboard 
-          user={currentUser} 
-          setUser={setCurrentUser} 
-          onLogout={handleLogout} 
-          batteryInfo={batteryInfo}
-        />
+        currentPortal === 'spotify' ? (
+          <SpotifyDashboard 
+            user={currentUser} 
+            setUser={setCurrentUser} 
+            onLogout={handleLogout} 
+            onToggleToChat={() => setCurrentPortal('chat')}
+            onToggleToGames={() => setCurrentPortal('games')}
+          />
+        ) : currentPortal === 'games' ? (
+          <GamesDashboard
+            user={currentUser}
+            onLogout={handleLogout}
+            onToggleToChat={() => setCurrentPortal('chat')}
+            onToggleToSpotify={() => setCurrentPortal('spotify')}
+          />
+        ) : (
+          <Dashboard 
+            user={currentUser} 
+            setUser={setCurrentUser} 
+            onLogout={handleLogout} 
+            batteryInfo={batteryInfo}
+            onToggleToSpotify={() => setCurrentPortal('spotify')}
+            onToggleToGames={() => setCurrentPortal('games')}
+          />
+        )
       ) : showAuth ? (
         <Auth onLogin={handleLogin} onBack={() => setShowAuth(false)} />
       ) : (

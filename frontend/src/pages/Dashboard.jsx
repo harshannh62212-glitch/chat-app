@@ -10,7 +10,7 @@ import FriendsPanel from '../components/FriendsPanel';
 import Logo from '../components/Logo';
 import '../styles/Dashboard.css';
 
-function Dashboard({ user, setUser, onLogout, batteryInfo }) {
+function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, onToggleToGames }) {
   const [activeTab, setActiveTab] = useState('servers');
   const [selectedServer, setSelectedServer] = useState(null);
   const [selectedDM, setSelectedDM] = useState(null);
@@ -25,6 +25,8 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
   const [bugSuccess, setBugSuccess] = useState(false);
   const [bugError, setBugError] = useState('');
 
+
+  const [viewingFriends, setViewingFriends] = useState(false);
 
   const fetchUserServers = async () => {
     try {
@@ -44,6 +46,7 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
   const handleNotificationClick = (notif) => {
     setActiveTab('dms');
     setSelectedServer(null);
+    setViewingFriends(false);
     setSelectedDM({
       id: notif.senderId,
       other_user_id: notif.senderId,
@@ -86,9 +89,16 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
     }
   };
 
+  const handleBack = () => {
+    setSelectedServer(null);
+    setSelectedDM(null);
+    setViewingFriends(false);
+  };
+
+  const hasActiveView = !!(selectedServer || selectedDM || viewingFriends);
 
   return (
-    <div className="dashboard discord-layout" style={{ position: 'relative' }}>
+    <div className={`dashboard discord-layout ${hasActiveView ? 'has-active-view' : 'show-navigation'}`} style={{ position: 'relative' }}>
       {/* 1. Leftmost Server Rail (Narrow Icon Column) */}
       <div className="discord-server-rail">
 
@@ -98,9 +108,11 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
 
         <div className="rail-separator"></div>
 
+
+
         <div 
           className={`rail-icon home-icon ${activeTab === 'dms' && !selectedServer ? 'active' : ''}`}
-          onClick={() => { setActiveTab('dms'); setSelectedServer(null); setSelectedDM(null); }}
+          onClick={() => { setActiveTab('dms'); setSelectedServer(null); setSelectedDM(null); setViewingFriends(false); }}
           title="Direct Messages"
         >
           💬
@@ -113,7 +125,7 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
             <div 
               key={srv.id}
               className={`rail-icon server-icon ${selectedServer?.id === srv.id ? 'active' : ''}`}
-              onClick={() => { setSelectedServer(srv); setSelectedDM(null); setActiveTab('servers'); }}
+              onClick={() => { setSelectedServer(srv); setSelectedDM(null); setActiveTab('servers'); setViewingFriends(false); }}
               title={srv.name}
             >
               {srv.name.substring(0, 2).toUpperCase()}
@@ -131,10 +143,53 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
 
         <div 
           className={`rail-icon discover-icon ${activeTab === 'discovery' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('discovery'); setSelectedServer(null); setSelectedDM(null); }}
+          onClick={() => { setActiveTab('discovery'); setSelectedServer(null); setSelectedDM(null); setViewingFriends(false); }}
           title="Explore Public Servers"
         >
           🧭
+        </div>
+
+        {/* Bottom utility icons */}
+        <div className="rail-separator" style={{ marginTop: 'auto' }}></div>
+
+        {/* Spotify Portal Button */}
+        <div 
+          className="rail-icon spotify-rail-btn"
+          onClick={onToggleToSpotify}
+          title="Open Spotify Portal"
+          style={{
+            background: 'rgba(29, 185, 84, 0.15)',
+            border: '1px solid rgba(29, 185, 84, 0.4)',
+            color: '#1db954',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '20px',
+            marginBottom: '10px'
+          }}
+        >
+          🎵
+        </div>
+
+        {/* Games Portal Button */}
+        <div 
+          className="rail-icon games-rail-btn"
+          onClick={onToggleToGames}
+          title="Open Games Arcade"
+          style={{
+            background: 'rgba(165, 94, 234, 0.15)',
+            border: '1px solid rgba(165, 94, 234, 0.4)',
+            color: '#a55eea',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '20px',
+            marginBottom: '10px'
+          }}
+        >
+          🎮
         </div>
 
         {user && user.is_admin && (
@@ -146,7 +201,6 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
             }}
             title="Admin & Database Management Hub"
             style={{
-              marginTop: 'auto',
               background: 'rgba(0, 255, 255, 0.12)',
               border: '1px solid rgba(0, 255, 255, 0.3)',
               color: '#00ffff',
@@ -169,7 +223,6 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
           onClick={() => setShowGlobalReportModal(true)}
           title="Report Bug / System Glitch"
           style={{
-            marginTop: user && user.is_admin ? '0' : 'auto',
             background: 'rgba(255, 71, 87, 0.1)',
             border: '1px solid rgba(255, 71, 87, 0.2)',
             color: '#ff4757',
@@ -232,9 +285,11 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
           <div className="sub-sidebar-content">
             {activeTab === 'dms' && (
               <DMList 
-                onSelectDM={setSelectedDM}
+                onSelectDM={(dm) => { setSelectedDM(dm); setViewingFriends(false); }}
                 selectedDM={selectedDM}
                 currentUser={user}
+                viewingFriends={viewingFriends}
+                onShowFriends={() => { setViewingFriends(true); setSelectedDM(null); }}
               />
             )}
 
@@ -264,8 +319,10 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
               setSelectedServer(null);
               setSelectedDM(otherUser);
               setActiveTab('dms');
+              setViewingFriends(false);
             }}
             batteryInfo={batteryInfo}
+            onBack={handleBack}
           />
         )}
 
@@ -274,6 +331,7 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
             dmWith={selectedDM}
             currentUser={user}
             onOpenSettings={() => setShowSettingsModal(true)}
+            onBack={handleBack}
           />
         )}
 
@@ -284,7 +342,9 @@ function Dashboard({ user, setUser, onLogout, batteryInfo }) {
             currentUser={user}
             onStartDM={(friend) => {
               setSelectedDM(friend);
+              setViewingFriends(false);
             }}
+            onBack={handleBack}
           />
         )}
 

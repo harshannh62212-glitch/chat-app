@@ -320,4 +320,23 @@ router.post('/history', authMiddleware, async (req, res) => {
   }
 });
 
+// Get play counts for all tracks (globally)
+router.get('/play-counts', authMiddleware, async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT track_id, COUNT(*) as play_count 
+       FROM spotify_history 
+       GROUP BY track_id`
+    );
+    const counts = {};
+    result.rows.forEach(row => {
+      counts[row.track_id] = parseInt(row.play_count, 10);
+    });
+    res.json(counts);
+  } catch (err) {
+    console.error('Error fetching play counts:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

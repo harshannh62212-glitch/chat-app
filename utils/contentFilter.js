@@ -196,11 +196,10 @@ function containsBannedWords(text) {
     }
   }
 
-  // Check word list on both original and normalized text
+  // Check word list on both original and normalized text (includes concatenated words like 'fuckbitch')
   for (const word of BANNED_WORDS) {
     const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(?:^|\\b|\\s)${escaped}(?:$|\\b|\\s|[^a-z])`, 'i');
-    if (regex.test(lower) || regex.test(normalized)) {
+    if (lower.includes(word.toLowerCase()) || normalized.includes(word.toLowerCase())) {
       return { blocked: true, reason: `banned_word:${word}` };
     }
   }
@@ -208,8 +207,7 @@ function containsBannedWords(text) {
   // Check custom DB words
   for (const word of customBannedWords) {
     const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(?:^|\\b|\\s)${escaped}(?:$|\\b|\\s|[^a-z])`, 'i');
-    if (regex.test(lower) || regex.test(normalized)) {
+    if (lower.includes(word.toLowerCase()) || normalized.includes(word.toLowerCase())) {
       return { blocked: true, reason: `custom_word:${word}` };
     }
   }
@@ -233,21 +231,18 @@ function filterContent(text) {
     filtered = filtered.replace(pattern, (match) => '*'.repeat(match.length));
   }
 
-  // Replace word list
+  // Replace word list (includes concatenated words)
   for (const word of BANNED_WORDS) {
     const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(?:^|\\b|\\s)${escaped}(?:$|\\b|\\s|[^a-z])`, 'gi');
-    filtered = filtered.replace(regex, (match) => {
-      // Preserve surrounding whitespace, only asterisk the word itself
-      return match.replace(new RegExp(escaped, 'gi'), (w) => '*'.repeat(w.length));
-    });
+    const regex = new RegExp(escaped, 'gi');
+    filtered = filtered.replace(regex, (match) => '*'.repeat(match.length));
   }
 
   // Replace custom words
   for (const word of customBannedWords) {
     const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(?:^|\\b)${escaped}(?:$|\\b)`, 'gi');
-    filtered = filtered.replace(regex, '*'.repeat(word.length));
+    const regex = new RegExp(escaped, 'gi');
+    filtered = filtered.replace(regex, (match) => '*'.repeat(match.length));
   }
 
   return filtered;

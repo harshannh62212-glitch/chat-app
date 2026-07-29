@@ -1370,3 +1370,115 @@ body.theme-cyberpunk-neon {
   transform: translateY(-1px) !important;
   box-shadow: 0 6px 20px rgba(0, 255, 255, 0.35) !important;
 }
+
+/* Mobile Responsiveness Rules */
+@media (max-width: 768px) {
+  .discord-layout {
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  .mobile-back-btn {
+    display: flex !important;
+  }
+
+  /* When we have an active view (chat, friends list) on mobile */
+  .discord-layout.has-active-view .discord-server-rail,
+  .discord-layout.has-active-view .discord-sub-sidebar {
+    display: none !important;
+  }
+
+  .discord-layout.has-active-view .main-content {
+    display: flex !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    flex: 1 !important;
+  }
+
+  /* When we are showing the navigation menu (list of servers/DMs) on mobile */
+  .discord-layout.show-navigation .main-content {
+    display: none !important;
+  }
+
+  .discord-layout.show-navigation .discord-server-rail {
+    display: flex !important;
+    border-radius: 0 !important;
+    border-top: none !important;
+    border-bottom: none !important;
+    border-left: none !important;
+  }
+
+  .discord-layout.show-navigation .discord-sub-sidebar {
+    display: flex !important;
+    flex: 1 !important;
+    width: calc(100vw - 76px) !important;
+    border-radius: 0 !important;
+    border: none !important;
+  }
+
+  /* Make sure modals and panels scale correctly */
+  .modal {
+    width: 95% !important;
+    padding: 16px !important;
+  }
+
+  /* ServerChat Layout details on mobile */
+  .server-chat {
+    border-radius: 0 !important;
+    border: none !important;
+    width: 100% !important;
+  }
+  
+  .chat-container {
+    flex-direction: row !important; /* Keep horizontal but hide elements via classes */
+  }
+
+  /* When viewing rooms, hide chat-main and members-list, show chatroom-selector */
+  .server-chat.mobile-show-rooms .chat-main,
+  .server-chat.mobile-show-rooms .members-list {
+    display: none !important;
+  }
+  .server-chat.mobile-show-rooms .chatroom-selector {
+    display: flex !important;
+    width: 100% !important;
+  }
+
+  /* When viewing chat, hide chatroom-selector and members-list, show chat-main */
+  .server-chat.mobile-show-chat .chatroom-selector,
+  .server-chat.mobile-show-chat .members-list {
+    display: none !important;
+  }
+  .server-chat.mobile-show-chat .chat-main {
+    display: flex !important;
+    width: 100% !important;
+  }
+
+  /* Direct message UI */
+  .direct-message {
+    border-radius: 0 !important;
+    border: none !important;
+    width: 100% !important;
+  }
+
+  /* Friends panel */
+  .friends-panel {
+    border-radius: 0 !important;
+    border: none !important;
+    width: 100% !important;
+  }
+
+  .friends-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    height: auto !important;
+    padding: 12px !important;
+  }
+
+  .friends-sub-tabs {
+    width: 100% !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+  }
+}
+
