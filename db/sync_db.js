@@ -1,4 +1,8 @@
 const { Pool } = require('pg');
+const dns = require('dns');
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 const localConnectionString = process.env.LOCAL_DATABASE_URL || 'postgresql://chat_user:secure_password_change_me@127.0.0.1:5432/chat_db';
 const supabaseConnectionString = process.env.DATABASE_URL || 'postgresql://postgres:ALLsystems143%40%40@db.aebntdjjniirnwthtwlx.supabase.co:5432/postgres';

@@ -1,5 +1,10 @@
 process.env.UV_THREADPOOL_SIZE = 16;
 
+const dns = require('dns');
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
 const { initDB } = require('./db/database');
