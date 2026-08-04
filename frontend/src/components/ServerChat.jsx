@@ -366,7 +366,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
   // Fetch & listen to messages in the active chatroom
   useEffect(() => {
-    if (!selectedChatroom) {
+    if (!selectedChatroom || !currentUser) {
       setMessages([]);
       return;
     }
@@ -421,9 +421,11 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       socket.off('new-message', handleNewMessage);
       socket.off('message-deleted', handleMessageDeleted);
       socket.off('reaction-updated', handleReactionUpdated);
-      socket.emit('user-left', currentUser.id, server.id);
+      if (currentUser) {
+        socket.emit('user-left', currentUser.id, server.id);
+      }
     };
-  }, [selectedChatroom, server.id]);
+  }, [selectedChatroom, server.id, currentUser]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -509,6 +511,10 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       console.error('Failed to delete message:', err);
     }
   };
+
+  if (!currentUser) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#b9bbbe' }}>Loading chat...</div>;
+  }
 
   return (
     <div className={`server-chat ${viewingChat ? 'mobile-show-chat' : 'mobile-show-rooms'}`}>
