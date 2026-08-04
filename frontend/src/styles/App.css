@@ -1061,3 +1061,39 @@ body {
   padding-left: 8px;
 }
 
+/* Autocomplete tag dropdown */
+.message-input-form-wrapper {
+  position: relative;
+}
+
+.tag-autocomplete-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 10px;
+  right: 10px;
+  background-color: #2b2d31;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 99;
+  margin-bottom: 5px;
+}
+
+.tag-autocomplete-item {
+  padding: 8px 12px;
+  color: #dbdee1;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-autocomplete-item:hover {
+  background-color: #35373c;
+  color: #fff;
+}
+

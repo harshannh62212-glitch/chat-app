@@ -58,6 +58,9 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     };
   }, []);
 
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
+  const [tagQuery, setTagQuery] = useState('');
+
   // WebRTC Video Rooms state & refs
   const [inVoiceRoom, setInVoiceRoom] = useState(false);
   const [voiceUsers, setVoiceUsers] = useState([]); // Array of { socketId, username, stream }
@@ -453,6 +456,48 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     setMessageInput(prev => `@${username} ` + prev);
   };
 
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setMessageInput(val);
+
+    const selectionStart = e.target.selectionStart;
+    const textBeforeCursor = val.slice(0, selectionStart);
+    const words = textBeforeCursor.split(/\s+/);
+    const lastWord = words[words.length - 1];
+
+    if (lastWord.startsWith('@')) {
+      setShowTagDropdown(true);
+      setTagQuery(lastWord.slice(1).toLowerCase());
+    } else {
+      setShowTagDropdown(false);
+    }
+  };
+
+  const selectTagUser = (username) => {
+    const textarea = document.getElementById('message-input-textarea');
+    if (!textarea) return;
+
+    const selectionStart = textarea.selectionStart;
+    const textBeforeCursor = messageInput.slice(0, selectionStart);
+    const textAfterCursor = messageInput.slice(selectionStart);
+
+    const words = textBeforeCursor.split(/\s+/);
+    words[words.length - 1] = `@${username}`;
+
+    const newTextBefore = words.join(' ');
+    setMessageInput(newTextBefore + ' ' + textAfterCursor);
+    setShowTagDropdown(false);
+    setTimeout(() => textarea.focus(), 10);
+  };
+
+  const allMentionableUsers = [
+    { id: 'gemini-bot-id', username: 'gemini' },
+    ...members
+  ];
+  const filteredTags = allMentionableUsers.filter(u => 
+    u.username && u.username.toLowerCase().includes(tagQuery)
+  );
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!messageInput.trim() || !selectedChatroom) return;
@@ -827,6 +872,15 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
           </div>
 
           <form onSubmit={handleSendMessage} className="message-input-form-wrapper">
+            {showTagDropdown && filteredTags.length > 0 && (
+              <div className="tag-autocomplete-dropdown">
+                {filteredTags.map(u => (
+                  <div key={u.id} className="tag-autocomplete-item" onClick={() => selectTagUser(u.username)}>
+                    👤 @{u.username}
+                  </div>
+                ))}
+              </div>
+            )}
             {showGiphy && (
               <GiphyPanel 
                 onSelectGif={handleSelectGif}
@@ -844,10 +898,11 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                 GIF
               </button>
               <input
+                id="message-input-textarea"
                 type="text"
                 placeholder="Type a message..."
                 value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
+                onChange={handleInputChange}
                 disabled={!selectedChatroom}
               />
               <button type="submit" disabled={!selectedChatroom}>Send</button>
