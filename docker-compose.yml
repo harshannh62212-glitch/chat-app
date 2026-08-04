@@ -91,17 +91,15 @@ services:
     build: .
     container_name: chat_app_db_sync
     restart: always
+    network_mode: host
     command: node db/sync_db.js
     environment:
-      LOCAL_DATABASE_URL: postgresql://chat_user:secure_password_change_me@postgres:5432/chat_db
+      LOCAL_DATABASE_URL: postgresql://chat_user:secure_password_change_me@127.0.0.1:5432/chat_db
       DATABASE_URL: postgresql://postgres:ALLsystems143%40%40@db.aebntdjjniirnwthtwlx.supabase.co:5432/postgres
       NODE_ENV: production
-      NODE_OPTIONS: "--dns-result-order=ipv4first"
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - chat_network
 
 volumes:
   postgres_data:
