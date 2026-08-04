@@ -89,7 +89,14 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
   const joinVoiceRoom = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      } catch (err) {
+        console.warn('[WEBRTC] Could not get both audio and video, falling back to audio only:', err);
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        setIsVideoOff(true);
+      }
       localStreamRef.current = stream;
       setLocalStream(stream);
       
@@ -255,8 +262,16 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     const requestPermissions = async () => {
       try {
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-          stream.getTracks().forEach(track => track.stop());
+          let stream;
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+          } catch (err) {
+            console.warn('[PERMISSION] Could not request both, falling back to audio only:', err);
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          }
+          if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+          }
         }
       } catch (err) {
         console.warn('[PERMISSION] Mic/Camera permission denied or not available:', err);
