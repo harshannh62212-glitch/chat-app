@@ -292,6 +292,12 @@ async function createTables() {
         archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, friend_id)
       );
+
+      CREATE TABLE IF NOT EXISTS public.system_config (
+        key VARCHAR(255) PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     // Archive trigger function and trigger

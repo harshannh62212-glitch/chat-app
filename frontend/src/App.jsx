@@ -113,17 +113,42 @@ function App() {
       if (!saved && import.meta.env.PROD) {
         try {
           let tunnel = '';
-          // Try fetching dedicated tunnel.json first
+          // Try fetching from Supabase REST API first
           try {
-            const tunnelRes = await fetch('/tunnel.json');
-            if (tunnelRes.ok && tunnelRes.headers.get('content-type')?.includes('application/json')) {
-              const data = await tunnelRes.json();
-              if (data && data.url) {
-                tunnel = data.url;
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+            if (supabaseUrl && supabaseAnonKey) {
+              const res = await fetch(`${supabaseUrl}/rest/v1/system_config?key=eq.active_tunnel_url`, {
+                headers: {
+                  'apikey': supabaseAnonKey,
+                  'Authorization': `Bearer ${supabaseAnonKey}`
+                }
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data && data[0] && data[0].value) {
+                  tunnel = data[0].value;
+                  console.log('[AXIOS] Resolved active tunnel URL from Supabase:', tunnel);
+                }
               }
             }
-          } catch (e) {
-            // Ignore and fall back to vercel.json
+          } catch (supabaseErr) {
+            console.warn('[AXIOS] Failed to fetch tunnel URL from Supabase:', supabaseErr);
+          }
+
+          // Try fetching dedicated tunnel.json first
+          if (!tunnel) {
+            try {
+              const tunnelRes = await fetch('/tunnel.json');
+              if (tunnelRes.ok && tunnelRes.headers.get('content-type')?.includes('application/json')) {
+                const data = await tunnelRes.json();
+                if (data && data.url) {
+                  tunnel = data.url;
+                }
+              }
+            } catch (e) {
+              // Ignore and fall back to vercel.json
+            }
           }
 
           // Fall back to vercel.json

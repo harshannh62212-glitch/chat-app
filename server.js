@@ -11,6 +11,7 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
   (async () => {
     try {
       await initDB();
+      startTunnelUrlWatcher();
       for (let i = 0; i < numCPUs; i++) {
         cluster.fork();
       }
@@ -31,6 +32,7 @@ if (!useClustering) {
   (async () => {
     try {
       await initDB();
+      startTunnelUrlWatcher();
     } catch (err) {
       console.error('Failed to initialize database:', err);
       if (!process.env.VERCEL) {
@@ -64,6 +66,46 @@ const spotifyRoutes = require('./routes/spotify');
 const { query } = require('./db/database');
 const { filterContent, containsBannedWords } = require('./utils/contentFilter');
 const { startHealthCheck } = require('./backend/scripts/healthCheck');
+
+// Start tunnel URL watcher to update Supabase with the active Cloudflare tunnel URL
+function startTunnelUrlWatcher() {
+  if (cluster.isWorker) return;
+
+  console.log('[TUNNEL WATCHER] Starting active Cloudflare tunnel watcher...');
+  
+  const checkTunnelLog = async () => {
+    try {
+      const logPath = path.join(__dirname, 'cloudflared.log');
+      if (!fs.existsSync(logPath)) {
+        return;
+      }
+      
+      const logContent = fs.readFileSync(logPath, 'utf8');
+      const match = logContent.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+      if (match) {
+        const tunnelUrl = match[0];
+        const currentRes = await query("SELECT value FROM system_config WHERE key = 'active_tunnel_url'");
+        const currentUrl = currentRes.rows[0]?.value;
+        
+        if (currentUrl !== tunnelUrl) {
+          console.log(`[TUNNEL WATCHER] New tunnel URL detected: ${tunnelUrl}. Updating database...`);
+          await query(`
+            INSERT INTO system_config (key, value, updated_at)
+            VALUES ('active_tunnel_url', $1, CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = CURRENT_TIMESTAMP;
+          `, [tunnelUrl]);
+        }
+      }
+    } catch (err) {
+      console.error('[TUNNEL WATCHER] Error checking/updating tunnel URL:', err);
+    }
+  };
+
+  // Run initial check and then poll every 15 seconds
+  setTimeout(checkTunnelLog, 5000);
+  setInterval(checkTunnelLog, 15000);
+}
+
 const app = express();
 const server = http.createServer(app);
 const corsWhitelist = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['*'];
