@@ -2,15 +2,15 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://plumbing-laughing-fame-martha.trycloudflare.com/api/$1"
+      "destination": "https://clicking-reservations-pubs-trustees.trycloudflare.com/api/$1"
     },
     {
       "source": "/socket.io/(.*)",
-      "destination": "https://plumbing-laughing-fame-martha.trycloudflare.com/socket.io/$1"
+      "destination": "https://clicking-reservations-pubs-trustees.trycloudflare.com/socket.io/$1"
     },
     {
       "source": "/ping",
-      "destination": "https://plumbing-laughing-fame-martha.trycloudflare.com/ping"
+      "destination": "https://clicking-reservations-pubs-trustees.trycloudflare.com/ping"
     },
     {
       "source": "/(.*)",

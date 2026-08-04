@@ -2,11 +2,11 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "https://plumbing-laughing-fame-martha.trycloudflare.com/api/$1"
+      "dest": "https://clicking-reservations-pubs-trustees.trycloudflare.com/api/$1"
     },
     {
       "src": "/socket.io/(.*)",
-      "dest": "https://plumbing-laughing-fame-martha.trycloudflare.com/socket.io/$1"
+      "dest": "https://clicking-reservations-pubs-trustees.trycloudflare.com/socket.io/$1"
     },
     {
       "handle": "filesystem"
