@@ -506,7 +506,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   };
 
   const allMentionableUsers = [
-    { id: 'gemini-bot-id', username: 'gemini' },
+    { id: 'bot-id', username: 'bot' },
     ...members
   ];
   const filteredTags = allMentionableUsers.filter(u => 

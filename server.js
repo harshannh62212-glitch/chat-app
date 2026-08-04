@@ -1107,8 +1107,8 @@ io.on('connection', (socket) => {
       });
       // ── Layer 3: AI async eval (catches context/bypass attempts the keyword list missed) ──
       evaluateMessageAsync(data.id, filteredContent, 'server');
-      if (filteredContent.toLowerCase().includes('@gemini')) {
-        handleGeminiBotResponse(serverId, chatroom_id, filteredContent, senderId);
+      if (filteredContent.toLowerCase().includes('@bot')) {
+        handleLocalBotResponse(serverId, chatroom_id, filteredContent, senderId);
       }
     } else if (dmWith) {
       io.to(`user-${dmWith}`).emit('new-dm', {
@@ -1221,110 +1221,68 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 5000;
 
-// Gemini Bot response handler
-async function handleGeminiBotResponse(serverId, chatroomId, content, senderId) {
-  const promptText = content.replace(/@gemini/gi, '').trim();
+// Local Bot response handler (1B parameter llama3.2:1b model capped at 1 thread to keep CPU under 20% and memory under 8GB)
+async function handleLocalBotResponse(serverId, chatroomId, content, senderId) {
+  const promptText = content.replace(/@bot/gi, '').trim();
   if (!promptText) return;
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.warn('[GEMINI BOT] GEMINI_API_KEY is missing in env!');
-      return;
+  const botSocketRoom = `server-${serverId}`;
+  io.to(botSocketRoom).emit('user-typing', { userId: 'bot-id' });
+
+  try {
+    const prompt = `You are "bot", a sarcastic, witty, and extremely fun AI assistant integrated into a Discord-style chat channel. Keep the response under 120 words.
+    User's message: "${promptText}"`;
+
+    let botResponse = '';
+    try {
+      console.log(`[LOCAL BOT] Querying local llama3.2:1b model...`);
+      const response = await fetch('http://127.0.0.1:11434/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'llama3.2:1b',
+          prompt: prompt,
+          stream: false,
+          options: {
+            num_thread: 1 // Cap CPU to 1 thread (~10-20% max CPU on Mac)
+          }
+        })
+      });
+      if (response.ok) {
+        const json = await response.json();
+        botResponse = json.response.trim();
+        console.log(`[LOCAL BOT] Success generating response.`);
+      }
+    } catch (e) {
+      console.warn(`[LOCAL BOT] Local model generate failed:`, e.message);
+      botResponse = "Sorry, my local 1B model is currently unavailable.";
     }
 
-    const botSocketRoom = `server-${serverId}`;
-    io.to(botSocketRoom).emit('user-typing', { userId: 'gemini-bot-id' });
+    const result = await query(
+      `INSERT INTO server_messages (sender_id, chatroom_id, content, is_moderated)
+       VALUES ($1, $2, $3, true) RETURNING id, created_at`,
+      ['bot-id', chatroomId, botResponse]
+    );
+    
+    const newMsgId = result.rows[0].id;
+    const createdAt = result.rows[0].created_at;
 
-    try {
-      const prompt = `You are "Gemini AI", a sarcastic, witty, and extremely fun AI assistant integrated into a Discord-style chat channel.
-      Respond with personality, jokes, light sarcasm, and clever remarks. You can use popular internet slang and emojis. Keep the response under 120 words.
-      User's message: "${promptText}"`;
-
-      const models = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp'];
-      let botResponse = '';
-
-      for (const model of models) {
-        try {
-          console.log(`[GEMINI BOT] Attempting response with model: ${model}`);
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }]
-            })
-          });
-
-          if (response.ok) {
-            const json = await response.json();
-            const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) {
-              botResponse = text;
-              console.log(`[GEMINI BOT] Success with model: ${model}`);
-              break;
-            }
-          } else {
-            const errText = await response.text();
-            console.warn(`[GEMINI BOT] Model ${model} failed:`, errText);
-          }
-        } catch (err) {
-          console.warn(`[GEMINI BOT] Error with model ${model}:`, err.message);
-        }
-      }
-
-      if (!botResponse) {
-        const localModel = await getLocalOllamaModel();
-        if (localModel) {
-          try {
-            console.log(`[GEMINI BOT] Falling back to local model: ${localModel}`);
-            const response = await fetch('http://127.0.0.1:11434/api/generate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                model: localModel,
-                prompt: `You are "Gemini AI", a sarcastic, witty, and extremely fun AI assistant. Respond to: "${promptText}"`,
-                stream: false
-              })
-            });
-            if (response.ok) {
-              const json = await response.json();
-              botResponse = json.response.trim();
-              console.log(`[GEMINI BOT] Success with local model: ${localModel}`);
-            }
-          } catch (e) {
-            console.warn(`[GEMINI BOT] Local model fallback failed:`, e.message);
-          }
-        }
-      }
-
-      if (!botResponse) {
-        botResponse = "Sorry, my API quota limit has been temporarily reached on all models. Please try again in a minute!";
-      }
-
-      const result = await query(
-        `INSERT INTO server_messages (sender_id, chatroom_id, content, is_moderated)
-         VALUES ($1, $2, $3, true) RETURNING id, created_at`,
-        ['gemini-bot-id', chatroomId, botResponse]
-      );
-      
-      const newMsgId = result.rows[0].id;
-      const createdAt = result.rows[0].created_at;
-
-      io.to(botSocketRoom).emit('new-message', {
-        id: newMsgId,
-        senderId: 'gemini-bot-id',
-        sender_id: 'gemini-bot-id',
-        username: 'Gemini AI Assistant',
-        avatar_url: 'https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/google-gemini-icon.png',
-        content: botResponse,
-        serverId,
-        chatroom_id: chatroomId,
-        created_at: createdAt,
-        timestamp: createdAt,
-        isDM: false,
-        reactions: {}
-      });
+    io.to(botSocketRoom).emit('new-message', {
+      id: newMsgId,
+      senderId: 'bot-id',
+      sender_id: 'bot-id',
+      username: 'bot',
+      avatar_url: 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png',
+      content: botResponse,
+      serverId,
+      chatroom_id: chatroomId,
+      created_at: createdAt,
+      timestamp: createdAt,
+      isDM: false,
+      reactions: {}
+    });
   } catch (err) {
-    console.error('[GEMINI BOT] Error generating response:', err);
+    console.error('[LOCAL BOT] Error generating response:', err);
   }
 }
 
