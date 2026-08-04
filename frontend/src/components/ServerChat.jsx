@@ -7,16 +7,15 @@ import GiphyPanel from './GiphyPanel';
 import ReportButton from './ReportButton';
 
 
+const fallbackURL = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
 const savedProxyTarget = localStorage.getItem('custom_proxy_target');
-const socketUrl = savedProxyTarget || (import.meta.env.PROD ? window.location.origin : 'http://localhost:8000');
+const socketUrl = savedProxyTarget || (import.meta.env.PROD ? fallbackURL : 'http://localhost:8000');
 const socket = io(socketUrl, {
   autoConnect: true,
   extraHeaders: {
     'bypass-tunnel-reminder': 'true'
   }
 });
-
-const fallbackURL = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
 
 socket.on('connect_error', (err) => {
   console.warn('[SOCKET] Connection error:', err.message);
