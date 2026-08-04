@@ -16,6 +16,19 @@ const socket = io(socketUrl, {
   }
 });
 
+const fallbackURL = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
+
+socket.on('connect_error', (err) => {
+  console.warn('[SOCKET] Connection error:', err.message);
+  if (import.meta.env.PROD && socket.io.uri !== fallbackURL) {
+    console.log('[SOCKET] Switching socket connection to fallback Render URL:', fallbackURL);
+    socket.io.uri = fallbackURL;
+    socket.disconnect().connect();
+    axios.defaults.baseURL = fallbackURL;
+    localStorage.setItem('custom_proxy_target', fallbackURL);
+  }
+});
+
 function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInfo, onBack }) {
   const [chatrooms, setChatrooms] = useState([]);
   const [selectedChatroom, setSelectedChatroom] = useState(null);
