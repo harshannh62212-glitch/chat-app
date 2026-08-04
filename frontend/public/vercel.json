@@ -2,15 +2,15 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://phentermine-novelty-toolbar-respective.trycloudflare.com/api/$1"
+      "destination": "https://plumbing-laughing-fame-martha.trycloudflare.com/api/$1"
     },
     {
       "source": "/socket.io/(.*)",
-      "destination": "https://phentermine-novelty-toolbar-respective.trycloudflare.com/socket.io/$1"
+      "destination": "https://plumbing-laughing-fame-martha.trycloudflare.com/socket.io/$1"
     },
     {
       "source": "/ping",
-      "destination": "https://phentermine-novelty-toolbar-respective.trycloudflare.com/ping"
+      "destination": "https://plumbing-laughing-fame-martha.trycloudflare.com/ping"
     },
     {
       "source": "/(.*)",

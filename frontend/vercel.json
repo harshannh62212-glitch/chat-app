@@ -2,11 +2,11 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "https://phentermine-novelty-toolbar-respective.trycloudflare.com/api/$1"
+      "dest": "https://plumbing-laughing-fame-martha.trycloudflare.com/api/$1"
     },
     {
       "src": "/socket.io/(.*)",
-      "dest": "https://phentermine-novelty-toolbar-respective.trycloudflare.com/socket.io/$1"
+      "dest": "https://plumbing-laughing-fame-martha.trycloudflare.com/socket.io/$1"
     },
     {
       "handle": "filesystem"
