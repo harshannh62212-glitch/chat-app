@@ -1,13 +1,16 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+const isVercel = Boolean(process.env.VERCEL);
+const useSsl = process.env.DB_SSL === 'true' || (isVercel && process.env.DB_SSL !== 'false');
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  min: 2,
-  max: 150,
+  min: isVercel ? 0 : 2,
+  max: isVercel ? 20 : 150,
   idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 5000,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
+  ssl: useSsl ? { rejectUnauthorized: false } : false
 });
 
 pool.on('error', (err) => {
@@ -106,6 +109,12 @@ async function createTables() {
       );
     `);
 
+    // Add reactions support to messages if not present
+    await client.query(`
+      ALTER TABLE server_messages ADD COLUMN IF NOT EXISTS reactions JSONB DEFAULT '{}'::jsonb;
+      ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS reactions JSONB DEFAULT '{}'::jsonb;
+    `);
+
     // Friendships table
     await client.query(`
       CREATE TABLE IF NOT EXISTS friendships (
@@ -127,6 +136,28 @@ async function createTables() {
         reason TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         expires_at TIMESTAMP
+      );
+    `);
+
+    // Banned words table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS banned_words (
+        id SERIAL PRIMARY KEY,
+        word VARCHAR(255) UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Reports table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS reports (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+        description TEXT NOT NULL,
+        screenshot_url TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'open',
+        ai_evaluation VARCHAR(20) NOT NULL DEFAULT 'unevaluated',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
@@ -156,26 +187,17 @@ async function createTables() {
       UPDATE users SET is_admin = true WHERE username = 'Nxghtmare3621';
     `);
 
-    // Banned words table
+    // Seed Gemini Bot user
     await client.query(`
-      CREATE TABLE IF NOT EXISTS banned_words (
-        id SERIAL PRIMARY KEY,
-        word VARCHAR(255) UNIQUE NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    // Reports table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS reports (
-        id SERIAL PRIMARY KEY,
-        user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
-        description TEXT NOT NULL,
-        screenshot_url TEXT,
-        status VARCHAR(20) NOT NULL DEFAULT 'open',
-        ai_evaluation VARCHAR(20) NOT NULL DEFAULT 'unevaluated',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+      INSERT INTO users (id, username, email, password, avatar_url)
+      VALUES (
+        'gemini-bot-id', 
+        'Gemini AI Assistant', 
+        'gemini-bot@ai.local', 
+        'bot-no-password-hash', 
+        'https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/google-gemini-icon.png'
+      )
+      ON CONFLICT (id) DO NOTHING;
     `);
 
     // Spotify Playlists table

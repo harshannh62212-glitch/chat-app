@@ -62,6 +62,14 @@ async function checkHealth() {
   }
 }
 
-// Run immediately then schedule next runs every 5 minutes.
-checkHealth();
-setInterval(checkHealth, 5 * 60 * 1000);
+function startHealthCheck() {
+  if (process.env.VERCEL) return;
+  checkHealth();
+  setInterval(checkHealth, 5 * 60 * 1000);
+}
+
+if (require.main === module) {
+  startHealthCheck();
+}
+
+module.exports = { sendSMS, checkHealth, startHealthCheck };

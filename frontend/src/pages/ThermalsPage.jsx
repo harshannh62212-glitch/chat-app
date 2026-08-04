@@ -47,6 +47,7 @@ function ThermalsPage({ onBack }) {
   const stressTimerRef = useRef(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [pingLatency, setPingLatency] = useState(null);
 
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
@@ -202,6 +203,35 @@ function ThermalsPage({ onBack }) {
     const interval = setInterval(fetchHealth, 15000);
     return () => clearInterval(interval);
   }, []);
+
+  // Ping every 3 seconds with 32 bytes of data to monitor latency
+  useEffect(() => {
+    let active = true;
+    const doPing = async () => {
+      try {
+        const startTime = performance.now();
+        // Send a 32-byte string (32 characters) in the request payload/query
+        const payload32 = 'x'.repeat(32);
+        await axios.get(`/api/ping?p=${payload32}`);
+        if (active) {
+          const latency = Math.round(performance.now() - startTime);
+          setPingLatency(latency);
+        }
+      } catch (err) {
+        if (active) {
+          setPingLatency(null);
+        }
+      }
+    };
+
+    doPing();
+    const interval = setInterval(doPing, 3000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
 
   useEffect(() => {
     if (isUnlocked) {
@@ -415,6 +445,14 @@ function ThermalsPage({ onBack }) {
             ⏱️ {metrics.uptime}
           </div>
           <div className="card-sub">Dell Latitude 5290</div>
+        </div>
+
+        <div className="thermal-card highlight-blue">
+          <div className="card-label">Network Latency</div>
+          <div className="card-val" style={{ color: '#70a1ff' }}>
+            ⚡ {pingLatency !== null ? `${pingLatency} ms` : 'Testing…'}
+          </div>
+          <div className="card-sub">32-byte payload every 3s</div>
         </div>
       </div>
 

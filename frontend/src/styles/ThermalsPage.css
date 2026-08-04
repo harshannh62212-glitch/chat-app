@@ -187,6 +187,7 @@ html, body {
 
 .thermal-card.highlight-purple { border-left: 4px solid #a55eea; }
 .thermal-card.highlight-green { border-left: 4px solid #2ed573; }
+.thermal-card.highlight-blue { border-left: 4px solid #70a1ff; }
 
 .card-label {
   font-size: 0.85em;

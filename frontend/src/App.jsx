@@ -8,10 +8,46 @@ import LandingPage from './pages/LandingPage';
 import axios from 'axios';
 import './styles/App.css';
 
+const fallbackURL = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
+
+// Clear failover target on load so we always try the primary server first upon new session
+if (localStorage.getItem('custom_proxy_target') === fallbackURL) {
+  localStorage.removeItem('custom_proxy_target');
+}
+
 // In production (Vercel), check for localstorage custom proxy target for sandbox testing
 const savedProxyTarget = localStorage.getItem('custom_proxy_target');
 axios.defaults.baseURL = savedProxyTarget || (import.meta.env.PROD ? '' : 'http://localhost:8000');
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
+
+let isFailedOver = false;
+
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    
+    // Check if error is due to network failure/timeout and we haven't failed over yet
+    if (!isFailedOver && (!error.response || error.code === 'ERR_NETWORK')) {
+      console.warn('[FAILOVER] Primary backend offline. Switching to Render cloud backup:', fallbackURL);
+      isFailedOver = true;
+      localStorage.setItem('custom_proxy_target', fallbackURL);
+      axios.defaults.baseURL = fallbackURL;
+      
+      // Update config for retry
+      originalRequest.baseURL = fallbackURL;
+      if (originalRequest.url && !originalRequest.url.startsWith('http')) {
+        originalRequest.url = originalRequest.url.startsWith('/') ? originalRequest.url : '/' + originalRequest.url;
+      }
+
+      // Notify other parts of the app (like socket connections)
+      window.dispatchEvent(new CustomEvent('api-failover-activated', { detail: { url: fallbackURL } }));
+      
+      return axios(originalRequest);
+    }
+    return Promise.reject(error);
+  }
+);
 
 import ThermalsPage from './pages/ThermalsPage';
 import AdminPanel from './components/AdminPanel';
@@ -80,24 +116,56 @@ function App() {
       const saved = localStorage.getItem('custom_proxy_target');
       if (!saved && import.meta.env.PROD) {
         try {
-          const res = await fetch('/vercel.json');
-          const config = await res.json();
-          const apiRewrite = config.rewrites?.find(r => r.source === '/api/(.*)');
-          if (apiRewrite && apiRewrite.destination) {
-            const tunnel = apiRewrite.destination.split('/api/')[0];
-            if (tunnel) {
-              console.log('[AXIOS] Bypassing Vercel proxy. Connecting directly to tunnel:', tunnel);
-              axios.defaults.baseURL = tunnel;
+          let tunnel = '';
+          // Try fetching dedicated tunnel.json first
+          try {
+            const tunnelRes = await fetch('/tunnel.json');
+            if (tunnelRes.ok && tunnelRes.headers.get('content-type')?.includes('application/json')) {
+              const data = await tunnelRes.json();
+              if (data && data.url) {
+                tunnel = data.url;
+              }
+            }
+          } catch (e) {
+            // Ignore and fall back to vercel.json
+          }
+
+          // Fall back to vercel.json
+          if (!tunnel) {
+            const res = await fetch('/vercel.json');
+            if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+              const config = await res.json();
+              if (config.rewrites) {
+                const apiRewrite = config.rewrites.find(r => r.source === '/api/(.*)');
+                if (apiRewrite && apiRewrite.destination && apiRewrite.destination.startsWith('http')) {
+                  tunnel = apiRewrite.destination.split('/api/')[0];
+                }
+              } else if (config.routes) {
+                const apiRoute = config.routes.find(r => r.src === '/api/(.*)');
+                if (apiRoute && apiRoute.dest && apiRoute.dest.startsWith('http')) {
+                  tunnel = apiRoute.dest.split('/api/')[0];
+                }
+              }
             }
           }
+
+          if (tunnel) {
+            console.log('[AXIOS] Bypassing Vercel proxy. Connecting directly to tunnel:', tunnel);
+            axios.defaults.baseURL = tunnel;
+          }
         } catch (err) {
-          console.error('[AXIOS] Failed to resolve direct tunnel URL:', err);
+          // Ignore if configs are not served
         }
       }
     };
     resolveDirectTarget();
 
     loadCustomBannedWords();
+    
+    // Request notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
     
     // Load custom theme, typography, and letter spacing variables on mount
     const savedTheme = localStorage.getItem('theme') || 'cosmic-dark';

@@ -8,8 +8,8 @@
 
 body {
   font-family: 'Outfit', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: radial-gradient(circle at 50% 50%, #1e2029 0%, #0f1015 100%);
-  color: #ffffff;
+  background-color: #0b0c10;
+  color: #f1f3f9;
 }
 
 .app.dashboard-view {
@@ -38,10 +38,8 @@ body {
 
 .sidebar {
   width: 300px;
-  background: rgba(23, 25, 35, 0.6);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  background: #111217;
+  border-right: 1px solid #1e2029;
   padding: 15px;
   overflow-y: auto;
   display: flex;
@@ -914,3 +912,101 @@ body {
   display: block;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
+
+/* Message Reactions Styling */
+.message-reactions-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.reaction-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: #b9bbbe;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.reaction-tag:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.reaction-tag.active {
+  background-color: rgba(88, 101, 242, 0.15);
+  border-color: rgba(88, 101, 242, 0.45);
+  color: #5865f2;
+}
+
+.reaction-count {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Add Reaction Dropdown */
+.add-reaction-inline-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.add-reaction-trigger-btn {
+  background: none;
+  border: none;
+  color: #72767d;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.add-reaction-trigger-btn:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #dcddde;
+}
+
+.reaction-picker-menu {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: #18191c;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 5px;
+  z-index: 100;
+  flex-direction: row;
+  gap: 4px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  margin-bottom: 5px;
+}
+
+.add-reaction-inline-dropdown:hover .reaction-picker-menu {
+  display: flex;
+}
+
+.reaction-picker-menu button {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: transform 0.1s ease;
+}
+
+.reaction-picker-menu button:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  transform: scale(1.2);
+}
+

@@ -25,21 +25,241 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   const [showMembers, setShowMembers] = useState(true);
   const [showGiphy, setShowGiphy] = useState(false);
 
+  // WebRTC Voice Rooms state & refs
+  const [inVoiceRoom, setInVoiceRoom] = useState(false);
+  const [voiceUsers, setVoiceUsers] = useState([]);
+  const [isMuted, setIsMuted] = useState(false);
+  
+  const localStreamRef = useRef(null);
+  const peersRef = useRef(new Map());
+  const audioElementsRef = useRef(new Map());
+
+  const leaveVoiceRoom = () => {
+    socket.emit('leave-voice', { voiceRoomId: server.id });
+    
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
+    
+    peersRef.current.forEach(pc => pc.close());
+    peersRef.current.clear();
+    
+    audioElementsRef.current.forEach(audio => {
+      audio.pause();
+      audio.remove();
+    });
+    audioElementsRef.current.clear();
+    
+    setInVoiceRoom(false);
+    setVoiceUsers([]);
+  };
+
+  const joinVoiceRoom = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      localStreamRef.current = stream;
+      
+      if (isMuted) {
+        stream.getAudioTracks().forEach(t => t.enabled = false);
+      }
+
+      setInVoiceRoom(true);
+      
+      socket.emit('join-voice', {
+        voiceRoomId: server.id,
+        userId: currentUser.id,
+        username: currentUser.username
+      });
+    } catch (err) {
+      console.error('[WEBRTC] Failed to get microphone stream:', err);
+      alert('Could not access microphone. Please check permissions.');
+    }
+  };
+
+  const toggleMute = () => {
+    const newState = !isMuted;
+    setIsMuted(newState);
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach(track => {
+        track.enabled = !newState;
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (!inVoiceRoom) return;
+
+    const createPeerConnection = (targetSocketId, otherUserInfo) => {
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
+
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => {
+          pc.addTrack(track, localStreamRef.current);
+        });
+      }
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('voice-signal', {
+            targetSocketId,
+            signal: { candidate: event.candidate }
+          });
+        }
+      };
+
+      pc.ontrack = (event) => {
+        const remoteStream = event.streams[0];
+        let audio = audioElementsRef.current.get(targetSocketId);
+        if (!audio) {
+          audio = document.createElement('audio');
+          audio.autoplay = true;
+          document.body.appendChild(audio);
+          audioElementsRef.current.set(targetSocketId, audio);
+        }
+        audio.srcObject = remoteStream;
+      };
+
+      peersRef.current.set(targetSocketId, pc);
+      return pc;
+    };
+
+    const handleVoiceRoomUsers = async (users) => {
+      setVoiceUsers(users);
+      for (const u of users) {
+        const pc = createPeerConnection(u.socketId, u);
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('voice-signal', {
+          targetSocketId: u.socketId,
+          signal: { offer }
+        });
+      }
+    };
+
+    const handleVoiceUserJoined = (user) => {
+      setVoiceUsers(prev => {
+        if (prev.some(u => u.socketId === user.socketId)) return prev;
+        return [...prev, user];
+      });
+    };
+
+    const handleVoiceSignal = async (data) => {
+      const { senderSocketId, signal } = data;
+      let pc = peersRef.current.get(senderSocketId);
+
+      if (signal.offer) {
+        pc = createPeerConnection(senderSocketId);
+        await pc.setRemoteDescription(new RTCSessionDescription(signal.offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('voice-signal', {
+          targetSocketId: senderSocketId,
+          signal: { answer }
+        });
+      } else if (signal.answer) {
+        if (pc) {
+          await pc.setRemoteDescription(new RTCSessionDescription(signal.answer));
+        }
+      } else if (signal.candidate) {
+        if (pc) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          } catch (e) {
+            console.error('[WEBRTC] Error adding ICE candidate:', e);
+          }
+        }
+      }
+    };
+
+    const handleVoiceUserLeft = (data) => {
+      const { socketId } = data;
+      setVoiceUsers(prev => prev.filter(u => u.socketId !== socketId));
+      
+      const pc = peersRef.current.get(socketId);
+      if (pc) {
+        pc.close();
+        peersRef.current.delete(socketId);
+      }
+
+      const audio = audioElementsRef.current.get(socketId);
+      if (audio) {
+        audio.pause();
+        audio.remove();
+        audioElementsRef.current.delete(socketId);
+      }
+    };
+
+    socket.on('voice-room-users', handleVoiceRoomUsers);
+    socket.on('voice-user-joined', handleVoiceUserJoined);
+    socket.on('voice-signal', handleVoiceSignal);
+    socket.on('voice-user-left', handleVoiceUserLeft);
+
+    return () => {
+      socket.off('voice-room-users', handleVoiceRoomUsers);
+      socket.off('voice-user-joined', handleVoiceUserJoined);
+      socket.off('voice-signal', handleVoiceSignal);
+      socket.off('voice-user-left', handleVoiceUserLeft);
+    };
+  }, [inVoiceRoom, server.id]);
+
+  useEffect(() => {
+    return () => {
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      peersRef.current.forEach(pc => pc.close());
+      audioElementsRef.current.forEach(audio => {
+        audio.pause();
+        audio.remove();
+      });
+    };
+  }, []);
+
   useEffect(() => {
     const resolveSocketTunnel = async () => {
       const saved = localStorage.getItem('custom_proxy_target');
       if (!saved && import.meta.env.PROD) {
         try {
-          const res = await fetch('/vercel.json');
-          const config = await res.json();
-          const apiRewrite = config.rewrites?.find(r => r.source === '/api/(.*)');
-          if (apiRewrite && apiRewrite.destination) {
-            const tunnel = apiRewrite.destination.split('/api/')[0];
-            if (tunnel && socket.io.uri !== tunnel) {
-              console.log('[SOCKET] Reconnecting socket directly to tunnel:', tunnel);
-              socket.io.uri = tunnel;
-              socket.disconnect().connect();
+          let tunnel = '';
+          // Try fetching dedicated tunnel.json first
+          try {
+            const tunnelRes = await fetch('/tunnel.json');
+            if (tunnelRes.ok && tunnelRes.headers.get('content-type')?.includes('application/json')) {
+              const data = await tunnelRes.json();
+              if (data && data.url) {
+                tunnel = data.url;
+              }
             }
+          } catch (e) {
+            // Ignore and fall back to vercel.json
+          }
+
+          // Fall back to vercel.json
+          if (!tunnel) {
+            const res = await fetch('/vercel.json');
+            if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+              const config = await res.json();
+              if (config.rewrites) {
+                const apiRewrite = config.rewrites.find(r => r.source === '/api/(.*)');
+                if (apiRewrite && apiRewrite.destination && apiRewrite.destination.startsWith('http')) {
+                  tunnel = apiRewrite.destination.split('/api/')[0];
+                }
+              } else if (config.routes) {
+                const apiRoute = config.routes.find(r => r.src === '/api/(.*)');
+                if (apiRoute && apiRoute.dest && apiRoute.dest.startsWith('http')) {
+                  tunnel = apiRoute.dest.split('/api/')[0];
+                }
+              }
+            }
+          }
+
+          if (tunnel && socket.io.uri !== tunnel) {
+            console.log('[SOCKET] Reconnecting socket directly to tunnel:', tunnel);
+            socket.io.uri = tunnel;
+            socket.disconnect().connect();
           }
         } catch (err) {
           console.error('[SOCKET] Failed to resolve direct tunnel URL:', err);
@@ -47,6 +267,19 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       }
     };
     resolveSocketTunnel();
+
+    const handleFailover = (e) => {
+      const fallbackUrl = e.detail.url;
+      if (socket.io.uri !== fallbackUrl) {
+        console.log('[SOCKET] Reconnecting socket to fallback server:', fallbackUrl);
+        socket.io.uri = fallbackUrl;
+        socket.disconnect().connect();
+      }
+    };
+    window.addEventListener('api-failover-activated', handleFailover);
+    return () => {
+      window.removeEventListener('api-failover-activated', handleFailover);
+    };
   }, []);
   const [viewingChat, setViewingChat] = useState(true);
   const messagesEndRef = useRef(null);
@@ -111,6 +344,14 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     socket.emit('user-joined', currentUser.id, server.id);
 
     const handleNewMessage = (msgData) => {
+      const isSelf = msgData.senderId === currentUser.id || msgData.sender_id === currentUser.id;
+      if (!isSelf && document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification(`New message in #${server.name}`, {
+          body: `${msgData.username || 'Someone'}: ${msgData.content}`,
+          icon: msgData.avatar_url || ''
+        });
+      }
+
       if (msgData.serverId === server.id || msgData.chatroom_id === selectedChatroom.id) {
         setMessages(prev => {
           if (prev.some(m => m.id === msgData.id)) return prev;
@@ -123,12 +364,20 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       setMessages(prev => prev.filter(m => m.id.toString() !== data.id.toString()));
     };
 
+    const handleReactionUpdated = (data) => {
+      if (data.type === 'server') {
+        setMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, reactions: data.reactions } : m));
+      }
+    };
+
     socket.on('new-message', handleNewMessage);
     socket.on('message-deleted', handleMessageDeleted);
+    socket.on('reaction-updated', handleReactionUpdated);
 
     return () => {
       socket.off('new-message', handleNewMessage);
       socket.off('message-deleted', handleMessageDeleted);
+      socket.off('reaction-updated', handleReactionUpdated);
       socket.emit('user-left', currentUser.id, server.id);
     };
   }, [selectedChatroom, server.id]);
@@ -136,6 +385,17 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const handleToggleReaction = (messageId, emoji, hasReacted) => {
+    const eventName = hasReacted ? 'remove-reaction' : 'add-reaction';
+    socket.emit(eventName, {
+      messageId,
+      type: 'server',
+      emoji,
+      userId: currentUser.id,
+      serverId: server.id
+    });
+  };
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -282,6 +542,70 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
             ))}
           </div>
 
+          {/* Voice Channels Section */}
+          <div className="voice-rooms-wrapper" style={{ marginTop: '20px', padding: '0 10px' }}>
+            <h4 style={{ margin: '10px 0 5px 0', fontSize: '0.8em', textTransform: 'uppercase', color: '#72767d', letterSpacing: '0.5px' }}>Voice Channels</h4>
+            {!inVoiceRoom ? (
+              <button className="voice-join-btn" onClick={joinVoiceRoom} style={{
+                width: '100%',
+                padding: '8px 10px',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                color: '#fff',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '0.9em',
+                transition: 'background-color 0.2s'
+              }}>
+                🔊 Join Voice Room
+              </button>
+            ) : (
+              <div className="voice-active-panel" style={{
+                backgroundColor: 'rgba(78, 93, 148, 0.15)',
+                border: '1px solid rgba(88, 101, 242, 0.3)',
+                padding: '10px',
+                borderRadius: '8px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ color: '#5865f2', fontWeight: 'bold', fontSize: '0.85em' }}>🟢 Connected Voice</span>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={toggleMute} style={{
+                      background: 'none',
+                      border: 'none',
+                      color: isMuted ? '#f04747' : '#fff',
+                      cursor: 'pointer',
+                      fontSize: '1em'
+                    }} title={isMuted ? 'Unmute' : 'Mute'}>
+                      {isMuted ? '🎙️❌' : '🎙️'}
+                    </button>
+                    <button onClick={leaveVoiceRoom} style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#f04747',
+                      cursor: 'pointer',
+                      fontSize: '1.1em'
+                    }} title="Disconnect">
+                      📴
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="voice-users-list" style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '5px' }}>
+                  <div style={{ fontSize: '0.8em', color: '#b9bbbe' }}>👤 {currentUser.username} (You)</div>
+                  {voiceUsers.map(user => (
+                    <div key={user.socketId} style={{ fontSize: '0.8em', color: '#b9bbbe' }}>
+                      👤 {user.username}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* User profile details at the bottom of the column */}
           <div className="discord-user-bar">
             <div className="user-bar-profile">
@@ -341,6 +665,41 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                     ) : (
                       <div className="message-text">{msg.content}</div>
                     )}
+
+                    <div className="message-reactions-row">
+                      {msg.reactions && Object.entries(msg.reactions).map(([emoji, userIds]) => {
+                        if (!Array.isArray(userIds) || userIds.length === 0) return null;
+                        const hasReacted = userIds.includes(currentUser.id);
+                        return (
+                          <button
+                            key={emoji}
+                            className={`reaction-tag ${hasReacted ? 'active' : ''}`}
+                            onClick={() => handleToggleReaction(msg.id, emoji, hasReacted)}
+                            title={userIds.length + ' reactions'}
+                          >
+                            <span>{emoji}</span>
+                            <span className="reaction-count">{userIds.length}</span>
+                          </button>
+                        );
+                      })}
+                      
+                      <div className="add-reaction-inline-dropdown">
+                        <button className="add-reaction-trigger-btn" title="Add Reaction">😀+</button>
+                        <div className="reaction-picker-menu">
+                          {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => {
+                            const hasReacted = msg.reactions && Array.isArray(msg.reactions[emoji]) && msg.reactions[emoji].includes(currentUser.id);
+                            return (
+                              <button
+                                key={emoji}
+                                onClick={() => handleToggleReaction(msg.id, emoji, hasReacted)}
+                              >
+                                {emoji}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))

@@ -397,16 +397,17 @@
   --font-size: 15px;
   --letter-spacing: normal;
   
-  /* Theme default variables (Cosmic Dark) */
-  --bg-gradient: radial-gradient(circle at 50% 50%, #1e2029 0%, #0f1015 100%);
-  --sidebar-bg: rgba(23, 25, 35, 0.6);
-  --sidebar-border: rgba(255, 255, 255, 0.06);
-  --chat-bg: rgba(30, 32, 41, 0.45);
-  --header-bg: rgba(23, 25, 35, 0.5);
-  --accent-color: #5865f2;
-  --accent-hover: #4752c4;
-  --accent-shadow: rgba(88, 101, 242, 0.25);
-  --panel-blur: blur(20px);
+  /* Theme default variables (Cosmic Dark -> now Premium Slate Dark) */
+  --bg-gradient: none;
+  background-color: #0b0c10 !important;
+  --sidebar-bg: #111217;
+  --sidebar-border: #1f242e;
+  --chat-bg: #0b0c10;
+  --header-bg: #111217;
+  --accent-color: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-shadow: rgba(99, 102, 241, 0.1);
+  --panel-blur: none;
 }
 
 /* Discord Classic Theme overrides */
@@ -419,7 +420,7 @@ body.theme-discord-classic {
   --header-bg: #2f3136;
   --accent-color: #5865f2;
   --accent-hover: #4752c4;
-  --accent-shadow: rgba(88, 101, 242, 0.2);
+  --accent-shadow: rgba(88, 101, 242, 0.15);
   --panel-blur: none;
 }
 
@@ -428,26 +429,27 @@ body.theme-midnight-obsidian {
   --bg-gradient: none;
   background-color: #000000 !important;
   --sidebar-bg: #0a0a0a;
-  --sidebar-border: #151515;
+  --sidebar-border: #1a1a1a;
   --chat-bg: #000000;
   --header-bg: #0a0a0a;
-  --accent-color: #9d4edd;
-  --accent-hover: #7b2cbf;
-  --accent-shadow: rgba(157, 78, 221, 0.35);
+  --accent-color: #f3f4f6;
+  --accent-hover: #e5e7eb;
+  --accent-shadow: rgba(255, 255, 255, 0.05);
   --panel-blur: none;
 }
 
-/* Cyberpunk Neon overrides */
+/* Cyberpunk Neon -> now Premium Nordic Teal overrides */
 body.theme-cyberpunk-neon {
-  --bg-gradient: linear-gradient(135deg, #0f051d 0%, #05010a 100%);
-  --sidebar-bg: rgba(20, 5, 35, 0.7);
-  --sidebar-border: rgba(0, 240, 255, 0.2);
-  --chat-bg: rgba(10, 2, 20, 0.5);
-  --header-bg: rgba(20, 5, 35, 0.8);
-  --accent-color: #ff007f;
-  --accent-hover: #e6006f;
-  --accent-shadow: rgba(255, 0, 127, 0.4);
-  --panel-blur: blur(15px);
+  --bg-gradient: none;
+  background-color: #090d16 !important;
+  --sidebar-bg: #0f1626;
+  --sidebar-border: #1e293b;
+  --chat-bg: #090d16;
+  --header-bg: #0f1626;
+  --accent-color: #0d9488;
+  --accent-hover: #0f766e;
+  --accent-shadow: rgba(13, 148, 136, 0.15);
+  --panel-blur: none;
 }
 
 /* Discord Layout Styles */
@@ -504,19 +506,15 @@ body.theme-cyberpunk-neon {
 /* 1. Server Rail styles */
 .discord-server-rail {
   width: 76px;
-  background: rgba(13, 14, 20, 0.65);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--sidebar-bg);
   padding: 16px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
+  border-right: 1px solid var(--sidebar-border);
   flex-shrink: 0;
   overflow-y: auto;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
 .discord-server-rail::-webkit-scrollbar {
@@ -575,36 +573,30 @@ body.theme-cyberpunk-neon {
 }
 
 .add-server-icon {
-  color: #00ff88;
+  color: #10b981;
   font-size: 24px;
 }
 .add-server-icon:hover {
-  background: #00ff88 !important;
-  color: #121214 !important;
-  box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3) !important;
+  background: #10b981 !important;
+  color: #ffffff !important;
 }
 
 .discover-icon {
-  color: #00f2fe;
+  color: var(--accent-color);
 }
 .discover-icon:hover, .discover-icon.active {
-  background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%) !important;
-  color: white;
-  box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3) !important;
+  background: var(--accent-color) !important;
+  color: white !important;
 }
 
 /* 2. Sub-sidebar styles */
 .discord-sub-sidebar {
   width: 250px;
-  background: rgba(18, 20, 29, 0.55);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
 
@@ -1100,12 +1092,9 @@ body.theme-cyberpunk-neon {
 .admin-panel,
 .welcome-island {
   flex: 1;
-  background: rgba(22, 24, 35, 0.55) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 20px !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45) !important;
+  background: var(--chat-bg) !important;
+  border: 1px solid var(--sidebar-border) !important;
+  border-radius: 8px !important;
   overflow: hidden;
   display: flex;
   flex-direction: column;

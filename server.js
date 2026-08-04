@@ -4,7 +4,9 @@ const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
 const { initDB } = require('./db/database');
 
-if (cluster.isPrimary || cluster.isMaster) {
+const useClustering = process.env.NODE_ENV === 'production' && !process.env.VERCEL && require.main === module;
+
+if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
   console.log(`[CLUSTER] Master ${process.pid} is running. Spawning ${numCPUs} workers...`);
   (async () => {
     try {
@@ -22,6 +24,20 @@ if (cluster.isPrimary || cluster.isMaster) {
     cluster.fork();
   });
   return; // Stop execution on master process
+}
+
+// For worker processes or when clustering is disabled in development / serverless
+if (!useClustering) {
+  (async () => {
+    try {
+      await initDB();
+    } catch (err) {
+      console.error('Failed to initialize database:', err);
+      if (!process.env.VERCEL) {
+        process.exit(1);
+      }
+    }
+  })();
 }
 
 
@@ -47,7 +63,7 @@ const reportRoutes = require('./routes/report');
 const spotifyRoutes = require('./routes/spotify');
 const { query } = require('./db/database');
 const { filterContent, containsBannedWords } = require('./utils/contentFilter');
-require('./backend/scripts/healthCheck');
+const { startHealthCheck } = require('./backend/scripts/healthCheck');
 const app = express();
 const server = http.createServer(app);
 const corsWhitelist = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['*'];
@@ -72,18 +88,28 @@ const io = socketIO(server, {
 
 app.set('io', io); // Make io accessible in routes via req.app.get('io')
 
-const { createClient } = require('redis');
-const { createAdapter } = require('@socket.io/redis-adapter');
-
-const pubClient = createClient({ url: process.env.REDIS_URL || 'redis://redis:6379' });
-const subClient = pubClient.duplicate();
-
-Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
-  io.adapter(createAdapter(pubClient, subClient));
-  console.log(`[SOCKET.IO] Redis adapter configured on worker process ${process.pid}`);
-}).catch(err => {
-  console.error('[SOCKET.IO] Redis adapter connection failed:', err);
+// Express route handler for Socket.IO HTTP polling on serverless platforms (Vercel)
+app.use('/socket.io', (req, res) => {
+  io.engine.handleRequest(req, res);
 });
+
+const redisUrl = process.env.REDIS_URL;
+if (redisUrl) {
+  const { createClient } = require('redis');
+  const { createAdapter } = require('@socket.io/redis-adapter');
+
+  const pubClient = createClient({ url: redisUrl });
+  const subClient = pubClient.duplicate();
+
+  Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
+    io.adapter(createAdapter(pubClient, subClient));
+    console.log(`[SOCKET.IO] Redis adapter configured on worker process ${process.pid}`);
+  }).catch(err => {
+    console.error('[SOCKET.IO] Redis adapter connection failed:', err);
+  });
+} else {
+  console.log(`[SOCKET.IO] Redis URL not specified. Running with in-memory adapter on process ${process.pid}`);
+}
 
 
 app.use(helmet({
@@ -112,6 +138,14 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname, 'frontend/dist')));
+
+app.get('/ping', (req, res) => {
+  res.send('pong-32bytes-payload-status-okay');
+});
+
+app.get('/api/ping', (req, res) => {
+  res.send('pong-32bytes-payload-status-okay');
+});
 
 const adminRoutes = require('./routes/admin');
 
@@ -697,9 +731,6 @@ function getBatteryInfo() {
   return { percent, status, isCharging };
 }
 
-app.get('/ping', (req, res) => {
-  res.send('pong-32bytes-payload-status-okay');
-});
 
 app.get('/api/system/status', (req, res) => {
   res.json({
@@ -844,7 +875,7 @@ app.post('/api/system/stress/stop', (req, res) => {
 
 // Serve index.html for React routing fallback
 app.get(/.*/, (req, res, next) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/ping')) {
+  if (req.path.startsWith('/api') || req.path.startsWith('/ping') || req.path.startsWith('/socket.io')) {
     return next();
   }
   res.sendFile(path.join(__dirname, 'frontend/dist/index.html'));
@@ -972,6 +1003,34 @@ Respond ONLY with this JSON:
   }
 }
 
+const voiceRooms = new Map();
+
+function handleLeaveVoice(socket, voiceRoomId) {
+  if (!voiceRoomId) {
+    for (const [rid, users] of voiceRooms.entries()) {
+      if (users.has(socket.id)) {
+        users.delete(socket.id);
+        socket.leave(`voice-${rid}`);
+        io.to(`voice-${rid}`).emit('voice-user-left', { socketId: socket.id });
+        if (users.size === 0) {
+          voiceRooms.delete(rid);
+        }
+      }
+    }
+    return;
+  }
+  
+  const roomUsers = voiceRooms.get(voiceRoomId);
+  if (roomUsers) {
+    roomUsers.delete(socket.id);
+    socket.leave(`voice-${voiceRoomId}`);
+    io.to(`voice-${voiceRoomId}`).emit('voice-user-left', { socketId: socket.id });
+    if (roomUsers.size === 0) {
+      voiceRooms.delete(voiceRoomId);
+    }
+  }
+}
+
 io.on('connection', (socket) => {
   console.log('New user connected:', socket.id);
 
@@ -1031,6 +1090,9 @@ io.on('connection', (socket) => {
       });
       // ── Layer 3: AI async eval (catches context/bypass attempts the keyword list missed) ──
       evaluateMessageAsync(data.id, filteredContent, 'server');
+      if (filteredContent.toLowerCase().includes('@gemini')) {
+        handleGeminiBotResponse(serverId, chatroom_id, filteredContent, senderId);
+      }
     } else if (dmWith) {
       io.to(`user-${dmWith}`).emit('new-dm', {
         senderId,
@@ -1054,13 +1116,156 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('add-reaction', async (data) => {
+    const { messageId, type, emoji, userId } = data;
+    try {
+      const table = type === 'server' ? 'server_messages' : 'direct_messages';
+      const res = await query(`SELECT reactions FROM ${table} WHERE id = $1`, [messageId]);
+      if (res.rows.length > 0) {
+        let reactions = res.rows[0].reactions || {};
+        if (!reactions[emoji]) {
+          reactions[emoji] = [];
+        }
+        if (!reactions[emoji].includes(userId)) {
+          reactions[emoji].push(userId);
+        }
+        await query(`UPDATE ${table} SET reactions = $1 WHERE id = $2`, [JSON.stringify(reactions), messageId]);
+        io.emit('reaction-updated', { messageId, type, reactions });
+      }
+    } catch (err) {
+      console.error('[REACTION] Error adding reaction:', err);
+    }
+  });
+
+  socket.on('remove-reaction', async (data) => {
+    const { messageId, type, emoji, userId } = data;
+    try {
+      const table = type === 'server' ? 'server_messages' : 'direct_messages';
+      const res = await query(`SELECT reactions FROM ${table} WHERE id = $1`, [messageId]);
+      if (res.rows.length > 0) {
+        let reactions = res.rows[0].reactions || {};
+        if (reactions[emoji]) {
+          reactions[emoji] = reactions[emoji].filter(id => id !== userId);
+          if (reactions[emoji].length === 0) {
+            delete reactions[emoji];
+          }
+          await query(`UPDATE ${table} SET reactions = $1 WHERE id = $2`, [JSON.stringify(reactions), messageId]);
+          io.emit('reaction-updated', { messageId, type, reactions });
+        }
+      }
+    } catch (err) {
+      console.error('[REACTION] Error removing reaction:', err);
+    }
+  });
+
+  socket.on('join-voice', (data) => {
+    const { voiceRoomId, userId, username } = data;
+    socket.join(`voice-${voiceRoomId}`);
+    
+    if (!voiceRooms.has(voiceRoomId)) {
+      voiceRooms.set(voiceRoomId, new Map());
+    }
+    
+    const roomUsers = voiceRooms.get(voiceRoomId);
+    roomUsers.set(socket.id, { userId, username });
+    
+    const otherUsers = Array.from(roomUsers.entries())
+      .filter(([sid]) => sid !== socket.id)
+      .map(([sid, info]) => ({ socketId: sid, userId: info.userId, username: info.username }));
+      
+    socket.emit('voice-room-users', otherUsers);
+    
+    socket.to(`voice-${voiceRoomId}`).emit('voice-user-joined', {
+      socketId: socket.id,
+      userId,
+      username
+    });
+  });
+
+  socket.on('voice-signal', (data) => {
+    const { targetSocketId, signal } = data;
+    io.to(targetSocketId).emit('voice-signal', {
+      senderSocketId: socket.id,
+      signal
+    });
+  });
+
+  socket.on('leave-voice', (data) => {
+    const { voiceRoomId } = data;
+    handleLeaveVoice(socket, voiceRoomId);
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     connectedUsers.delete(socket.id);
+    handleLeaveVoice(socket);
   });
 });
 
 const PORT = process.env.PORT || 5000;
+
+// Gemini Bot response handler
+async function handleGeminiBotResponse(serverId, chatroomId, content, senderId) {
+  const promptText = content.replace(/@gemini/gi, '').trim();
+  if (!promptText) return;
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn('[GEMINI BOT] GEMINI_API_KEY is missing in env!');
+    return;
+  }
+
+  const botSocketRoom = `server-${serverId}`;
+  io.to(botSocketRoom).emit('user-typing', { userId: 'gemini-bot-id' });
+
+  try {
+    const prompt = `You are a helpful, friendly AI assistant named Gemini integrated into a chat room channel.
+    Respond naturally and concisely to the user's message. Keep the response under 150 words.
+    User's message: "${promptText}"`;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }]
+      })
+    });
+
+    if (response.ok) {
+      const json = await response.json();
+      const botResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't understand that.";
+      
+      const result = await query(
+        `INSERT INTO server_messages (sender_id, chatroom_id, content, is_moderated)
+         VALUES ($1, $2, $3, true) RETURNING id, created_at`,
+        ['gemini-bot-id', chatroomId, botResponse]
+      );
+      
+      const newMsgId = result.rows[0].id;
+      const createdAt = result.rows[0].created_at;
+
+      io.to(botSocketRoom).emit('new-message', {
+        id: newMsgId,
+        senderId: 'gemini-bot-id',
+        sender_id: 'gemini-bot-id',
+        username: 'Gemini AI Assistant',
+        avatar_url: 'https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/google-gemini-icon.png',
+        content: botResponse,
+        serverId,
+        chatroom_id: chatroomId,
+        created_at: createdAt,
+        timestamp: createdAt,
+        isDM: false,
+        reactions: {}
+      });
+    } else {
+      const errorText = await response.text();
+      console.error('[GEMINI BOT] API request failed:', errorText);
+    }
+  } catch (err) {
+    console.error('[GEMINI BOT] Error generating response:', err);
+  }
+}
 
 // Gemini AI Moderation Daemon
 async function runGeminiModeration() {
@@ -1294,18 +1499,18 @@ function optimizeCpuGovernor() {
         const govFile = `${cpufreqPath}/${cpu}/cpufreq/scaling_governor`;
         if (fs.existsSync(govFile)) {
           try {
-            fs.writeFileSync(govFile, 'powersave');
+            fs.writeFileSync(govFile, 'performance');
           } catch (e) {}
         }
         
         const eppFile = `${cpufreqPath}/${cpu}/cpufreq/energy_performance_preference`;
         if (fs.existsSync(eppFile)) {
           try {
-            fs.writeFileSync(eppFile, 'balance_performance');
+            fs.writeFileSync(eppFile, 'performance');
           } catch (e) {}
         }
       }
-      console.log('[SYSTEM] CPU Scaling Governors set to powersave with balance_performance preference for maximum efficiency and turbo boost responsiveness.');
+      console.log('[SYSTEM] CPU Scaling Governors set to performance with performance preference for maximum network throughput.');
     }
   } catch (e) {
     console.warn('[SYSTEM] Failed to set CPU governor optimizations:', e.message);
@@ -1329,17 +1534,23 @@ function optimizeRamAndVirtualMemory() {
   }
 }
 
-(async () => {
-  try {
-    optimizeCpuGovernor();
-    optimizeRamAndVirtualMemory();
-    server.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-  } catch (err) {
-    console.error('Failed to start server:', err);
-    process.exit(1);
-  }
-})();
+if (require.main === module) {
+  (async () => {
+    try {
+      optimizeCpuGovernor();
+      optimizeRamAndVirtualMemory();
+      server.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+        startHealthCheck();
+      });
+    } catch (err) {
+      console.error('Failed to start server:', err);
+      process.exit(1);
+    }
+  })();
+}
 
-module.exports = { io };
+module.exports = app;
+module.exports.app = app;
+module.exports.io = io;
+module.exports.server = server;
