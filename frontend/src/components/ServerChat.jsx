@@ -55,6 +55,20 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   const [members, setMembers] = useState([]);
   const [showMembers, setShowMembers] = useState(true);
   const [showGiphy, setShowGiphy] = useState(false);
+  const [showTunnelWarning, setShowTunnelWarning] = useState(false);
+
+  useEffect(() => {
+    const handleConnectError = (err) => {
+      console.warn('[SOCKET] Connection error:', err.message);
+      if (socketUrl.includes('trycloudflare') || socketUrl.includes('localtunnel')) {
+        setShowTunnelWarning(true);
+      }
+    };
+    socket.on('connect_error', handleConnectError);
+    return () => {
+      socket.off('connect_error', handleConnectError);
+    };
+  }, []);
 
   // WebRTC Video Rooms state & refs
   const [inVoiceRoom, setInVoiceRoom] = useState(false);
@@ -523,6 +537,35 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
   return (
     <div className={`server-chat ${viewingChat ? 'mobile-show-chat' : 'mobile-show-rooms'}`}>
+      {showTunnelWarning && (
+        <div style={{
+          backgroundColor: '#faa61a',
+          color: '#000',
+          padding: '10px',
+          textAlign: 'center',
+          fontWeight: 'bold',
+          fontSize: '0.85em',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '12px',
+          zIndex: 1000,
+          borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
+          width: '100%',
+          boxSizing: 'border-box'
+        }}>
+          <span>⚠️ Backend connection failed. If you are using a local tunnel, please authorize it to enable messaging:</span>
+          <a href={socketUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#000', textDecoration: 'underline', fontWeight: '800' }}>
+            Authorize Tunnel
+          </a>
+          <button 
+            onClick={() => setShowTunnelWarning(false)} 
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.2em', color: '#000' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <div className="chat-header">
         <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {onBack && (
