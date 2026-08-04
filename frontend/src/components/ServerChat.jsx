@@ -248,6 +248,20 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   }, []);
 
   useEffect(() => {
+    const requestPermissions = async () => {
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+          stream.getTracks().forEach(track => track.stop());
+        }
+      } catch (err) {
+        console.warn('[PERMISSION] Mic/Camera permission denied or not available:', err);
+      }
+    };
+    requestPermissions();
+  }, []);
+
+  useEffect(() => {
     const resolveSocketTunnel = async () => {
       const saved = localStorage.getItem('custom_proxy_target');
       if (!saved && import.meta.env.PROD) {
