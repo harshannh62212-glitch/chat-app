@@ -29,7 +29,7 @@ async function syncTable(tableName, pkeyCol, columns) {
             values
           );
         } catch (e) {
-          console.error(`[SYNC] Insert failed for ${tableName} key ${key} to Supabase:`, e.message);
+          console.error(`[SYNC] Insert failed for ${tableName} key ${key} to Supabase:`, e.message, '\nQuery:', `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders})`, '\nValues:', values);
         }
       }
     }
