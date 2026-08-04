@@ -7,24 +7,12 @@ import GiphyPanel from './GiphyPanel';
 import ReportButton from './ReportButton';
 
 
-const fallbackURL = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
 const savedProxyTarget = localStorage.getItem('custom_proxy_target');
-const socketUrl = savedProxyTarget || (import.meta.env.PROD ? fallbackURL : 'http://localhost:8000');
+const socketUrl = savedProxyTarget || (import.meta.env.PROD ? window.location.origin : 'http://localhost:8000');
 const socket = io(socketUrl, {
   autoConnect: true,
   extraHeaders: {
     'bypass-tunnel-reminder': 'true'
-  }
-});
-
-socket.on('connect_error', (err) => {
-  console.warn('[SOCKET] Connection error:', err.message);
-  if (import.meta.env.PROD && socket.io.uri !== fallbackURL) {
-    console.log('[SOCKET] Switching socket connection to fallback Render URL:', fallbackURL);
-    socket.io.uri = fallbackURL;
-    socket.disconnect().connect();
-    axios.defaults.baseURL = fallbackURL;
-    localStorage.setItem('custom_proxy_target', fallbackURL);
   }
 });
 
@@ -60,7 +48,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   useEffect(() => {
     const handleConnectError = (err) => {
       console.warn('[SOCKET] Connection error:', err.message);
-      if (socketUrl.includes('trycloudflare') || socketUrl.includes('localtunnel')) {
+      if (import.meta.env.PROD || socketUrl.includes('trycloudflare') || socketUrl.includes('localtunnel')) {
         setShowTunnelWarning(true);
       }
     };

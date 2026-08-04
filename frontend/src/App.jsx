@@ -17,38 +17,8 @@ if (localStorage.getItem('custom_proxy_target') === fallbackURL) {
 
 // In production (Vercel), check for localstorage custom proxy target for sandbox testing
 const savedProxyTarget = localStorage.getItem('custom_proxy_target');
-axios.defaults.baseURL = savedProxyTarget || (import.meta.env.PROD ? fallbackURL : 'http://localhost:8000');
+axios.defaults.baseURL = savedProxyTarget || (import.meta.env.PROD ? '' : 'http://localhost:8000');
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
-
-let isFailedOver = false;
-
-axios.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-    
-    // Check if error is due to network failure/timeout or 5xx server/gateway error
-    const isServerError = error.response && error.response.status >= 500;
-    if (!isFailedOver && (!error.response || error.code === 'ERR_NETWORK' || isServerError)) {
-      console.warn('[FAILOVER] Primary backend offline or returned error. Switching to Render cloud backup:', fallbackURL);
-      isFailedOver = true;
-      localStorage.setItem('custom_proxy_target', fallbackURL);
-      axios.defaults.baseURL = fallbackURL;
-      
-      // Update config for retry
-      originalRequest.baseURL = fallbackURL;
-      if (originalRequest.url && !originalRequest.url.startsWith('http')) {
-        originalRequest.url = originalRequest.url.startsWith('/') ? originalRequest.url : '/' + originalRequest.url;
-      }
-
-      // Notify other parts of the app (like socket connections)
-      window.dispatchEvent(new CustomEvent('api-failover-activated', { detail: { url: fallbackURL } }));
-      
-      return axios(originalRequest);
-    }
-    return Promise.reject(error);
-  }
-);
 
 import ThermalsPage from './pages/ThermalsPage';
 import AdminPanel from './components/AdminPanel';
