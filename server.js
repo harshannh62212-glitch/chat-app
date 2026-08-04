@@ -9,7 +9,7 @@ const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
 const path = require('path');
 const fs = require('fs');
-const { initDB } = require('./db/database');
+const { initDB, query } = require('./db/database');
 
 const useClustering = process.env.NODE_ENV === 'production' && !process.env.VERCEL && require.main === module;
 
@@ -68,7 +68,6 @@ const messageRoutes = require('./routes/messages');
 const userRoutes = require('./routes/users');
 const reportRoutes = require('./routes/report');
 const spotifyRoutes = require('./routes/spotify');
-const { query } = require('./db/database');
 const { filterContent, containsBannedWords } = require('./utils/contentFilter');
 const { startHealthCheck } = require('./backend/scripts/healthCheck');
 
