@@ -23,10 +23,14 @@ async function syncTable(tableName, pkeyCol, columns) {
         console.log(`[SYNC] Copying ${tableName} key ${key} from Local to Supabase`);
         const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
         const values = columns.map(col => localRow[col]);
-        await supabasePool.query(
-          `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`,
-          values
-        );
+        try {
+          await supabasePool.query(
+            `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`,
+            values
+          );
+        } catch (e) {
+          console.error(`[SYNC] Insert failed for ${tableName} key ${key} to Supabase:`, e.message);
+        }
       }
     }
 
@@ -36,10 +40,14 @@ async function syncTable(tableName, pkeyCol, columns) {
         console.log(`[SYNC] Copying ${tableName} key ${key} from Supabase to Local`);
         const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
         const values = columns.map(col => supabaseRow[col]);
-        await localPool.query(
-          `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`,
-          values
-        );
+        try {
+          await localPool.query(
+            `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`,
+            values
+          );
+        } catch (e) {
+          console.error(`[SYNC] Insert failed for ${tableName} key ${key} to Local:`, e.message);
+        }
       }
     }
   } catch (err) {
