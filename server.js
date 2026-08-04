@@ -890,6 +890,22 @@ app.use((err, req, res, next) => {
 
 const connectedUsers = new Map();
 
+async function getLocalOllamaModel() {
+  try {
+    const res = await fetch('http://127.0.0.1:11434/api/tags');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.models && data.models.length > 0) {
+        const preferred = data.models.find(m => m.name.includes('gemma3') || m.name.includes('qwen'));
+        return preferred ? preferred.name : data.models[0].name;
+      }
+    }
+  } catch (e) {
+    // Ollama not running
+  }
+  return null;
+}
+
 // Asynchronous Optimistic Moderation (Ollama Llama 3.2:3b with Gemini fallback)
 async function evaluateMessageAsync(id, content, type) {
   if (!id || !content) return;
@@ -919,17 +935,18 @@ Respond ONLY with this JSON:
   let isAppropriate = true;
   let ollamaSuccess = false;
 
-  // 1. Try local Ollama (Llama 3.2:3b)
+  // 1. Try local Ollama
   try {
+    const localModel = await getLocalOllamaModel() || 'gemma3:270m';
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 1200);
 
-    const response = await fetch('http://host.docker.internal:11434/api/generate', {
+    const response = await fetch('http://127.0.0.1:11434/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
-        model: 'llama3.2:3b',
+        model: localModel,
         prompt: prompt,
         format: 'json',
         stream: false
@@ -1255,6 +1272,31 @@ async function handleGeminiBotResponse(serverId, chatroomId, content, senderId) 
       }
 
       if (!botResponse) {
+        const localModel = await getLocalOllamaModel();
+        if (localModel) {
+          try {
+            console.log(`[GEMINI BOT] Falling back to local model: ${localModel}`);
+            const response = await fetch('http://127.0.0.1:11434/api/generate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: localModel,
+                prompt: `You are "Gemini AI", a sarcastic, witty, and extremely fun AI assistant. Respond to: "${promptText}"`,
+                stream: false
+              })
+            });
+            if (response.ok) {
+              const json = await response.json();
+              botResponse = json.response.trim();
+              console.log(`[GEMINI BOT] Success with local model: ${localModel}`);
+            }
+          } catch (e) {
+            console.warn(`[GEMINI BOT] Local model fallback failed:`, e.message);
+          }
+        }
+      }
+
+      if (!botResponse) {
         botResponse = "Sorry, my API quota limit has been temporarily reached on all models. Please try again in a minute!";
       }
 
@@ -1321,15 +1363,16 @@ async function runGeminiModeration() {
 
       // Try local Ollama (Llama 3.2) first
       try {
+        const localModel = await getLocalOllamaModel() || 'gemma3:270m';
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 1200);
 
-        const response = await fetch('http://host.docker.internal:11434/api/generate', {
+        const response = await fetch('http://127.0.0.1:11434/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
           body: JSON.stringify({
-            model: 'llama3.2',
+            model: localModel,
             prompt: prompt,
             format: 'json',
             stream: false
