@@ -58,6 +58,7 @@ function App() {
   const [moderationUnlocked, setModerationUnlocked] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [currentPortal, setCurrentPortal] = useState('chat');
+  const [tunnelResolved, setTunnelResolved] = useState(!import.meta.env.PROD || !!localStorage.getItem('custom_proxy_target'));
 
   useEffect(() => {
     const handlePopState = () => {
@@ -80,6 +81,8 @@ function App() {
   const [batteryInfo, setBatteryInfo] = useState(null);
 
   useEffect(() => {
+    if (!tunnelResolved) return;
+
     const checkSystemStatus = async () => {
       try {
         const res = await axios.get('/api/system/status');
@@ -104,7 +107,7 @@ function App() {
     checkSystemStatus();
     const interval = setInterval(checkSystemStatus, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [tunnelResolved]);
 
   useEffect(() => {
     // Resolve direct tunnel URL in production to bypass Vercel serverless latency
@@ -115,8 +118,11 @@ function App() {
           let tunnel = '';
           // Try fetching from Supabase REST API first
           try {
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+            let supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            if (!supabaseUrl || supabaseUrl.includes('trycloudflare.com')) {
+              supabaseUrl = 'https://aebntdjjniirnwthtwlx.supabase.co';
+            }
+            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
             if (supabaseUrl && supabaseAnonKey) {
               const res = await fetch(`${supabaseUrl}/rest/v1/system_config?key=eq.active_tunnel_url`, {
                 headers: {
@@ -179,7 +185,9 @@ function App() {
         }
       }
     };
-    resolveDirectTarget();
+    resolveDirectTarget().finally(() => {
+      setTunnelResolved(true);
+    });
 
     loadCustomBannedWords();
     
@@ -187,7 +195,11 @@ function App() {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
-    
+  }, []);
+
+  useEffect(() => {
+    if (!tunnelResolved) return;
+
     // Load custom theme, typography, and letter spacing variables on mount
     const savedTheme = localStorage.getItem('theme') || 'cosmic-dark';
     const savedFont = localStorage.getItem('font') || 'Outfit';
@@ -219,7 +231,7 @@ function App() {
     } else {
       setLoadingApp(false);
     }
-  }, []);
+  }, [tunnelResolved]);
 
   const handleLogin = (token, user) => {
     localStorage.setItem('chat_token', token);

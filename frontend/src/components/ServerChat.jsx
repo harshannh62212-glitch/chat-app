@@ -288,8 +288,11 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
           let tunnel = '';
           // Try fetching from Supabase REST API first
           try {
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+            let supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            if (!supabaseUrl || supabaseUrl.includes('trycloudflare.com')) {
+              supabaseUrl = 'https://aebntdjjniirnwthtwlx.supabase.co';
+            }
+            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
             if (supabaseUrl && supabaseAnonKey) {
               const res = await fetch(`${supabaseUrl}/rest/v1/system_config?key=eq.active_tunnel_url`, {
                 headers: {
