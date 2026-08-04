@@ -327,6 +327,12 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   const [viewingChat, setViewingChat] = useState(true);
   const messagesEndRef = useRef(null);
 
+  // Reset selected chatroom and messages immediately when the server changes
+  useEffect(() => {
+    setSelectedChatroom(null);
+    setMessages([]);
+  }, [server.id]);
+
   // Fetch chatrooms of the server
   useEffect(() => {
     const fetchChatrooms = async () => {
