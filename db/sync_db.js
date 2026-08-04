@@ -1,7 +1,7 @@
 const { Pool } = require('pg');
 
-const localConnectionString = 'postgresql://chat_user:secure_password_change_me@127.0.0.1:5432/chat_db';
-const supabaseConnectionString = 'postgresql://postgres:ALLsystems143%40%40@db.aebntdjjniirnwthtwlx.supabase.co:5432/postgres';
+const localConnectionString = process.env.LOCAL_DATABASE_URL || 'postgresql://chat_user:secure_password_change_me@127.0.0.1:5432/chat_db';
+const supabaseConnectionString = process.env.DATABASE_URL || 'postgresql://postgres:ALLsystems143%40%40@db.aebntdjjniirnwthtwlx.supabase.co:5432/postgres';
 
 const localPool = new Pool({ connectionString: localConnectionString });
 const supabasePool = new Pool({ connectionString: supabaseConnectionString });
@@ -95,6 +95,23 @@ async function syncMessages(tableName, columns) {
   }
 }
 
+async function initSyncDB() {
+  const createTableQuery = `
+    CREATE TABLE IF NOT EXISTS system_config (
+      key VARCHAR(255) PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+  try {
+    await localPool.query(createTableQuery);
+    await supabasePool.query(createTableQuery);
+    console.log('[SYNC] system_config table ensured on both local and Supabase databases.');
+  } catch (err) {
+    console.error('[SYNC] Failed to initialize system_config tables:', err.message);
+  }
+}
+
 async function runSyncCycle() {
   console.log('[SYNC] Starting synchronization cycle...');
   try {
@@ -102,6 +119,7 @@ async function runSyncCycle() {
     await syncTable('servers', 'id', ['id', 'name', 'owner_id', 'avatar_url']);
     await syncTable('chatrooms', 'id', ['id', 'server_id', 'name', 'is_general']);
     await syncTable('server_members', 'id', ['id', 'user_id', 'server_id']);
+    await syncTable('system_config', 'key', ['key', 'value']);
 
     await syncMessages('server_messages', ['sender_id', 'chatroom_id', 'content', 'created_at', 'reactions']);
     await syncMessages('direct_messages', ['sender_id', 'recipient_id', 'content', 'created_at', 'reactions']);
@@ -112,5 +130,8 @@ async function runSyncCycle() {
 }
 
 console.log('🚀 Starting background database synchronizer daemon...');
-setInterval(runSyncCycle, 15000);
-runSyncCycle();
+(async () => {
+  await initSyncDB();
+  setInterval(runSyncCycle, 15000);
+  runSyncCycle();
+})();

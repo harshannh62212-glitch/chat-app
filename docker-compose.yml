@@ -86,6 +86,22 @@ services:
       - .:/shared
     networks:
       - chat_network
+
+  db_sync:
+    build: .
+    container_name: chat_app_db_sync
+    restart: always
+    command: node db/sync_db.js
+    environment:
+      LOCAL_DATABASE_URL: postgresql://chat_user:secure_password_change_me@postgres:5432/chat_db
+      DATABASE_URL: postgresql://postgres:ALLsystems143%40%40@db.aebntdjjniirnwthtwlx.supabase.co:5432/postgres
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - chat_network
+
 volumes:
   postgres_data:
 
