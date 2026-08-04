@@ -1209,21 +1209,21 @@ async function handleGeminiBotResponse(serverId, chatroomId, content, senderId) 
   const promptText = content.replace(/@gemini/gi, '').trim();
   if (!promptText) return;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.warn('[GEMINI BOT] GEMINI_API_KEY is missing in env!');
-    return;
-  }
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.warn('[GEMINI BOT] GEMINI_API_KEY is missing in env!');
+      return;
+    }
 
-  const botSocketRoom = `server-${serverId}`;
-  io.to(botSocketRoom).emit('user-typing', { userId: 'gemini-bot-id' });
+    const botSocketRoom = `server-${serverId}`;
+    io.to(botSocketRoom).emit('user-typing', { userId: 'gemini-bot-id' });
 
-  try {
-    const prompt = `You are "Gemini AI", a sarcastic, witty, and extremely fun AI assistant integrated into a Discord-style chat channel.
-    Respond with personality, jokes, light sarcasm, and clever remarks. You can use popular internet slang and emojis. Keep the response under 120 words.
-    User's message: "${promptText}"`;
+    try {
+      const prompt = `You are "Gemini AI", a sarcastic, witty, and extremely fun AI assistant integrated into a Discord-style chat channel.
+      Respond with personality, jokes, light sarcasm, and clever remarks. You can use popular internet slang and emojis. Keep the response under 120 words.
+      User's message: "${promptText}"`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1404,9 +1404,15 @@ async function runGeminiModeration() {
           continue;
         }
 
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+          console.warn('[AI MODERATOR] GEMINI_API_KEY is missing for avatar moderation!');
+          continue;
+        }
+
         const promptText = `Analyze this user profile picture. Is this image appropriate for a general-audience chat platform? It should not contain nudity, sexually suggestive content, hate symbols, graphic violence, drugs/weapons, or harassment. Respond with JSON: {"appropriate": true} or {"appropriate": false, "reason": "reason"}.`;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
