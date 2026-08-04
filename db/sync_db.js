@@ -91,7 +91,7 @@ async function runSyncCycle() {
   console.log('[SYNC] Starting synchronization cycle...');
   try {
     await syncTable('users', 'id', ['id', 'username', 'email', 'password', 'avatar_url']);
-    await syncTable('servers', 'id', ['id', 'name', 'owner_id', 'icon_url']);
+    await syncTable('servers', 'id', ['id', 'name', 'owner_id', 'avatar_url']);
     await syncTable('chatrooms', 'id', ['id', 'server_id', 'name', 'is_general']);
     await syncTable('server_members', 'id', ['id', 'user_id', 'server_id']);
 
