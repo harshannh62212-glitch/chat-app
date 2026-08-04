@@ -7,6 +7,8 @@ if (dns.setDefaultResultOrder) {
 
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
+const path = require('path');
+const fs = require('fs');
 const { initDB } = require('./db/database');
 
 const useClustering = process.env.NODE_ENV === 'production' && !process.env.VERCEL && require.main === module;
@@ -52,8 +54,6 @@ const express = require('express');
 
 const cors = require('cors');
 const http = require('http');
-const path = require('path');
-const fs = require('fs');
 const helmet = require('helmet');
 
 const STATUS_FILE = path.resolve(__dirname, 'public', 'healthStatus.json');
