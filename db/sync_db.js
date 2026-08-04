@@ -8,7 +8,28 @@ const localConnectionString = process.env.LOCAL_DATABASE_URL || 'postgresql://ch
 const supabaseConnectionString = process.env.DATABASE_URL || 'postgresql://postgres:ALLsystems143%40%40@db.aebntdjjniirnwthtwlx.supabase.co:5432/postgres';
 
 const localPool = new Pool({ connectionString: localConnectionString });
-const supabasePool = new Pool({ connectionString: supabaseConnectionString });
+
+let supabasePoolConfig = {
+  connectionString: supabaseConnectionString
+};
+
+// Handle IPv6-only hostname resolution failures inside Docker network
+if (supabaseConnectionString.includes('db.aebntdjjniirnwthtwlx.supabase.co')) {
+  console.log('[SYNC] IPv6 Supabase host detected. Applying transparent IPv4 + SNI fallback configuration.');
+  supabasePoolConfig = {
+    user: 'postgres',
+    password: 'ALLsystems143@@',
+    host: '3.228.56.118',
+    port: 5432,
+    database: 'postgres',
+    ssl: {
+      rejectUnauthorized: false,
+      servername: 'db.aebntdjjniirnwthtwlx.supabase.co'
+    }
+  };
+}
+
+const supabasePool = new Pool(supabasePoolConfig);
 
 async function syncTable(tableName, pkeyCol, columns) {
   try {
