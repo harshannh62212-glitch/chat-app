@@ -81,6 +81,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
     restart: unless-stopped
+    user: root
     command: tunnel --logfile /shared/cloudflared.log --no-autoupdate --url http://backend:8000
     volumes:
       - .:/shared
