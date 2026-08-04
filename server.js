@@ -1219,8 +1219,8 @@ async function handleGeminiBotResponse(serverId, chatroomId, content, senderId) 
   io.to(botSocketRoom).emit('user-typing', { userId: 'gemini-bot-id' });
 
   try {
-    const prompt = `You are a helpful, friendly AI assistant named Gemini integrated into a chat room channel.
-    Respond naturally and concisely to the user's message. Keep the response under 150 words.
+    const prompt = `You are "Gemini AI", a sarcastic, witty, and extremely fun AI assistant integrated into a Discord-style chat channel.
+    Respond with personality, jokes, light sarcasm, and clever remarks. You can use popular internet slang and emojis. Keep the response under 120 words.
     User's message: "${promptText}"`;
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {

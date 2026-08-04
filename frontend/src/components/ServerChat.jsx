@@ -29,6 +29,25 @@ socket.on('connect_error', (err) => {
   }
 });
 
+function VideoParticipant({ stream, username, isLocal }) {
+  const videoRef = useRef(null);
+  
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  return (
+    <div className="video-participant-card">
+      <video ref={videoRef} autoPlay playsInline muted={isLocal} />
+      <div className="participant-overlay">
+        <span className="participant-name">{username} {isLocal && '(You)'}</span>
+      </div>
+    </div>
+  );
+}
+
 function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInfo, onBack }) {
   const [chatrooms, setChatrooms] = useState([]);
   const [selectedChatroom, setSelectedChatroom] = useState(null);
@@ -38,14 +57,15 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   const [showMembers, setShowMembers] = useState(true);
   const [showGiphy, setShowGiphy] = useState(false);
 
-  // WebRTC Voice Rooms state & refs
+  // WebRTC Video Rooms state & refs
   const [inVoiceRoom, setInVoiceRoom] = useState(false);
-  const [voiceUsers, setVoiceUsers] = useState([]);
+  const [voiceUsers, setVoiceUsers] = useState([]); // Array of { socketId, username, stream }
   const [isMuted, setIsMuted] = useState(false);
+  const [isVideoOff, setIsVideoOff] = useState(false);
+  const [localStream, setLocalStream] = useState(null);
   
   const localStreamRef = useRef(null);
   const peersRef = useRef(new Map());
-  const audioElementsRef = useRef(new Map());
 
   const leaveVoiceRoom = () => {
     socket.emit('leave-voice', { voiceRoomId: server.id });
@@ -54,15 +74,10 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       localStreamRef.current.getTracks().forEach(track => track.stop());
       localStreamRef.current = null;
     }
+    setLocalStream(null);
     
     peersRef.current.forEach(pc => pc.close());
     peersRef.current.clear();
-    
-    audioElementsRef.current.forEach(audio => {
-      audio.pause();
-      audio.remove();
-    });
-    audioElementsRef.current.clear();
     
     setInVoiceRoom(false);
     setVoiceUsers([]);
@@ -70,11 +85,15 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
   const joinVoiceRoom = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
       localStreamRef.current = stream;
+      setLocalStream(stream);
       
       if (isMuted) {
         stream.getAudioTracks().forEach(t => t.enabled = false);
+      }
+      if (isVideoOff) {
+        stream.getVideoTracks().forEach(t => t.enabled = false);
       }
 
       setInVoiceRoom(true);
@@ -85,8 +104,8 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
         username: currentUser.username
       });
     } catch (err) {
-      console.error('[WEBRTC] Failed to get microphone stream:', err);
-      alert('Could not access microphone. Please check permissions.');
+      console.error('[WEBRTC] Failed to get camera/microphone stream:', err);
+      alert('Could not access camera or microphone. Please check permissions.');
     }
   };
 
@@ -95,6 +114,16 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     setIsMuted(newState);
     if (localStreamRef.current) {
       localStreamRef.current.getAudioTracks().forEach(track => {
+        track.enabled = !newState;
+      });
+    }
+  };
+
+  const toggleVideo = () => {
+    const newState = !isVideoOff;
+    setIsVideoOff(newState);
+    if (localStreamRef.current) {
+      localStreamRef.current.getVideoTracks().forEach(track => {
         track.enabled = !newState;
       });
     }
@@ -125,14 +154,12 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
       pc.ontrack = (event) => {
         const remoteStream = event.streams[0];
-        let audio = audioElementsRef.current.get(targetSocketId);
-        if (!audio) {
-          audio = document.createElement('audio');
-          audio.autoplay = true;
-          document.body.appendChild(audio);
-          audioElementsRef.current.set(targetSocketId, audio);
-        }
-        audio.srcObject = remoteStream;
+        setVoiceUsers(prev => prev.map(u => {
+          if (u.socketId === targetSocketId) {
+            return { ...u, stream: remoteStream };
+          }
+          return u;
+        }));
       };
 
       peersRef.current.set(targetSocketId, pc);
@@ -140,7 +167,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     };
 
     const handleVoiceRoomUsers = async (users) => {
-      setVoiceUsers(users);
+      setVoiceUsers(users.map(u => ({ ...u, stream: null })));
       for (const u of users) {
         const pc = createPeerConnection(u.socketId, u);
         const offer = await pc.createOffer();
@@ -155,7 +182,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     const handleVoiceUserJoined = (user) => {
       setVoiceUsers(prev => {
         if (prev.some(u => u.socketId === user.socketId)) return prev;
-        return [...prev, user];
+        return [...prev, { ...user, stream: null }];
       });
     };
 
@@ -196,13 +223,6 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
         pc.close();
         peersRef.current.delete(socketId);
       }
-
-      const audio = audioElementsRef.current.get(socketId);
-      if (audio) {
-        audio.pause();
-        audio.remove();
-        audioElementsRef.current.delete(socketId);
-      }
     };
 
     socket.on('voice-room-users', handleVoiceRoomUsers);
@@ -224,10 +244,6 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
         localStreamRef.current.getTracks().forEach(track => track.stop());
       }
       peersRef.current.forEach(pc => pc.close());
-      audioElementsRef.current.forEach(audio => {
-        audio.pause();
-        audio.remove();
-      });
     };
   }, []);
 
@@ -408,6 +424,10 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       userId: currentUser.id,
       serverId: server.id
     });
+  };
+
+  const handleReplyTo = (username) => {
+    setMessageInput(prev => `@${username} ` + prev);
   };
 
   const handleSendMessage = async (e) => {
@@ -591,9 +611,18 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                       border: 'none',
                       color: isMuted ? '#f04747' : '#fff',
                       cursor: 'pointer',
-                      fontSize: '1em'
+                      fontSize: '1.1em'
                     }} title={isMuted ? 'Unmute' : 'Mute'}>
                       {isMuted ? '🎙️❌' : '🎙️'}
+                    </button>
+                    <button onClick={toggleVideo} style={{
+                      background: 'none',
+                      border: 'none',
+                      color: isVideoOff ? '#f04747' : '#fff',
+                      cursor: 'pointer',
+                      fontSize: '1.1em'
+                    }} title={isVideoOff ? 'Turn Camera On' : 'Turn Camera Off'}>
+                      {isVideoOff ? '📹❌' : '📹'}
                     </button>
                     <button onClick={leaveVoiceRoom} style={{
                       background: 'none',
@@ -642,80 +671,101 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
         </div>
 
         <div className="chat-main">
+          {inVoiceRoom && (
+            <div className="video-meeting-grid-container">
+              {localStream && <VideoParticipant stream={localStream} username={currentUser.username} isLocal={true} />}
+              {voiceUsers.map(user => {
+                if (!user.stream) return null;
+                return <VideoParticipant key={user.socketId} stream={user.stream} username={user.username} isLocal={false} />;
+              })}
+            </div>
+          )}
           <div className="messages">
             {messages.length === 0 ? (
               <p className="no-messages">No messages yet. Be the first to say hello!</p>
             ) : (
-              messages.map((msg) => (
-                <div key={msg.id} className="message-wrapper">
-                  <div className="message-avatar">
-                    {msg.avatar_url ? (
-                      <img src={msg.avatar_url} alt={msg.username} />
-                    ) : (
-                      <span>{msg.username ? msg.username[0].toUpperCase() : '?'}</span>
-                    )}
-                  </div>
-                  <div className="message-content-col">
-                    <div className="message-meta">
-                      <span className="message-username">{msg.username}</span>
-                      <span className="message-timestamp">
-                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      {(msg.sender_id === currentUser.id || currentUser.is_admin) && (
-                        <button
-                          className="delete-msg-btn"
-                          onClick={() => handleDeleteMessage(msg.id)}
-                          title="Delete Message"
-                          style={{ marginLeft: '8px' }}
-                        >
-                          🗑️
-                        </button>
+              messages.map((msg) => {
+                const isMentioned = msg.content && msg.content.toLowerCase().includes('@' + currentUser.username.toLowerCase());
+                return (
+                  <div key={msg.id} className={`message-wrapper ${isMentioned ? 'mentioned-message' : ''}`}>
+                    <div className="message-avatar">
+                      {msg.avatar_url ? (
+                        <img src={msg.avatar_url} alt={msg.username} />
+                      ) : (
+                        <span>{msg.username ? msg.username[0].toUpperCase() : '?'}</span>
                       )}
-                      <ReportButton messageId={msg.id} />
                     </div>
-                    {msg.content.startsWith('http') && msg.content.includes('giphy.com') ? (
-                      <img src={msg.content} className="message-gif" alt="GIF" />
-                    ) : (
-                      <div className="message-text">{msg.content}</div>
-                    )}
-
-                    <div className="message-reactions-row">
-                      {msg.reactions && Object.entries(msg.reactions).map(([emoji, userIds]) => {
-                        if (!Array.isArray(userIds) || userIds.length === 0) return null;
-                        const hasReacted = userIds.includes(currentUser.id);
-                        return (
+                    <div className="message-content-col">
+                      <div className="message-meta">
+                        <span className="message-username">{msg.username}</span>
+                        <span className="message-timestamp">
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {(msg.sender_id === currentUser.id || currentUser.is_admin) && (
                           <button
-                            key={emoji}
-                            className={`reaction-tag ${hasReacted ? 'active' : ''}`}
-                            onClick={() => handleToggleReaction(msg.id, emoji, hasReacted)}
-                            title={userIds.length + ' reactions'}
+                            className="delete-msg-btn"
+                            onClick={() => handleDeleteMessage(msg.id)}
+                            title="Delete Message"
+                            style={{ marginLeft: '8px' }}
                           >
-                            <span>{emoji}</span>
-                            <span className="reaction-count">{userIds.length}</span>
+                            🗑️
                           </button>
-                        );
-                      })}
-                      
-                      <div className="add-reaction-inline-dropdown">
-                        <button className="add-reaction-trigger-btn" title="Add Reaction">😀+</button>
-                        <div className="reaction-picker-menu">
-                          {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => {
-                            const hasReacted = msg.reactions && Array.isArray(msg.reactions[emoji]) && msg.reactions[emoji].includes(currentUser.id);
-                            return (
-                              <button
-                                key={emoji}
-                                onClick={() => handleToggleReaction(msg.id, emoji, hasReacted)}
-                              >
-                                {emoji}
-                              </button>
-                            );
-                          })}
+                        )}
+                        <ReportButton messageId={msg.id} />
+                        <button
+                          className="reply-msg-btn"
+                          onClick={() => handleReplyTo(msg.username)}
+                          title="Reply"
+                          style={{ marginLeft: '8px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}
+                        >
+                          ↩️
+                        </button>
+                      </div>
+
+                      {msg.content.startsWith('http') && msg.content.includes('giphy.com') ? (
+                        <img src={msg.content} className="message-gif" alt="GIF" />
+                      ) : (
+                        <div className="message-text">{msg.content}</div>
+                      )}
+
+                      <div className="message-reactions-row">
+                        {msg.reactions && Object.entries(msg.reactions).map(([emoji, userIds]) => {
+                          if (!Array.isArray(userIds) || userIds.length === 0) return null;
+                          const hasReacted = userIds.includes(currentUser.id);
+                          return (
+                            <button
+                              key={emoji}
+                              className={`reaction-tag ${hasReacted ? 'active' : ''}`}
+                              onClick={() => handleToggleReaction(msg.id, emoji, hasReacted)}
+                              title={userIds.length + ' reactions'}
+                            >
+                              <span>{emoji}</span>
+                              <span className="reaction-count">{userIds.length}</span>
+                            </button>
+                          );
+                        })}
+                        
+                        <div className="add-reaction-inline-dropdown">
+                          <button className="add-reaction-trigger-btn" title="Add Reaction">😀+</button>
+                          <div className="reaction-picker-menu">
+                            {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => {
+                              const hasReacted = msg.reactions && Array.isArray(msg.reactions[emoji]) && msg.reactions[emoji].includes(currentUser.id);
+                              return (
+                                <button
+                                  key={emoji}
+                                  onClick={() => handleToggleReaction(msg.id, emoji, hasReacted)}
+                                >
+                                  {emoji}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
             <div ref={messagesEndRef} />
           </div>
