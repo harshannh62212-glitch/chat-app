@@ -1076,20 +1076,9 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // ── Layer 1: Instant keyword/pattern block (no AI, zero latency) ──
-    const { blocked, reason } = containsBannedWords(content);
-    if (blocked) {
-      console.log(`[CONTENT BLOCK] Blocked message from ${username || senderId} — reason: ${reason}`);
-      // Notify only the sender — no one else sees this
-      socket.emit('message-blocked', {
-        reason: 'Your message contains content that is not allowed on this platform.',
-        id: data.id
-      });
-      return; // Stop — do NOT broadcast
-    }
-
-    // ── Layer 2: Clean the text (replace any remaining mild terms with ***) ──
-    const filteredContent = filterContent(content);
+    // Censorship disabled per user request
+    // Censorship disabled per user request
+    let filteredContent = content;
 
     if (serverId) {
       io.to(`server-${serverId}`).emit('new-message', {
@@ -1230,8 +1219,7 @@ async function handleLocalBotResponse(serverId, chatroomId, content, senderId) {
   io.to(botSocketRoom).emit('user-typing', { userId: 'bot-id' });
 
   try {
-    const prompt = `You are "bot", a sarcastic, witty, and extremely fun AI assistant integrated into a Discord-style chat channel. Keep the response under 120 words.
-    User's message: "${promptText}"`;
+  const prompt = `${promptText}`;
 
     let botResponse = '';
     try {
@@ -1244,7 +1232,8 @@ async function handleLocalBotResponse(serverId, chatroomId, content, senderId) {
           prompt: prompt,
           stream: false,
           options: {
-            num_thread: 1 // Cap CPU to 1 thread (~10-20% max CPU on Mac)
+            num_thread: 1, // Cap CPU to 1 thread (~10-20% max CPU on Mac)
+            num_predict: 80 // limit to ~80 tokens for short response
           }
         })
       });

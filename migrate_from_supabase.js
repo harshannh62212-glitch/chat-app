@@ -5,7 +5,7 @@ const supabaseUrl = 'https://aebntdjjniirnwthtwlx.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
 
 const localPool = new Pool({
-  connectionString: 'postgresql://chat_user:secure_password_change_me@192.168.1.27:5432/chat_db'
+  connectionString: 'postgresql://chat_user:secure_password_change_me@127.0.0.1:5432/chat_db'
 });
 
 async function fetchFromSupabase(endpoint) {

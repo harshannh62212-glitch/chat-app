@@ -1,6 +1,6 @@
 const { Pool } = require('pg');
 
-const localConnectionString = 'postgresql://chat_user:secure_password_change_me@192.168.1.27:5432/chat_db';
+const localConnectionString = 'postgresql://chat_user:secure_password_change_me@127.0.0.1:5432/chat_db';
 const supabaseConnectionString = 'postgresql://postgres:ALLsystems143%40%40@db.aebntdjjniirnwthtwlx.supabase.co:5432/postgres';
 
 const localPool = new Pool({ connectionString: localConnectionString });

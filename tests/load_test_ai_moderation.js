@@ -63,7 +63,7 @@ const BORDERLINE = [
   'hell of a bug',
 ];
 
-const BASE = 'http://192.168.1.27:8000';
+const BASE = 'http://127.0.0.1:8000';
 
 function pickMessage(vu) {
   const r = Math.random();
