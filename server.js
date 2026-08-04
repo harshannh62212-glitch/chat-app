@@ -1223,18 +1223,41 @@ async function handleGeminiBotResponse(serverId, chatroomId, content, senderId) 
       Respond with personality, jokes, light sarcasm, and clever remarks. You can use popular internet slang and emojis. Keep the response under 120 words.
       User's message: "${promptText}"`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      })
-    });
+      const models = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp'];
+      let botResponse = '';
 
-    if (response.ok) {
-      const json = await response.json();
-      const botResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't understand that.";
-      
+      for (const model of models) {
+        try {
+          console.log(`[GEMINI BOT] Attempting response with model: ${model}`);
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }]
+            })
+          });
+
+          if (response.ok) {
+            const json = await response.json();
+            const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
+              botResponse = text;
+              console.log(`[GEMINI BOT] Success with model: ${model}`);
+              break;
+            }
+          } else {
+            const errText = await response.text();
+            console.warn(`[GEMINI BOT] Model ${model} failed:`, errText);
+          }
+        } catch (err) {
+          console.warn(`[GEMINI BOT] Error with model ${model}:`, err.message);
+        }
+      }
+
+      if (!botResponse) {
+        botResponse = "Sorry, my API quota limit has been temporarily reached on all models. Please try again in a minute!";
+      }
+
       const result = await query(
         `INSERT INTO server_messages (sender_id, chatroom_id, content, is_moderated)
          VALUES ($1, $2, $3, true) RETURNING id, created_at`,
@@ -1258,10 +1281,6 @@ async function handleGeminiBotResponse(serverId, chatroomId, content, senderId) 
         isDM: false,
         reactions: {}
       });
-    } else {
-      const errorText = await response.text();
-      console.error('[GEMINI BOT] API request failed:', errorText);
-    }
   } catch (err) {
     console.error('[GEMINI BOT] Error generating response:', err);
   }
