@@ -4,18 +4,31 @@ const { authMiddleware, adminCheck } = require('../middleware/auth');
 
 const router = express.Router();
 
-// POST /report - user submits a bug report
+// POST /report - user submits a bug/message report (with local AI evaluation)
 router.post('/report', authMiddleware, async (req, res) => {
   const { description, screenshot_url } = req.body;
   if (!description || !description.trim()) {
     return res.status(400).json({ error: 'Description is required' });
   }
+
+  const aiEvaluation = await evaluateReport(description);
+  let reportStatus = 'open';
+  if (aiEvaluation === 'SPAM' || aiEvaluation === 'ABUSIVE') {
+    reportStatus = 'spam';
+  } else if (aiEvaluation === 'VAGUE') {
+    reportStatus = 'needs_info';
+  }
+
   try {
     await query(
-      `INSERT INTO reports (user_id, description, screenshot_url) VALUES ($1, $2, $3)`,
-      [req.userId, description.trim(), screenshot_url || null]
+      `INSERT INTO reports (user_id, description, screenshot_url, status, ai_evaluation) VALUES ($1, $2, $3, $4, $5)`,
+      [req.userId, description.trim(), screenshot_url || null, reportStatus, aiEvaluation]
     );
-    res.json({ message: 'Report submitted successfully' });
+    res.json({
+      message: 'Report submitted successfully',
+      ai_evaluation: aiEvaluation,
+      status: reportStatus
+    });
   } catch (err) {
     console.error('Failed to insert report:', err);
     res.status(500).json({ error: 'Failed to submit report' });
@@ -26,7 +39,7 @@ router.post('/report', authMiddleware, async (req, res) => {
 router.get('/admin/reports', authMiddleware, adminCheck, async (req, res) => {
   try {
     const result = await query(
-      `SELECT r.id, r.user_id, COALESCE(u.username, 'Anonymous') AS username, r.description, r.screenshot_url, r.status, r.created_at
+      `SELECT r.id, r.user_id, COALESCE(u.username, 'Anonymous') AS username, r.description, r.screenshot_url, r.status, r.ai_evaluation, r.created_at
        FROM reports r
        LEFT JOIN users u ON r.user_id = u.id
        ORDER BY r.created_at DESC`
@@ -108,7 +121,7 @@ Respond ONLY with this JSON structure:
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
@@ -148,7 +161,7 @@ router.post('/global-report', authMiddleware, async (req, res) => {
   const aiEvaluation = await evaluateReport(description);
   let reportStatus = 'open';
   if (aiEvaluation === 'SPAM' || aiEvaluation === 'ABUSIVE') {
-    reportStatus = 'rejected';
+    reportStatus = 'spam';
   } else if (aiEvaluation === 'VAGUE') {
     reportStatus = 'needs_info';
   }

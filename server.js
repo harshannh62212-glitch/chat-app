@@ -193,6 +193,21 @@ app.get('/api/ping', (req, res) => {
   res.send('pong-32bytes-payload-status-okay');
 });
 
+app.get('/api/resolve-tunnel', async (req, res) => {
+  try {
+    const result = await query("SELECT value FROM system_config WHERE key = 'active_tunnel_url'");
+    const tunnelUrl = result.rows[0]?.value;
+    if (tunnelUrl) {
+      res.json({ url: tunnelUrl });
+    } else {
+      res.status(404).json({ error: 'Tunnel URL not found' });
+    }
+  } catch (err) {
+    console.error('Failed to resolve tunnel:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 const adminRoutes = require('./routes/admin');
 
 const rateLimit = require('express-rate-limit');
@@ -942,7 +957,7 @@ async function getLocalOllamaModel() {
     if (res.ok) {
       const data = await res.json();
       if (data && data.models && data.models.length > 0) {
-        const preferred = data.models.find(m => m.name.includes('gemma3') || m.name.includes('qwen'));
+        const preferred = data.models.find(m => m.name.includes('gemma') || m.name.includes('llama') || m.name.includes('qwen'));
         return preferred ? preferred.name : data.models[0].name;
       }
     }
@@ -1021,7 +1036,8 @@ Respond ONLY with this JSON:
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+        const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash';
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
@@ -1142,7 +1158,7 @@ io.on('connection', (socket) => {
       });
       // ── Layer 3: AI async eval (catches context/bypass attempts the keyword list missed) ──
       evaluateMessageAsync(data.id, filteredContent, 'server');
-      if (filteredContent.toLowerCase().includes('@bot')) {
+      if (filteredContent.toLowerCase().includes('@bot') || filteredContent.toLowerCase().includes('@gemini')) {
         handleLocalBotResponse(serverId, chatroom_id, filteredContent, senderId);
       }
     } else if (dmWith) {
@@ -1258,11 +1274,11 @@ const PORT = process.env.PORT || 5000;
 
 // Local Bot response handler (1B parameter llama3.2:1b model capped at 1 thread to keep CPU under 20% and memory under 8GB)
 async function handleLocalBotResponse(serverId, chatroomId, content, senderId) {
-  const promptText = content.replace(/@bot/gi, '').trim();
+  const promptText = content.replace(/@(bot|gemini|Gemini AI Assistant)/gi, '').trim();
   if (!promptText) return;
 
   const botSocketRoom = `server-${serverId}`;
-  io.to(botSocketRoom).emit('user-typing', { userId: 'bot-id' });
+  io.to(botSocketRoom).emit('user-typing', { userId: 'gemini-bot-id' });
 
   try {
   const prompt = `${promptText}`;
@@ -1296,7 +1312,7 @@ async function handleLocalBotResponse(serverId, chatroomId, content, senderId) {
     const result = await query(
       `INSERT INTO server_messages (sender_id, chatroom_id, content, is_moderated)
        VALUES ($1, $2, $3, true) RETURNING id, created_at`,
-      ['bot-id', chatroomId, botResponse]
+      ['gemini-bot-id', chatroomId, botResponse]
     );
     
     const newMsgId = result.rows[0].id;
@@ -1304,10 +1320,10 @@ async function handleLocalBotResponse(serverId, chatroomId, content, senderId) {
 
     io.to(botSocketRoom).emit('new-message', {
       id: newMsgId,
-      senderId: 'bot-id',
-      sender_id: 'bot-id',
-      username: 'bot',
-      avatar_url: 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png',
+      senderId: 'gemini-bot-id',
+      sender_id: 'gemini-bot-id',
+      username: 'Gemini AI Assistant',
+      avatar_url: 'https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/google-gemini-icon.png',
       content: botResponse,
       serverId,
       chatroom_id: chatroomId,

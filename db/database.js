@@ -177,6 +177,7 @@ async function createTables() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS timeout_until TIMESTAMP;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT false;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS minecraft_username VARCHAR(255);
       ALTER TABLE server_messages ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
       ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
       ALTER TABLE reports ADD COLUMN IF NOT EXISTS ai_evaluation VARCHAR(20) DEFAULT 'unevaluated';
@@ -185,6 +186,21 @@ async function createTables() {
     // Seed Administrator role
     await client.query(`
       UPDATE users SET is_admin = true WHERE username = 'Nxghtmare3621';
+    `);
+
+    // Clean up duplicate/legacy 'bot-id' user if it exists and migrate its references
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM users WHERE id = 'bot-id') THEN
+          -- Reassign any existing messages or references to 'gemini-bot-id'
+          UPDATE server_messages SET sender_id = 'gemini-bot-id' WHERE sender_id = 'bot-id';
+          UPDATE direct_messages SET sender_id = 'gemini-bot-id' WHERE sender_id = 'bot-id';
+          UPDATE direct_messages SET recipient_id = 'gemini-bot-id' WHERE recipient_id = 'bot-id';
+          DELETE FROM server_members WHERE user_id = 'bot-id';
+          DELETE FROM users WHERE id = 'bot-id';
+        END IF;
+      END $$;
     `);
 
     // Seed Gemini Bot user

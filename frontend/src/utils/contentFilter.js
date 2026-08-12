@@ -80,8 +80,9 @@ export const BYPASS_PATTERNS = [
   /(?<![a-z])b[\s\W_]*[i1!ïíy*@#$%.~_\-]*[\s\W_]*t*[\s\W_]*c+[\s\W_]*h+(?:es|ing|in|ed)?(?![a-z])/gi,
 
   // ── ass variants ──
-  /(?:^|[\s,!?.])(ass)(?:hole|hat|wipe|clown|face|head|bag|$|[\s,!?.])/gi,
-  /(?<![a-z])[a@4][s$5]{2}(?!ass|in|ign)/gi,
+  /(?<![a-z])(ass)(?:hole|hat|wipe|clown|face|head|bag)(?![a-z])/gi,
+  /(?<![a-z])ass(?:es)?(?![a-z])/gi,
+  /(?<![a-z])[a@4][s$5]{2}(?![a-z])/gi,
 
   // ── cunt / cnt ──
   /(?<![a-z])c[\s\W_]*[u0o*@#$%.~_\-]*[\s\W_]*n+[\s\W_]*t+(?:s)?(?![a-z])/gi,

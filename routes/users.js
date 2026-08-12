@@ -1,6 +1,9 @@
 const express = require('express');
 const { query } = require('../db/database');
 const { authMiddleware } = require('../middleware/auth');
+const fs = require('fs');
+const path = require('path');
+
 
 const router = express.Router();
 
@@ -236,6 +239,83 @@ router.get('/friends/pending', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch pending requests' });
+  }
+});
+
+// Helper function to read Minecraft balance from Essentials userdata
+function getMinecraftBalance(username) {
+  const dir = process.env.MINECRAFT_USERDATA_PATH || '/minecraft-server/plugins/Essentials/userdata';
+  if (!fs.existsSync(dir)) {
+    return null;
+  }
+  
+  const files = fs.readdirSync(dir);
+  for (const file of files) {
+    if (!file.endsWith('.yml')) continue;
+    
+    try {
+      const filePath = path.join(dir, file);
+      const content = fs.readFileSync(filePath, 'utf8');
+      
+      const nameMatch = content.match(/last-account-name:\s*['"]?([^'"\r\n]+)['"]?/i);
+      if (nameMatch && nameMatch[1].toLowerCase() === username.toLowerCase()) {
+        const moneyMatch = content.match(/money:\s*['"]?([^'"\r\n]+)['"]?/);
+        if (moneyMatch) {
+          return parseFloat(moneyMatch[1]) || 0;
+        }
+        return 0;
+      }
+    } catch (e) {
+      console.error(`Error reading/parsing Essentials file ${file}:`, e);
+    }
+  }
+  return null;
+}
+
+// Update Minecraft Username Binding
+router.put('/minecraft/username', authMiddleware, async (req, res) => {
+  try {
+    const { minecraftUsername } = req.body;
+    if (minecraftUsername === undefined) {
+      return res.status(400).json({ error: 'minecraftUsername is required' });
+    }
+
+    await query(
+      'UPDATE users SET minecraft_username = $1 WHERE id = $2',
+      [minecraftUsername || null, req.userId]
+    );
+
+    res.json({ success: true, minecraftUsername });
+  } catch (err) {
+    console.error('Error updating Minecraft username:', err);
+    res.status(500).json({ error: 'Failed to update Minecraft username' });
+  }
+});
+
+// Get Minecraft Balance
+router.get('/minecraft/balance', authMiddleware, async (req, res) => {
+  try {
+    let username = req.query.username;
+    if (!username) {
+      const userRes = await query('SELECT username, minecraft_username FROM users WHERE id = $1', [req.userId]);
+      if (userRes.rows.length > 0) {
+        username = userRes.rows[0].minecraft_username || userRes.rows[0].username;
+      }
+    }
+    
+    if (!username) {
+      return res.status(400).json({ error: 'Username not found' });
+    }
+    
+    const balance = getMinecraftBalance(username);
+    if (balance === null) {
+      return res.json({ username, balance: null, found: false });
+    }
+    
+    return res.json({ username, balance, found: true });
+  } catch (err) {
+    console.error('Error fetching Minecraft balance:', err);
+    res.status(500).json({ error: 'Failed to fetch Minecraft balance' });
   }
 });
 

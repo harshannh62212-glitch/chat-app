@@ -7,15 +7,16 @@
 }
 
 body {
-  font-family: 'Outfit', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #0b0c10;
-  color: #f1f3f9;
+  font-family: 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  background-color: #1e1f22;
+  color: #dbdee1;
 }
 
 .app.dashboard-view {
   width: 100%;
   height: 100vh;
   overflow: hidden;
+  background-color: #1e1f22;
 }
 
 .app.thermals-view {
@@ -34,13 +35,14 @@ body {
   display: flex;
   height: 100%;
   gap: 0;
+  background-color: #1e1f22;
 }
 
 .sidebar {
-  width: 300px;
-  background: #111217;
-  border-right: 1px solid #1e2029;
-  padding: 15px;
+  width: 240px;
+  background: #2b2d31;
+  border-right: 1px solid #1e1f22;
+  padding: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -51,6 +53,65 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Discord Floating Bottom Controls Bar */
+.discord-stage-floating-controls {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+}
+
+.floating-bar-pill {
+  background: #1e1f22;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px 16px;
+  border-radius: 28px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.stage-action-btn {
+  background: #2b2d31;
+  border: none;
+  color: #dbdee1;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.stage-action-btn:hover {
+  background: #35373c;
+  transform: scale(1.05);
+}
+
+.stage-action-btn.active-red {
+  background: #f23f43;
+  color: #fff;
+}
+
+.stage-action-btn.disconnect-red-btn {
+  background: #da373c;
+  color: #fff;
+  border-radius: 18px;
+  padding: 0 16px;
+  width: auto;
+}
+
+.stage-action-btn.disconnect-red-btn:hover {
+  background: #a1282c;
 }
 
 .user-info {
@@ -352,42 +413,47 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: rgba(30, 32, 41, 0.45);
+  background: #313338;
 }
 
 .chat-header {
-  background: rgba(23, 25, 35, 0.5);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  padding: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: #313338;
+  padding: 12px 16px;
+  border-bottom: 1px solid #1f2023;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  height: 48px;
 }
 
 .chat-header h2 {
-  font-size: 1.3em;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f2f3f5;
 }
 
 .header-info {
   display: flex;
-  gap: 20px;
-  font-size: 0.9em;
-  color: #72767d;
+  gap: 16px;
+  align-items: center;
+  font-size: 0.85em;
+  color: #949ba4;
 }
 
 .chat-container {
   flex: 1;
   display: flex;
   overflow: hidden;
+  background: #313338;
 }
 
 .chatroom-selector {
-  width: 200px;
-  background: rgba(23, 25, 35, 0.4);
-  padding: 15px;
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  width: 240px;
+  background: #2b2d31;
+  padding: 0;
+  border-right: 1px solid #1f2023;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
 }
 

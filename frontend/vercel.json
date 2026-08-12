@@ -1,12 +1,16 @@
 {
   "routes": [
     {
+      "src": "/api/resolve-tunnel",
+      "dest": "/api/resolve-tunnel"
+    },
+    {
       "src": "/api/(.*)",
-      "dest": "https://clicking-reservations-pubs-trustees.trycloudflare.com/api/$1"
+      "dest": "https://springfield-definition-bin-configurations.trycloudflare.com/api/$1"
     },
     {
       "src": "/socket.io/(.*)",
-      "dest": "https://clicking-reservations-pubs-trustees.trycloudflare.com/socket.io/$1"
+      "dest": "https://springfield-definition-bin-configurations.trycloudflare.com/socket.io/$1"
     },
     {
       "handle": "filesystem"

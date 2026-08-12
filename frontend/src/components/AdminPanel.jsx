@@ -683,46 +683,94 @@ function AdminPanel({ currentUser, onSelectServer }) {
 
             {activeSubTab === 'reports' && (
               <div className="admin-section">
-                <h3>User Bug/Issue Reports</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3>User Bug/Issue Reports</h3>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      onClick={() => setSelectedTable('inbox')}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: selectedTable !== 'spam' ? '#00ffff' : 'rgba(255, 255, 255, 0.1)',
+                        color: selectedTable !== 'spam' ? '#000' : '#fff',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      📥 Inbox ({reports.filter(r => r.status !== 'spam' && r.status !== 'rejected').length})
+                    </button>
+                    <button
+                      onClick={() => setSelectedTable('spam')}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: selectedTable === 'spam' ? '#ff4757' : 'rgba(255, 255, 255, 0.1)',
+                        color: '#fff',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🗑️ Spam Box ({reports.filter(r => r.status === 'spam' || r.status === 'rejected' || r.ai_evaluation === 'SPAM' || r.ai_evaluation === 'ABUSIVE').length})
+                    </button>
+                  </div>
+                </div>
+
                 <table className="admin-table">
                   <thead>
                     <tr>
                       <th>Reporter</th>
                       <th>Description</th>
                       <th>Date</th>
-                      <th>AI Evaluation</th>
+                      <th>AI Triage</th>
                       <th>Status</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {reports.length === 0 ? (
+                    {reports
+                      .filter(r => {
+                        const isSpam = r.status === 'spam' || r.status === 'rejected' || r.ai_evaluation === 'SPAM' || r.ai_evaluation === 'ABUSIVE';
+                        return selectedTable === 'spam' ? isSpam : !isSpam;
+                      })
+                      .length === 0 ? (
                       <tr>
-                        <td colSpan="6" style={{ textAlign: 'center' }}>No reports found.</td>
+                        <td colSpan="6" style={{ textAlign: 'center', padding: '20px', color: '#a4b0be' }}>
+                          {selectedTable === 'spam' ? 'No spam reports detected.' : 'No active reports in inbox.'}
+                        </td>
                       </tr>
                     ) : (
-                      reports.map(r => (
-                        <tr key={r.id}>
-                          <td className="bold">{r.username}</td>
-                          <td>{r.description}</td>
-                          <td>{new Date(r.created_at).toLocaleDateString()}</td>
-                          <td>
-                            <span className={`status-badge ${r.ai_evaluation === 'LEGITIMATE' ? 'active' : r.ai_evaluation === 'SPAM' ? 'ban' : 'timeout'}`}>
-                              {r.ai_evaluation ? r.ai_evaluation.toUpperCase() : 'UNEVALUATED'}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`status-badge ${r.status === 'resolved' ? 'active' : r.status === 'rejected' ? 'status-badge' : 'ban'}`}>
-                              {r.status.toUpperCase()}
-                            </span>
-                          </td>
-                          <td>
-                            {r.status !== 'resolved' && r.status !== 'rejected' && (
-                              <button className="btn-green" onClick={() => handleResolveReport(r.id)}>Resolve</button>
-                            )}
-                          </td>
-                        </tr>
-                      ))
+                      reports
+                        .filter(r => {
+                          const isSpam = r.status === 'spam' || r.status === 'rejected' || r.ai_evaluation === 'SPAM' || r.ai_evaluation === 'ABUSIVE';
+                          return selectedTable === 'spam' ? isSpam : !isSpam;
+                        })
+                        .map(r => (
+                          <tr key={r.id}>
+                            <td className="bold">{r.username}</td>
+                            <td>{r.description}</td>
+                            <td>{new Date(r.created_at).toLocaleDateString()}</td>
+                            <td>
+                              <span className={`status-badge ${r.ai_evaluation === 'LEGITIMATE' ? 'active' : r.ai_evaluation === 'SPAM' || r.ai_evaluation === 'ABUSIVE' ? 'ban' : 'timeout'}`}>
+                                🤖 {r.ai_evaluation ? r.ai_evaluation.toUpperCase() : 'UNEVALUATED'}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`status-badge ${r.status === 'resolved' ? 'active' : r.status === 'spam' ? 'ban' : 'timeout'}`}>
+                                {r.status.toUpperCase()}
+                              </span>
+                            </td>
+                            <td>
+                              {r.status !== 'resolved' && r.status !== 'spam' && (
+                                <button className="btn-green" onClick={() => handleResolveReport(r.id)}>Resolve</button>
+                              )}
+                              {r.status === 'spam' && (
+                                <button className="btn-blue" onClick={() => handleResolveReport(r.id)}>Mark Resolved</button>
+                              )}
+                            </td>
+                          </tr>
+                        ))
                     )}
                   </tbody>
                 </table>

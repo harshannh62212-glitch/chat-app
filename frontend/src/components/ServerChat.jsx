@@ -16,20 +16,65 @@ const socket = io(socketUrl, {
   }
 });
 
-function VideoParticipant({ stream, username, isLocal }) {
+function VideoParticipant({ stream, username, avatarUrl, isLocal, isMuted, isDeafened, isSpeaking }) {
   const videoRef = useRef(null);
-  
+  const [hasVideoTrack, setHasVideoTrack] = useState(false);
+
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      const vTracks = stream.getVideoTracks();
+      setHasVideoTrack(vTracks.length > 0 && vTracks.some(t => t.enabled));
+
+      const handleTrackChange = () => {
+        setHasVideoTrack(stream.getVideoTracks().some(t => t.enabled));
+      };
+
+      stream.addEventListener('addtrack', handleTrackChange);
+      stream.addEventListener('removetrack', handleTrackChange);
+      return () => {
+        stream.removeEventListener('addtrack', handleTrackChange);
+        stream.removeEventListener('removetrack', handleTrackChange);
+      };
+    } else {
+      setHasVideoTrack(false);
     }
   }, [stream]);
 
   return (
-    <div className="video-participant-card">
-      <video ref={videoRef} autoPlay playsInline muted={isLocal} />
-      <div className="participant-overlay">
-        <span className="participant-name">{username} {isLocal && '(You)'}</span>
+    <div className={`voice-participant-tile ${isSpeaking ? 'speaking' : ''}`}>
+      {hasVideoTrack ? (
+        <video ref={videoRef} autoPlay playsInline muted={isLocal} className="participant-video" />
+      ) : (
+        <div className="participant-avatar-container">
+          <div className={`avatar-wrapper ${isSpeaking ? 'speaking' : ''}`}>
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={username} className="stage-avatar-img" />
+            ) : (
+              <div className="stage-avatar-fallback">
+                {username ? username[0].toUpperCase() : '?'}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="participant-overlay-bottom">
+        <div className="participant-name-tag">
+          {username} {isLocal && '(You)'}
+        </div>
+        <div className="status-icons-group">
+          {isMuted && (
+            <div className="status-icon-badge danger" title="Muted">
+              🎙️
+            </div>
+          )}
+          {isDeafened && (
+            <div className="status-icon-badge danger" title="Deafened">
+              🎧
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -44,13 +89,11 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   const [showMembers, setShowMembers] = useState(true);
   const [showGiphy, setShowGiphy] = useState(false);
   const [showTunnelWarning, setShowTunnelWarning] = useState(false);
+  const [currentSocketUrl, setCurrentSocketUrl] = useState(socketUrl);
 
   useEffect(() => {
     const handleConnectError = (err) => {
       console.warn('[SOCKET] Connection error:', err.message);
-      if (import.meta.env.PROD || socketUrl.includes('trycloudflare') || socketUrl.includes('localtunnel')) {
-        setShowTunnelWarning(true);
-      }
     };
     socket.on('connect_error', handleConnectError);
     return () => {
@@ -65,11 +108,68 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   const [inVoiceRoom, setInVoiceRoom] = useState(false);
   const [voiceUsers, setVoiceUsers] = useState([]); // Array of { socketId, username, stream }
   const [isMuted, setIsMuted] = useState(false);
+  const [isDeafened, setIsDeafened] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [localStream, setLocalStream] = useState(null);
+  const [isLocalSpeaking, setIsLocalSpeaking] = useState(false);
   
   const localStreamRef = useRef(null);
   const peersRef = useRef(new Map());
+  const audioContextRef = useRef(null);
+
+  const toggleDeafen = () => {
+    const newState = !isDeafened;
+    setIsDeafened(newState);
+    // Mute incoming audio from all peers
+    peersRef.current.forEach(pc => {
+      pc.getReceivers().forEach(receiver => {
+        if (receiver.track && receiver.track.kind === 'audio') {
+          receiver.track.enabled = !newState;
+        }
+      });
+    });
+  };
+
+  useEffect(() => {
+    if (!localStream || isMuted) {
+      setIsLocalSpeaking(false);
+      return;
+    }
+
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioCtx();
+      audioContextRef.current = audioCtx;
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      const source = audioCtx.createMediaStreamSource(localStream);
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      let intervalId;
+
+      const checkVolume = () => {
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / dataArray.length;
+        setIsLocalSpeaking(average > 15);
+      };
+
+      intervalId = setInterval(checkVolume, 100);
+
+      return () => {
+        clearInterval(intervalId);
+        if (audioCtx.state !== 'closed') {
+          audioCtx.close();
+        }
+      };
+    } catch (err) {
+      console.warn('[AUDIO] Failed to start audio analyser:', err);
+    }
+  }, [localStream, isMuted]);
 
   const leaveVoiceRoom = () => {
     socket.emit('leave-voice', { voiceRoomId: server.id });
@@ -286,9 +386,24 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       if (!saved && import.meta.env.PROD) {
         try {
           let tunnel = '';
-          // Try fetching from Supabase REST API first
+          // Try fetching from Vercel Serverless resolver first (same-origin, bypasses ad-blockers)
           try {
-            let supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const resolverRes = await fetch('/api/resolve-tunnel');
+            if (resolverRes.ok) {
+              const data = await resolverRes.json();
+              if (data && data.url) {
+                tunnel = data.url;
+                console.log('[SOCKET] Resolved active tunnel URL from Vercel Resolver:', tunnel);
+              }
+            }
+          } catch (resolverErr) {
+            console.warn('[SOCKET] Failed to fetch tunnel URL from Vercel Resolver:', resolverErr);
+          }
+
+          // Try fetching from Supabase REST API fallback
+          if (!tunnel) {
+            try {
+              let supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
             if (!supabaseUrl || supabaseUrl.includes('trycloudflare.com')) {
               supabaseUrl = 'https://aebntdjjniirnwthtwlx.supabase.co';
             }
@@ -311,6 +426,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
           } catch (supabaseErr) {
             console.warn('[SOCKET] Failed to fetch tunnel URL from Supabase:', supabaseErr);
           }
+        }
 
           // Try fetching dedicated tunnel.json first
           if (!tunnel) {
@@ -349,6 +465,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
           if (tunnel && socket.io.uri !== tunnel) {
             console.log('[SOCKET] Reconnecting socket directly to tunnel:', tunnel);
             socket.io.uri = tunnel;
+            setCurrentSocketUrl(tunnel);
             socket.disconnect().connect();
           }
         } catch (err) {
@@ -363,6 +480,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       if (socket.io.uri !== fallbackUrl) {
         console.log('[SOCKET] Reconnecting socket to fallback server:', fallbackUrl);
         socket.io.uri = fallbackUrl;
+        setCurrentSocketUrl(fallbackUrl);
         socket.disconnect().connect();
       }
     };
@@ -534,8 +652,8 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   };
 
   const allMentionableUsers = [
-    { id: 'bot-id', username: 'bot' },
-    ...members
+    { id: 'gemini-bot-id', username: 'bot' },
+    ...members.filter(u => u.id !== 'gemini-bot-id' && u.id !== 'bot-id')
   ];
   const filteredTags = allMentionableUsers.filter(u => 
     u.username && u.username.toLowerCase().includes(tagQuery)
@@ -613,35 +731,6 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
   return (
     <div className={`server-chat ${viewingChat ? 'mobile-show-chat' : 'mobile-show-rooms'}`}>
-      {showTunnelWarning && (
-        <div style={{
-          backgroundColor: '#faa61a',
-          color: '#000',
-          padding: '10px',
-          textAlign: 'center',
-          fontWeight: 'bold',
-          fontSize: '0.85em',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: '12px',
-          zIndex: 1000,
-          borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
-          width: '100%',
-          boxSizing: 'border-box'
-        }}>
-          <span>⚠️ Backend connection failed. If you are using a local tunnel, please authorize it to enable messaging:</span>
-          <a href={socketUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#000', textDecoration: 'underline', fontWeight: '800' }}>
-            Authorize Tunnel
-          </a>
-          <button 
-            onClick={() => setShowTunnelWarning(false)} 
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.2em', color: '#000' }}
-          >
-            ✕
-          </button>
-        </div>
-      )}
       <div className="chat-header">
         <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {onBack && (
@@ -738,59 +827,84 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                 fontSize: '0.9em',
                 transition: 'background-color 0.2s'
               }}>
-                🔊 Join Voice Room
+                🔊 General Voice
               </button>
             ) : (
               <div className="voice-active-panel" style={{
-                backgroundColor: 'rgba(78, 93, 148, 0.15)',
-                border: '1px solid rgba(88, 101, 242, 0.3)',
+                backgroundColor: 'rgba(35, 165, 90, 0.1)',
+                border: '1px solid rgba(35, 165, 90, 0.3)',
                 padding: '10px',
                 borderRadius: '8px'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <span style={{ color: '#5865f2', fontWeight: 'bold', fontSize: '0.85em' }}>🟢 Connected Voice</span>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={toggleMute} style={{
-                      background: 'none',
-                      border: 'none',
-                      color: isMuted ? '#f04747' : '#fff',
-                      cursor: 'pointer',
-                      fontSize: '1.1em'
-                    }} title={isMuted ? 'Unmute' : 'Mute'}>
-                      {isMuted ? '🎙️❌' : '🎙️'}
-                    </button>
-                    <button onClick={toggleVideo} style={{
-                      background: 'none',
-                      border: 'none',
-                      color: isVideoOff ? '#f04747' : '#fff',
-                      cursor: 'pointer',
-                      fontSize: '1.1em'
-                    }} title={isVideoOff ? 'Turn Camera On' : 'Turn Camera Off'}>
-                      {isVideoOff ? '📹❌' : '📹'}
-                    </button>
-                    <button onClick={leaveVoiceRoom} style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#f04747',
-                      cursor: 'pointer',
-                      fontSize: '1.1em'
-                    }} title="Disconnect">
-                      📴
-                    </button>
-                  </div>
+                  <span style={{ color: '#23a55a', fontWeight: 'bold', fontSize: '0.85em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    🟢 Voice Connected
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: '#949ba4' }}>
+                    {voiceUsers.length + 1} user{voiceUsers.length > 0 ? 's' : ''}
+                  </span>
                 </div>
                 
-                <div className="voice-users-list" style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '5px' }}>
-                  <div style={{ fontSize: '0.8em', color: '#b9bbbe' }}>👤 {currentUser.username} (You)</div>
+                <div className="voice-users-list" style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingLeft: '5px' }}>
+                  <div style={{ fontSize: '0.8em', color: '#f2f3f5', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ color: isLocalSpeaking ? '#23a55a' : '#949ba4' }}>👤</span>
+                    <span>{currentUser.username} (You)</span>
+                  </div>
                   {voiceUsers.map(user => (
-                    <div key={user.socketId} style={{ fontSize: '0.8em', color: '#b9bbbe' }}>
-                      👤 {user.username}
+                    <div key={user.socketId} style={{ fontSize: '0.8em', color: '#b5bac1', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>👤</span>
+                      <span>{user.username}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
           </div>
+
+          {/* Discord Bottom Voice Control Panel */}
+          {inVoiceRoom && (
+            <div className="discord-voice-control-panel">
+              <div className="voice-connection-status">
+                <div className="connection-info">
+                  <span className="connection-title">
+                    <span>📡</span> Voice Connected
+                  </span>
+                  <span className="connection-sub">RTC / General Stage</span>
+                </div>
+                <span className="stage-ping-badge">24ms</span>
+              </div>
+              <div className="voice-action-buttons">
+                <button
+                  className={`discord-voice-btn ${isMuted ? 'active-red' : ''}`}
+                  onClick={toggleMute}
+                  title={isMuted ? 'Unmute Microphone' : 'Mute Microphone'}
+                >
+                  {isMuted ? '🎙️❌' : '🎙️'}
+                </button>
+                <button
+                  className={`discord-voice-btn ${isDeafened ? 'active-red' : ''}`}
+                  onClick={toggleDeafen}
+                  title={isDeafened ? 'Undeafen Audio' : 'Deafen Audio'}
+                >
+                  {isDeafened ? '🎧❌' : '🎧'}
+                </button>
+                <button
+                  className={`discord-voice-btn ${isVideoOff ? 'active-red' : ''}`}
+                  onClick={toggleVideo}
+                  title={isVideoOff ? 'Turn Camera On' : 'Turn Camera Off'}
+                >
+                  {isVideoOff ? '📹❌' : '📹'}
+                </button>
+                <button
+                  className="discord-voice-btn disconnect-btn"
+                  onClick={leaveVoiceRoom}
+                  title="Disconnect Call"
+                >
+                  📴
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* User profile details at the bottom of the column */}
           <div className="discord-user-bar">
@@ -816,12 +930,72 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
         <div className="chat-main">
           {inVoiceRoom && (
-            <div className="video-meeting-grid-container">
-              {localStream && <VideoParticipant stream={localStream} username={currentUser.username} isLocal={true} />}
-              {voiceUsers.map(user => {
-                if (!user.stream) return null;
-                return <VideoParticipant key={user.socketId} stream={user.stream} username={user.username} isLocal={false} />;
-              })}
+            <div className="discord-voice-stage">
+              <div className="discord-stage-header">
+                <div className="stage-title-group">
+                  <span className="stage-channel-icon">🔊</span>
+                  <span className="stage-channel-name">【🔊】 VC 1</span>
+                </div>
+              </div>
+              <div className="discord-stage-grid">
+                <VideoParticipant
+                  stream={localStream}
+                  username={currentUser.username}
+                  avatarUrl={currentUser.avatar_url}
+                  isLocal={true}
+                  isMuted={isMuted}
+                  isDeafened={isDeafened}
+                  isSpeaking={isLocalSpeaking}
+                />
+                {voiceUsers.map(user => (
+                  <VideoParticipant
+                    key={user.socketId}
+                    stream={user.stream}
+                    username={user.username}
+                    avatarUrl={user.avatar_url}
+                    isLocal={false}
+                    isMuted={false}
+                    isDeafened={false}
+                    isSpeaking={false}
+                  />
+                ))}
+              </div>
+
+              {/* Floating Bottom Control Bar matching screenshot */}
+              <div className="discord-stage-floating-controls">
+                <div className="floating-bar-pill">
+                  <button
+                    className={`stage-action-btn ${isMuted ? 'active-red' : ''}`}
+                    onClick={toggleMute}
+                    title={isMuted ? 'Unmute' : 'Mute'}
+                  >
+                    {isMuted ? '🎙️❌' : '🎙️'}
+                  </button>
+                  <button
+                    className={`stage-action-btn ${isDeafened ? 'active-red' : ''}`}
+                    onClick={toggleDeafen}
+                    title={isDeafened ? 'Undeafen' : 'Deafen'}
+                  >
+                    {isDeafened ? '🎧❌' : '🎧'}
+                  </button>
+                  <button
+                    className={`stage-action-btn ${isVideoOff ? 'active-red' : ''}`}
+                    onClick={toggleVideo}
+                    title={isVideoOff ? 'Turn Camera On' : 'Turn Camera Off'}
+                  >
+                    {isVideoOff ? '📹❌' : '📹'}
+                  </button>
+                  <button className="stage-action-btn" title="Share Screen">
+                    🖥️
+                  </button>
+                  <button className="stage-action-btn" title="Activities">
+                    🚀
+                  </button>
+                  <button className="stage-action-btn disconnect-red-btn" onClick={leaveVoiceRoom} title="Disconnect">
+                    📴
+                  </button>
+                </div>
+              </div>
             </div>
           )}
           <div className="messages">
@@ -955,9 +1129,9 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
         {showMembers && (
           <div className="members-sidebar">
-            <h4>Members ({members.length})</h4>
+            <h4>Members ({members.filter(m => m.id !== 'bot-id').length})</h4>
             <div className="members-list">
-              {members.map(member => (
+              {members.filter(m => m.id !== 'bot-id').map(member => (
                 <div 
                   key={member.id} 
                   className={`member-item ${member.id !== currentUser.id ? 'clickable' : ''}`}

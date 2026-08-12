@@ -62,6 +62,7 @@ services:
       - .:/app
       - /app/node_modules
       - /sys:/sys
+      - /home/harshan/minecraft-server:/minecraft-server:ro
 
   redis:
     image: redis:7-alpine

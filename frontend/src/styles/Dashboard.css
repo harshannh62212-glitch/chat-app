@@ -627,10 +627,10 @@ body.theme-cyberpunk-neon {
 
 /* 3. User profile bar styles */
 .discord-user-bar {
-  height: 64px;
-  background-color: rgba(10, 11, 15, 0.4);
-  border-top: 1px solid var(--sidebar-border);
-  padding: 0 12px;
+  height: 52px;
+  background-color: #232428;
+  border-top: 1px solid #1f2023;
+  padding: 0 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
