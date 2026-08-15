@@ -61,6 +61,7 @@ const publicDir = path.resolve(__dirname, 'public');
 if (!fs.existsSync(publicDir)) { fs.mkdirSync(publicDir, { recursive: true }); }
 const socketIO = require('socket.io');
 require('dotenv').config();
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'chat_app_jwt_super_secret_key_2026';
 const fetch = globalThis.fetch || require('node-fetch');
 const authRoutes = require('./routes/auth');
 const serverRoutes = require('./routes/servers');
@@ -73,7 +74,7 @@ const { startHealthCheck } = require('./backend/scripts/healthCheck');
 
 // Start tunnel URL watcher to update Supabase with the active Cloudflare tunnel URL
 function startTunnelUrlWatcher() {
-  if (cluster.isWorker) return;
+  if (process.env.VERCEL || cluster.isWorker) return;
 
   console.log('[TUNNEL WATCHER] Starting active Cloudflare tunnel watcher...');
   
@@ -163,9 +164,10 @@ function startTunnelUrlWatcher() {
     }
   };
 
-  // Run initial check and then poll every 15 seconds
-  setTimeout(checkTunnelLog, 2000);
-  setInterval(checkTunnelLog, 15000);
+  if (!process.env.VERCEL) {
+    setTimeout(checkTunnelLog, 2000);
+    setInterval(checkTunnelLog, 15000);
+  }
 
   // Background Thermal & Hardware Metrics Sync to Cloud DB (Supabase)
   // Saves latest hardware stats so Cloud/Vercel/Render frontend can pick them up even when direct tunnel is inactive
@@ -909,9 +911,11 @@ function applyFanHardwareState() {
 }
 
 // Smart Thermal Daemon: Run every 500ms to outpace Dell BIOS EC watchdog which re-grabs control every ~1-2s
-setInterval(() => {
-  applyFanHardwareState();
-}, 500);
+if (!process.env.VERCEL) {
+  setInterval(() => {
+    applyFanHardwareState();
+  }, 500);
+}
 
 function getBatteryInfo() {
   let percent = 100;
@@ -1746,9 +1750,9 @@ async function moderationTick() {
   } finally {
     isModerating = false;
     setTimeout(moderationTick, 30000);
-  }
+if (!process.env.VERCEL) {
+  setTimeout(moderationTick, 30000);
 }
-setTimeout(moderationTick, 30000);
 
 function optimizeCpuGovernor() {
   try {
