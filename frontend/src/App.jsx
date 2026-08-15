@@ -23,6 +23,7 @@ axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
 import ThermalsPage from './pages/ThermalsPage';
 import AdminPanel from './components/AdminPanel';
 import MinecraftPage from './pages/MinecraftPage';
+import YouTubePage from './pages/YouTubePage';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -394,6 +395,8 @@ function App() {
             onToggleToChat={() => setCurrentPortal('chat')}
             onToggleToSpotify={() => setCurrentPortal('spotify')}
           />
+        ) : currentPortal === 'youtube' ? (
+          <YouTubePage onBack={() => setCurrentPortal('chat')} />
         ) : (
           <Dashboard 
             user={currentUser} 
@@ -402,6 +405,7 @@ function App() {
             batteryInfo={batteryInfo}
             onToggleToSpotify={() => setCurrentPortal('spotify')}
             onToggleToGames={() => setCurrentPortal('games')}
+            onToggleToYouTube={() => setCurrentPortal('youtube')}
           />
         )
       ) : showAuth ? (
