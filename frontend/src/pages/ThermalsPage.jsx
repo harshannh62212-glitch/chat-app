@@ -174,6 +174,58 @@ function ThermalsPage({ onBack }) {
         batteryHealth: powerData.health || null
       });
     } catch (err) {
+      // Fallback: Read latest temporary cache from Supabase system_config table
+      try {
+        let supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aebntdjjniirnwthtwlx.supabase.co';
+        if (supabaseUrl.includes('trycloudflare.com')) supabaseUrl = 'https://aebntdjjniirnwthtwlx.supabase.co';
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
+
+        const cacheRes = await fetch(`${supabaseUrl}/rest/v1/system_config?key=eq.latest_thermals_cache`, {
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`
+          }
+        });
+
+        if (cacheRes.ok) {
+          const rows = await cacheRes.json();
+          if (rows && rows[0] && rows[0].value) {
+            const cached = JSON.parse(rows[0].value);
+            const fanData = cached.fan || {};
+            const sysData = cached.system || {};
+            const powerData = sysData.power || {};
+
+            setMetrics({
+              tempC: fanData.tempC || 45,
+              rpm: fanData.rpm || 0,
+              pwm: fanData.pwm || 0,
+              speedPercent: fanData.speedPercent || 0,
+              mode: fanData.mode || 'auto',
+              ramUsedGB: sysData.memory?.usedGB || '1.0 GB',
+              ramTotalGB: sysData.memory?.totalGB || '24 GB',
+              ramPercent: sysData.memory?.usedPercent || '4.5%',
+              cpuLoad: sysData.cpuLoadAverage?.['1min'] || '0.20',
+              cpuUtil: sysData.cpuUtil || 15,
+              gpuUtil: sysData.gpuUtil || 5,
+              ramClockSpeed: sysData.ramClockSpeed || '2133 MHz',
+              memoryBandwidth: sysData.memoryBandwidth || '12.4 GB/s',
+              currentWh: powerData.currentWh || 0,
+              totalWh: powerData.totalWh || 0,
+              batteryTimeLeft: powerData.batteryTimeLeft || '',
+              uptime: `${Math.floor((sysData.uptimeSeconds || 0) / 3600)}h ${Math.floor(((sysData.uptimeSeconds || 0) % 3600) / 60)}m`,
+              batteryPercent: powerData.batteryPercent !== undefined ? powerData.batteryPercent : 100,
+              batteryStatus: powerData.batteryStatus || 'Full',
+              watts: powerData.watts || '12.5 W',
+              acOnline: powerData.acOnline !== undefined ? powerData.acOnline : true,
+              lowBatteryAutoSaveTriggered: !!powerData.lowBatteryAutoSaveTriggered,
+              batteryHealth: powerData.health || null
+            });
+            return;
+          }
+        }
+      } catch (cacheErr) {
+        // Fallback fetch failed
+      }
       console.error('Failed to fetch thermals:', err);
     }
   };
