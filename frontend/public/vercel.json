@@ -2,15 +2,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://clicking-reservations-pubs-trustees.trycloudflare.com/api/$1"
-    },
-    {
-      "source": "/socket.io/(.*)",
-      "destination": "https://clicking-reservations-pubs-trustees.trycloudflare.com/socket.io/$1"
+      "destination": "/api/"
     },
     {
       "source": "/ping",
-      "destination": "https://clicking-reservations-pubs-trustees.trycloudflare.com/ping"
+      "destination": "/api/ping"
     },
     {
       "source": "/(.*)",
