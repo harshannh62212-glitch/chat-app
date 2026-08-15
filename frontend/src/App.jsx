@@ -15,44 +15,21 @@ if (localStorage.getItem('custom_proxy_target') === fallbackURL) {
   localStorage.removeItem('custom_proxy_target');
 }
 
-// In production (Vercel), check for localstorage custom proxy target for sandbox testing
+// In production (Vercel), use native same-origin API routes backed by Supabase
 const savedProxyTarget = localStorage.getItem('custom_proxy_target');
 axios.defaults.baseURL = savedProxyTarget || (import.meta.env.PROD ? '' : 'http://localhost:8000');
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
 
-// Add failover interceptor to switch to Render backend on network/tunnel errors
-axios.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-    const isNetworkError = !error.response || error.message === 'Network Error';
-    
-    if (isNetworkError && originalRequest && !originalRequest._retry) {
-      const currentTarget = axios.defaults.baseURL;
-      
-      if (currentTarget !== fallbackURL) {
-        console.warn('[AXIOS] Network error on current target. Failing over to Render backend:', fallbackURL);
-        
-        originalRequest._retry = true;
-        localStorage.setItem('custom_proxy_target', fallbackURL);
-        axios.defaults.baseURL = fallbackURL;
-        originalRequest.baseURL = fallbackURL;
-        
-        return axios(originalRequest);
-      }
-    }
-    return Promise.reject(error);
-  }
-);
-
 import ThermalsPage from './pages/ThermalsPage';
 import AdminPanel from './components/AdminPanel';
+import MinecraftPage from './pages/MinecraftPage';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
   const [showThermals, setShowThermals] = useState(window.location.pathname === '/thermals');
   const [showModeration, setShowModeration] = useState(window.location.pathname === '/moderation');
+  const [showMinecraft, setShowMinecraft] = useState(window.location.pathname === '/mc');
   const [loadingApp, setLoadingApp] = useState(true);
   const [moderationPassword, setModerationPassword] = useState('');
   const [moderationUnlocked, setModerationUnlocked] = useState(false);
@@ -64,6 +41,7 @@ function App() {
     const handlePopState = () => {
       setShowThermals(window.location.pathname === '/thermals');
       setShowModeration(window.location.pathname === '/moderation');
+      setShowMinecraft(window.location.pathname === '/mc');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -116,9 +94,24 @@ function App() {
       if (!saved && import.meta.env.PROD) {
         try {
           let tunnel = '';
-          // Try fetching from Supabase REST API first
+          // Try fetching from Vercel Serverless resolver first (same-origin, bypasses ad-blockers)
           try {
-            let supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const resolverRes = await fetch('/api/resolve-tunnel');
+            if (resolverRes.ok) {
+              const data = await resolverRes.json();
+              if (data && data.url) {
+                tunnel = data.url;
+                console.log('[AXIOS] Resolved active tunnel URL from Vercel Resolver:', tunnel);
+              }
+            }
+          } catch (resolverErr) {
+            console.warn('[AXIOS] Failed to fetch tunnel URL from Vercel Resolver:', resolverErr);
+          }
+
+          // Try fetching from Supabase REST API fallback
+          if (!tunnel) {
+            try {
+              let supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
             if (!supabaseUrl || supabaseUrl.includes('trycloudflare.com')) {
               supabaseUrl = 'https://aebntdjjniirnwthtwlx.supabase.co';
             }
@@ -141,6 +134,7 @@ function App() {
           } catch (supabaseErr) {
             console.warn('[AXIOS] Failed to fetch tunnel URL from Supabase:', supabaseErr);
           }
+        }
 
           // Try fetching dedicated tunnel.json first
           if (!tunnel) {
@@ -287,6 +281,8 @@ function App() {
             </button>
           </div>
         </div>
+      ) : showMinecraft ? (
+        <MinecraftPage user={currentUser} onBack={() => { window.history.pushState({}, '', '/'); setShowMinecraft(false); }} />
       ) : showThermals ? (
         <ThermalsPage onBack={() => { window.history.pushState({}, '', '/'); setShowThermals(false); }} />
       ) : showModeration ? (
