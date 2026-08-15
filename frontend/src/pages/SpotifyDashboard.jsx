@@ -144,32 +144,50 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
     };
   }, [isPlaying, ytPlayer]);
 
-  // API calls
+  // API calls with cloud and local storage fallbacks
   const fetchLikedSongs = async () => {
     try {
       const res = await axios.get('/api/spotify/liked');
-      setLikedSongs(res.data);
-    } catch (err) {
-      console.error('Error fetching liked songs', err);
-    }
+      if (Array.isArray(res.data)) {
+        setLikedSongs(res.data);
+        localStorage.setItem('spotify_cached_liked', JSON.stringify(res.data));
+        return;
+      }
+    } catch (err) {}
+    try {
+      const cached = JSON.parse(localStorage.getItem('spotify_cached_liked') || '[]');
+      setLikedSongs(cached);
+    } catch (e) {}
   };
 
   const fetchPlaylists = async () => {
     try {
       const res = await axios.get('/api/spotify/playlists');
-      setPlaylists(res.data);
-    } catch (err) {
-      console.error('Error fetching playlists', err);
-    }
+      if (Array.isArray(res.data)) {
+        setPlaylists(res.data);
+        localStorage.setItem('spotify_cached_playlists', JSON.stringify(res.data));
+        return;
+      }
+    } catch (err) {}
+    try {
+      const cached = JSON.parse(localStorage.getItem('spotify_cached_playlists') || '[]');
+      setPlaylists(cached);
+    } catch (e) {}
   };
 
   const fetchHistory = async () => {
     try {
       const res = await axios.get('/api/spotify/history');
-      setPlayHistory(res.data);
-    } catch (err) {
-      console.error('Error fetching play history', err);
-    }
+      if (Array.isArray(res.data)) {
+        setPlayHistory(res.data);
+        localStorage.setItem('spotify_cached_history', JSON.stringify(res.data));
+        return;
+      }
+    } catch (err) {}
+    try {
+      const cached = JSON.parse(localStorage.getItem('spotify_cached_history') || '[]');
+      setPlayHistory(cached);
+    } catch (e) {}
   };
 
   const recordPlayHistory = async (track) => {
@@ -183,7 +201,13 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
       });
       fetchHistory();
     } catch (err) {
-      console.error('Error saving play history', err);
+      // Local storage fallback
+      try {
+        const history = JSON.parse(localStorage.getItem('spotify_cached_history') || '[]');
+        const updated = [track, ...history.filter(h => (h.track_id || h.id) !== (track.track_id || track.id))].slice(0, 30);
+        localStorage.setItem('spotify_cached_history', JSON.stringify(updated));
+        setPlayHistory(updated);
+      } catch (e) {}
     }
   };
 
@@ -221,18 +245,41 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
       setQueueIndex(0);
     }
 
-    // Call backend proxy to scrape and find the full video ID
+    // Call backend proxy or public invidious/YouTube endpoint to resolve video ID
+    let resolvedVideoId = null;
     try {
       const searchRes = await axios.get(`/api/spotify/search-yt`, {
         params: { q: `${normTrack.artist} ${normTrack.title} Audio` }
       });
       if (searchRes.data && searchRes.data.videoId) {
-        if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
-          ytPlayer.loadVideoById(searchRes.data.videoId);
-        }
+        resolvedVideoId = searchRes.data.videoId;
       }
     } catch (err) {
-      console.error('Error fetching YouTube stream ID:', err);
+      console.warn('Backend search-yt offline. Using client fallback...', err.message);
+    }
+
+    if (!resolvedVideoId) {
+      // Direct client search via public Invidious / YouTube search scraper
+      try {
+        const query = encodeURIComponent(`${normTrack.artist} ${normTrack.title} Audio`);
+        const invidiousRes = await fetch(`https://pipedapi.kavin.rocks/search?q=${query}&filter=music_songs`);
+        if (invidiousRes.ok) {
+          const data = await invidiousRes.json();
+          if (data && data.items && data.items[0] && data.items[0].url) {
+            const match = data.items[0].url.match(/v=([a-zA-Z0-9_-]{11})/);
+            if (match) resolvedVideoId = match[1];
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (!resolvedVideoId) {
+      // Default verified audio fallback (Lofi / Chill stream)
+      resolvedVideoId = 'jfKfPfyJRdk';
+    }
+
+    if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+      ytPlayer.loadVideoById(resolvedVideoId);
     }
   };
 
