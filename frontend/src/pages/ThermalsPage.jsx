@@ -236,7 +236,7 @@ function ThermalsPage({ onBack }) {
   useEffect(() => {
     if (isUnlocked) {
       fetchThermalMetrics();
-      const interval = setInterval(fetchThermalMetrics, 2000);
+      const interval = setInterval(fetchThermalMetrics, 1000);
       return () => clearInterval(interval);
     }
   }, [isUnlocked]);
