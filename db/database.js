@@ -1,16 +1,17 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+const defaultSupabaseUrl = 'postgresql://postgres:ALLsystems143%40%40@db.aebntdjjniirnwthtwlx.supabase.co:5432/postgres';
+const connectionString = process.env.DATABASE_URL || defaultSupabaseUrl;
 const isVercel = Boolean(process.env.VERCEL);
-const useSsl = process.env.DB_SSL === 'true' || (isVercel && process.env.DB_SSL !== 'false');
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  min: isVercel ? 0 : 2,
-  max: isVercel ? 20 : 150,
+  connectionString,
+  min: 0,
+  max: isVercel ? 3 : 10,
   idleTimeoutMillis: 10000,
-  connectionTimeoutMillis: 5000,
-  ssl: useSsl ? { rejectUnauthorized: false } : false
+  connectionTimeoutMillis: 8000,
+  ssl: { rejectUnauthorized: false }
 });
 
 pool.on('error', (err) => {
@@ -21,10 +22,14 @@ async function initDB() {
   try {
     await pool.query('SELECT NOW()');
     console.log('Database connection successful');
-    await createTables();
+    if (!isVercel) {
+      await createTables();
+    }
   } catch (err) {
     console.error('Database connection failed:', err);
-    throw err;
+    if (!isVercel) {
+      throw err;
+    }
   }
 }
 
@@ -177,6 +182,7 @@ async function createTables() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS timeout_until TIMESTAMP;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT false;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS minecraft_username VARCHAR(255);
       ALTER TABLE server_messages ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
       ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
       ALTER TABLE reports ADD COLUMN IF NOT EXISTS ai_evaluation VARCHAR(20) DEFAULT 'unevaluated';
@@ -185,6 +191,21 @@ async function createTables() {
     // Seed Administrator role
     await client.query(`
       UPDATE users SET is_admin = true WHERE username = 'Nxghtmare3621';
+    `);
+
+    // Clean up duplicate/legacy 'bot-id' user if it exists and migrate its references
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM users WHERE id = 'bot-id') THEN
+          -- Reassign any existing messages or references to 'gemini-bot-id'
+          UPDATE server_messages SET sender_id = 'gemini-bot-id' WHERE sender_id = 'bot-id';
+          UPDATE direct_messages SET sender_id = 'gemini-bot-id' WHERE sender_id = 'bot-id';
+          UPDATE direct_messages SET recipient_id = 'gemini-bot-id' WHERE recipient_id = 'bot-id';
+          DELETE FROM server_members WHERE user_id = 'bot-id';
+          DELETE FROM users WHERE id = 'bot-id';
+        END IF;
+      END $$;
     `);
 
     // Seed Gemini Bot user
@@ -470,8 +491,18 @@ async function createTables() {
         EXECUTE FUNCTION public.check_message_content_moderation();
     `);
 
-    console.log('Tables created successfully');
-  } catch (err) {
+      // Auto-sync sequence counters for tables with SERIAL primary keys
+      const serialTables = ['servers', 'chatrooms', 'server_members', 'server_messages', 'direct_messages', 'friendships', 'bans', 'banned_words', 'reports', 'archived_friendships'];
+      for (const table of serialTables) {
+        try {
+          await client.query(`SELECT setval(pg_get_serial_sequence('${table}', 'id'), COALESCE(MAX(id), 1)) FROM ${table};`);
+        } catch (seqErr) {
+          // ignore if sequence doesn't exist
+        }
+      }
+
+      console.log('Tables created successfully');
+    } catch (err) {
     console.error('Error creating tables:', err);
     throw err;
   } finally {
