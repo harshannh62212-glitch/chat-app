@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import bcrypt from 'bcryptjs';
 import Logo from '../components/Logo';
 import { containsBannedWords } from '../utils/contentFilter';
 import '../styles/Auth.css';
@@ -55,6 +56,7 @@ function Auth({ onLogin, onBack }) {
         });
         const { user, token } = res.data;
         onLogin(token, user);
+        return;
       } else {
         const res = await axios.post('/api/auth/login', {
           username: usernameTrimmed,
@@ -62,9 +64,97 @@ function Auth({ onLogin, onBack }) {
         });
         const { user, token } = res.data;
         onLogin(token, user);
+        return;
       }
     } catch (err) {
-      console.error(err);
+      console.warn('Primary auth endpoint error. Trying Supabase Cloud fallback...', err);
+
+      try {
+        let supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aebntdjjniirnwthtwlx.supabase.co';
+        if (supabaseUrl.includes('trycloudflare.com')) supabaseUrl = 'https://aebntdjjniirnwthtwlx.supabase.co';
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
+
+        if (!isRegister) {
+          // Direct Supabase Login
+          const dbRes = await fetch(`${supabaseUrl}/rest/v1/users?username=ilike.${encodeURIComponent(usernameTrimmed)}&limit=1`, {
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Authorization': `Bearer ${supabaseAnonKey}`
+            }
+          });
+          if (dbRes.ok) {
+            const users = await dbRes.json();
+            const user = users && users[0];
+            if (user && user.password) {
+              const match = bcrypt.compareSync(password, user.password);
+              if (match) {
+                const token = `supabase_token_${user.id}_${Date.now()}`;
+                onLogin(token, {
+                  id: user.id,
+                  username: user.username,
+                  email: user.email,
+                  avatar_url: user.avatar_url,
+                  is_admin: user.username === 'Nxghtmare3621' || user.is_admin
+                });
+                return;
+              } else {
+                setError('Invalid credentials');
+                return;
+              }
+            } else {
+              setError('Invalid credentials');
+              return;
+            }
+          }
+        } else {
+          // Direct Supabase Register
+          const checkRes = await fetch(`${supabaseUrl}/rest/v1/users?username=ilike.${encodeURIComponent(usernameTrimmed)}&limit=1`, {
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Authorization': `Bearer ${supabaseAnonKey}`
+            }
+          });
+          const existing = await checkRes.json();
+          if (existing && existing.length > 0) {
+            setError('Username already exists');
+            return;
+          }
+
+          const salt = bcrypt.genSaltSync(10);
+          const hashedPassword = bcrypt.hashSync(password, salt);
+
+          const createRes = await fetch(`${supabaseUrl}/rest/v1/users`, {
+            method: 'POST',
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation'
+            },
+            body: JSON.stringify({
+              username: usernameTrimmed,
+              email: `${usernameTrimmed}@chat.local`,
+              password: hashedPassword
+            })
+          });
+
+          if (createRes.ok) {
+            const createdUsers = await createRes.json();
+            const user = createdUsers[0];
+            const token = `supabase_token_${user.id}_${Date.now()}`;
+            onLogin(token, {
+              id: user.id,
+              username: user.username,
+              email: user.email,
+              is_admin: user.username === 'Nxghtmare3621'
+            });
+            return;
+          }
+        }
+      } catch (fallbackErr) {
+        console.error('Supabase fallback error:', fallbackErr);
+      }
+
       let errMsg = 'Authentication failed';
       const rawError = err.response?.data?.error || err.response?.data || err.message;
       if (rawError) {
