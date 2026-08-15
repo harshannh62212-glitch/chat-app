@@ -10,7 +10,7 @@ import FriendsPanel from '../components/FriendsPanel';
 import Logo from '../components/Logo';
 import '../styles/Dashboard.css';
 
-function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, onToggleToGames }) {
+function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, onToggleToGames, onToggleToYouTube }) {
   const [activeTab, setActiveTab] = useState('servers');
   const [selectedServer, setSelectedServer] = useState(null);
   const [selectedDM, setSelectedDM] = useState(null);
@@ -190,6 +190,27 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
           }}
         >
           🎮
+        </div>
+
+        {/* YouTube Web App Portal Button */}
+        <div 
+          className="rail-icon youtube-rail-btn"
+          onClick={onToggleToYouTube || (() => { window.history.pushState({}, '', '/youtube'); window.dispatchEvent(new PopStateEvent('popstate')); })}
+          title="Open YouTube Portal"
+          style={{
+            background: 'rgba(255, 0, 0, 0.15)',
+            border: '1px solid rgba(255, 0, 0, 0.4)',
+            color: '#ff0000',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '20px',
+            marginBottom: '10px',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          ▶️
         </div>
 
         {user && user.is_admin && (
