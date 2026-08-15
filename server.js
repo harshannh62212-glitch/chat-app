@@ -77,7 +77,23 @@ function startTunnelUrlWatcher() {
 
   console.log('[TUNNEL WATCHER] Starting active Cloudflare tunnel watcher...');
   
+  const ensureCloudflaredRunning = () => {
+    const { exec, spawn } = require('child_process');
+    exec('pgrep -f "cloudflared tunnel"', (err, stdout) => {
+      if (err || !stdout.trim()) {
+        console.log('[TUNNEL WATCHER] Cloudflare tunnel process not found. Auto-launching cloudflared...');
+        const logPath = path.join(__dirname, 'cloudflared.log');
+        const child = spawn('cloudflared', ['tunnel', '--logfile', logPath, '--url', 'http://127.0.0.1:8000'], {
+          detached: true,
+          stdio: 'ignore'
+        });
+        child.unref();
+      }
+    });
+  };
+
   const checkTunnelLog = async () => {
+    ensureCloudflaredRunning();
     try {
       const logPath = path.join(__dirname, 'cloudflared.log');
       if (!fs.existsSync(logPath)) {
@@ -85,9 +101,9 @@ function startTunnelUrlWatcher() {
       }
       
       const logContent = fs.readFileSync(logPath, 'utf8');
-      const match = logContent.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
-      if (match) {
-        const tunnelUrl = match[0];
+      const matches = [...logContent.matchAll(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/g)];
+      if (matches.length > 0) {
+        const tunnelUrl = matches[matches.length - 1][0];
         const currentRes = await query("SELECT value FROM system_config WHERE key = 'active_tunnel_url'");
         const currentUrl = currentRes.rows[0]?.value;
         
@@ -99,6 +115,38 @@ function startTunnelUrlWatcher() {
             ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = CURRENT_TIMESTAMP;
           `, [tunnelUrl]);
         }
+
+        const jsonContent = JSON.stringify({ url: tunnelUrl }, null, 2);
+        const p1 = path.join(__dirname, 'public', 'tunnel.json');
+        const p2 = path.join(__dirname, 'frontend', 'public', 'tunnel.json');
+        if (!fs.existsSync(p1) || fs.readFileSync(p1, 'utf8') !== jsonContent) {
+          fs.writeFileSync(p1, jsonContent, 'utf8');
+        }
+        if (fs.existsSync(path.dirname(p2)) && (!fs.existsSync(p2) || fs.readFileSync(p2, 'utf8') !== jsonContent)) {
+          fs.writeFileSync(p2, jsonContent, 'utf8');
+        }
+
+        // Sync vercel.json rewrites with active tunnel URL
+        const vercelPaths = [
+          path.join(__dirname, 'vercel.json'),
+          path.join(__dirname, 'frontend', 'vercel.json'),
+          path.join(__dirname, 'frontend', 'dist', 'vercel.json')
+        ];
+
+        for (const vp of vercelPaths) {
+          if (fs.existsSync(vp)) {
+            try {
+              let vContent = fs.readFileSync(vp, 'utf8');
+              const updatedVContent = vContent.replace(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/g, tunnelUrl);
+              if (vContent !== updatedVContent) {
+                fs.writeFileSync(vp, updatedVContent, 'utf8');
+                console.log(`[TUNNEL WATCHER] Updated ${path.basename(vp)} rewrites to: ${tunnelUrl}`);
+              }
+            } catch (e) {
+              console.error(`[TUNNEL WATCHER] Failed to update ${vp}:`, e.message);
+            }
+          }
+        }
       }
     } catch (err) {
       console.error('[TUNNEL WATCHER] Error checking/updating tunnel URL:', err);
@@ -106,8 +154,97 @@ function startTunnelUrlWatcher() {
   };
 
   // Run initial check and then poll every 15 seconds
-  setTimeout(checkTunnelLog, 5000);
+  setTimeout(checkTunnelLog, 2000);
   setInterval(checkTunnelLog, 15000);
+
+  // Background Thermal & Hardware Metrics Sync to Cloud DB (Supabase)
+  // Saves latest hardware stats so Cloud/Vercel/Render frontend can pick them up even when direct tunnel is inactive
+  const syncThermalsToDatabase = async () => {
+    try {
+      const fanPath = getDellFanPath();
+      let rpm = 0;
+      let pwm = 0;
+      let enableMode = 1;
+      let tempC = readCpuTempC(fanPath);
+
+      if (fs.existsSync(`${fanPath}/fan1_input`)) {
+        rpm = parseInt(fs.readFileSync(`${fanPath}/fan1_input`, 'utf8').trim()) || 0;
+      }
+      if (fs.existsSync(`${fanPath}/pwm1`)) {
+        pwm = parseInt(fs.readFileSync(`${fanPath}/pwm1`, 'utf8').trim()) || 0;
+      }
+      if (fs.existsSync(`${fanPath}/pwm1_enable`)) {
+        enableMode = parseInt(fs.readFileSync(`${fanPath}/pwm1_enable`, 'utf8').trim()) || 1;
+      }
+
+      const speedPercent = currentFanState.mode === 'manual' 
+        ? currentFanState.manualPercent
+        : Math.round((currentFanState.targetPwm / 255) * 100);
+
+      const totalMem = os.totalmem();
+      const freeMem = os.freemem();
+      const usedMem = totalMem - freeMem;
+      const cpus = os.cpus();
+      const loadAvg = os.loadavg();
+      const power = getPowerSupplyInfo();
+
+      const snapshot = {
+        fan: {
+          rpm,
+          pwm: currentFanState.targetPwm,
+          speedPercent,
+          tempC,
+          mode: currentFanState.mode,
+          enableMode
+        },
+        system: {
+          status: 'online',
+          server: 'Dell Latitude 5290',
+          uptimeSeconds: Math.floor(os.uptime()),
+          cpuLoadAverage: {
+            '1min': loadAvg[0].toFixed(2),
+            '5min': loadAvg[1].toFixed(2),
+            '15min': loadAvg[2].toFixed(2)
+          },
+          cpuUtil: getCpuUsage(),
+          gpuUtil: getGpuUsage(),
+          ramClockSpeed: getRamClockSpeed(),
+          memoryBandwidth: getMemoryBandwidth(),
+          memory: {
+            totalGB: (totalMem / (1024 ** 3)).toFixed(2) + ' GB',
+            freeGB: (freeMem / (1024 ** 3)).toFixed(2) + ' GB',
+            usedGB: (usedMem / (1024 ** 3)).toFixed(2) + ' GB',
+            usedPercent: ((usedMem / totalMem) * 100).toFixed(1) + '%'
+          },
+          power
+        },
+        cached_at: new Date().toISOString()
+      };
+
+      const payload = JSON.stringify(snapshot);
+
+      // Write temporary local cache file and immediately clean up old temp data to conserve disk space
+      const tempPath = path.join(__dirname, 'thermals_cache_temp.json');
+      fs.writeFileSync(tempPath, payload, 'utf8');
+      
+      // Update the single row in Supabase system_config table
+      await query(`
+        INSERT INTO system_config (key, value, updated_at)
+        VALUES ('latest_thermals_cache', $1, CURRENT_TIMESTAMP)
+        ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = CURRENT_TIMESTAMP;
+      `, [payload]);
+
+      // Remove temp file after pushing to DB to conserve space
+      if (fs.existsSync(tempPath)) {
+        fs.unlinkSync(tempPath);
+      }
+    } catch (err) {
+      // Ignore background sync errors
+    }
+  };
+
+  setTimeout(syncThermalsToDatabase, 3000);
+  setInterval(syncThermalsToDatabase, 5000);
 }
 
 const app = express();
@@ -193,6 +330,21 @@ app.get('/api/ping', (req, res) => {
   res.send('pong-32bytes-payload-status-okay');
 });
 
+app.get('/api/resolve-tunnel', async (req, res) => {
+  try {
+    const result = await query("SELECT value FROM system_config WHERE key = 'active_tunnel_url'");
+    const tunnelUrl = result.rows[0]?.value;
+    if (tunnelUrl) {
+      res.json({ url: tunnelUrl });
+    } else {
+      res.status(404).json({ error: 'Tunnel URL not found' });
+    }
+  } catch (err) {
+    console.error('Failed to resolve tunnel:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 const adminRoutes = require('./routes/admin');
 
 const rateLimit = require('express-rate-limit');
@@ -202,13 +354,28 @@ const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
 app.set('trust proxy', 1);
 
-// Rate limiting – max 100 requests per 15 minutes per IP
+// Rate limiting – max 2000 requests per 15 minutes per IP, excluding health checks and status polling
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 2000,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false },
+  skip: (req) => {
+    const p = req.path || req.url || '';
+    return (
+      p === '/ping' ||
+      p === '/api/ping' ||
+      p === '/api/health' ||
+      p === '/api/resolve-tunnel' ||
+      p === '/api/system/status' ||
+      p.startsWith('/socket.io') ||
+      p.endsWith('.json') ||
+      p.endsWith('.html') ||
+      p.endsWith('.js') ||
+      p.endsWith('.css')
+    );
+  },
   message: { error: 'Too many requests, please try again later.' }
 }));
 
@@ -942,7 +1109,9 @@ async function getLocalOllamaModel() {
     if (res.ok) {
       const data = await res.json();
       if (data && data.models && data.models.length > 0) {
-        const preferred = data.models.find(m => m.name.includes('gemma3') || m.name.includes('qwen'));
+        const preferred = data.models.find(m => m.name.includes('llama')) ||
+                          data.models.find(m => m.name.includes('gemma')) ||
+                          data.models.find(m => m.name.includes('qwen'));
         return preferred ? preferred.name : data.models[0].name;
       }
     }
@@ -983,9 +1152,9 @@ Respond ONLY with this JSON:
 
   // 1. Try local Ollama
   try {
-    const localModel = await getLocalOllamaModel() || 'gemma3:270m';
+    const localModel = await getLocalOllamaModel() || 'llama3.2:1b';
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
 
     const response = await fetch('http://127.0.0.1:11434/api/generate', {
       method: 'POST',
@@ -1021,7 +1190,8 @@ Respond ONLY with this JSON:
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+        const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash-lite';
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
@@ -1052,10 +1222,13 @@ Respond ONLY with this JSON:
     
     // Delete from DB (since client might have written it by now)
     try {
-      if (type === 'server') {
-        await query("DELETE FROM server_messages WHERE id = $1", [id]);
-      } else {
-        await query("DELETE FROM direct_messages WHERE id = $1", [id]);
+      const numericId = parseInt(id, 10);
+      if (!isNaN(numericId)) {
+        if (type === 'server') {
+          await query("DELETE FROM server_messages WHERE id = $1", [numericId]);
+        } else {
+          await query("DELETE FROM direct_messages WHERE id = $1", [numericId]);
+        }
       }
     } catch (e) {
       console.error('[ASYNC MODERATOR] DB delete failed:', e.message);
@@ -1142,7 +1315,7 @@ io.on('connection', (socket) => {
       });
       // ── Layer 3: AI async eval (catches context/bypass attempts the keyword list missed) ──
       evaluateMessageAsync(data.id, filteredContent, 'server');
-      if (filteredContent.toLowerCase().includes('@bot')) {
+      if (filteredContent.toLowerCase().includes('@bot') || filteredContent.toLowerCase().includes('@gemini')) {
         handleLocalBotResponse(serverId, chatroom_id, filteredContent, senderId);
       }
     } else if (dmWith) {
@@ -1258,11 +1431,11 @@ const PORT = process.env.PORT || 5000;
 
 // Local Bot response handler (1B parameter llama3.2:1b model capped at 1 thread to keep CPU under 20% and memory under 8GB)
 async function handleLocalBotResponse(serverId, chatroomId, content, senderId) {
-  const promptText = content.replace(/@bot/gi, '').trim();
+  const promptText = content.replace(/@(bot|gemini|Gemini AI Assistant)/gi, '').trim();
   if (!promptText) return;
 
   const botSocketRoom = `server-${serverId}`;
-  io.to(botSocketRoom).emit('user-typing', { userId: 'bot-id' });
+  io.to(botSocketRoom).emit('user-typing', { userId: 'gemini-bot-id' });
 
   try {
   const prompt = `${promptText}`;
@@ -1289,14 +1462,40 @@ async function handleLocalBotResponse(serverId, chatroomId, content, senderId) {
         console.log(`[LOCAL BOT] Success generating response.`);
       }
     } catch (e) {
-      console.warn(`[LOCAL BOT] Local model generate failed:`, e.message);
-      botResponse = "Sorry, my local 1B model is currently unavailable.";
+      console.warn(`[LOCAL BOT] Local model generate failed, attempting Gemini fallback:`, e.message);
+    }
+
+    if (!botResponse) {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (apiKey) {
+        try {
+          console.log(`[LOCAL BOT] Querying Gemini Flash fallback...`);
+          const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash-lite';
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: `You are a friendly AI assistant for a chat platform. Respond concisely to: ${prompt}` }] }]
+            })
+          });
+          if (response.ok) {
+            const json = await response.json();
+            botResponse = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+          }
+        } catch (gemErr) {
+          console.error('[LOCAL BOT] Gemini fallback failed:', gemErr.message);
+        }
+      }
+    }
+
+    if (!botResponse) {
+      botResponse = "Sorry, my AI model is currently unavailable.";
     }
 
     const result = await query(
       `INSERT INTO server_messages (sender_id, chatroom_id, content, is_moderated)
        VALUES ($1, $2, $3, true) RETURNING id, created_at`,
-      ['bot-id', chatroomId, botResponse]
+      ['gemini-bot-id', chatroomId, botResponse]
     );
     
     const newMsgId = result.rows[0].id;
@@ -1304,10 +1503,10 @@ async function handleLocalBotResponse(serverId, chatroomId, content, senderId) {
 
     io.to(botSocketRoom).emit('new-message', {
       id: newMsgId,
-      senderId: 'bot-id',
-      sender_id: 'bot-id',
-      username: 'bot',
-      avatar_url: 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png',
+      senderId: 'gemini-bot-id',
+      sender_id: 'gemini-bot-id',
+      username: 'Gemini AI Assistant',
+      avatar_url: 'https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/google-gemini-icon.png',
       content: botResponse,
       serverId,
       chatroom_id: chatroomId,
@@ -1356,9 +1555,9 @@ async function runGeminiModeration() {
 
       // Try local Ollama (Llama 3.2) first
       try {
-        const localModel = await getLocalOllamaModel() || 'gemma3:270m';
+        const localModel = await getLocalOllamaModel() || 'llama3.2:1b';
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1200);
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
 
         const response = await fetch('http://127.0.0.1:11434/api/generate', {
           method: 'POST',
@@ -1391,7 +1590,8 @@ async function runGeminiModeration() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+            const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash-lite';
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               signal: controller.signal,
@@ -1467,7 +1667,8 @@ async function runGeminiModeration() {
 
         const promptText = `Analyze this user profile picture. Is this image appropriate for a general-audience chat platform? It should not contain nudity, sexually suggestive content, hate symbols, graphic violence, drugs/weapons, or harassment. Respond with JSON: {"appropriate": true} or {"appropriate": false, "reason": "reason"}.`;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+        const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash-lite';
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1600,7 +1801,7 @@ if (require.main === module) {
     try {
       optimizeCpuGovernor();
       optimizeRamAndVirtualMemory();
-      server.listen(PORT, () => {
+      server.listen(PORT, '0.0.0.0', () => {
         console.log(`Server running on port ${PORT}`);
         startHealthCheck();
       });
