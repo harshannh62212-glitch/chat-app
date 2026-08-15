@@ -170,12 +170,32 @@ function App() {
             }
           }
 
-          if (tunnel) {
-            console.log('[AXIOS] Bypassing Vercel proxy. Connecting directly to tunnel:', tunnel);
-            axios.defaults.baseURL = tunnel;
+          // Only use tunnel if it is alive and responsive
+          if (tunnel && tunnel.startsWith('http')) {
+            try {
+              const pingController = new AbortController();
+              const pingTimeout = setTimeout(() => pingController.abort(), 1200);
+              const pingRes = await fetch(`${tunnel}/ping`, { 
+                signal: pingController.signal,
+                headers: { 'bypass-tunnel-reminder': 'true' }
+              });
+              clearTimeout(pingTimeout);
+              if (pingRes.ok) {
+                console.log('[AXIOS] Verified active home tunnel. Connecting directly to:', tunnel);
+                axios.defaults.baseURL = tunnel;
+              } else {
+                console.log('[AXIOS] Tunnel unreachable. Staying on Vercel Cloud Serverless backend.');
+                axios.defaults.baseURL = '';
+              }
+            } catch (pingErr) {
+              console.log('[AXIOS] Tunnel offline. Operating in Cloud Mode via Vercel.');
+              axios.defaults.baseURL = '';
+            }
+          } else {
+            axios.defaults.baseURL = '';
           }
         } catch (err) {
-          // Ignore if configs are not served
+          axios.defaults.baseURL = '';
         }
       }
     };
