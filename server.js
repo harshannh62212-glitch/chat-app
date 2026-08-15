@@ -1750,6 +1750,9 @@ async function moderationTick() {
   } finally {
     isModerating = false;
     setTimeout(moderationTick, 30000);
+  }
+}
+
 if (!process.env.VERCEL) {
   setTimeout(moderationTick, 30000);
 }
