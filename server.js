@@ -81,9 +81,19 @@ function startTunnelUrlWatcher() {
     const { exec, spawn } = require('child_process');
     exec('pgrep -f "cloudflared tunnel"', (err, stdout) => {
       if (err || !stdout.trim()) {
-        console.log('[TUNNEL WATCHER] Cloudflare tunnel process not found. Auto-launching cloudflared...');
+        console.log('[TUNNEL WATCHER] Cloudflare tunnel process not found. Auto-launching cloudflared with HTTP2 protocol...');
         const logPath = path.join(__dirname, 'cloudflared.log');
-        const child = spawn('cloudflared', ['tunnel', '--logfile', logPath, '--url', 'http://127.0.0.1:8000'], {
+        // Clear stale log if it was terminated
+        try {
+          if (fs.existsSync(logPath)) {
+            const content = fs.readFileSync(logPath, 'utf8');
+            if (content.includes('Initiating graceful shutdown') || content.includes('Failed to dial')) {
+              fs.writeFileSync(logPath, '', 'utf8');
+            }
+          }
+        } catch (e) {}
+
+        const child = spawn('cloudflared', ['tunnel', '--protocol', 'http2', '--logfile', logPath, '--url', 'http://127.0.0.1:8000'], {
           detached: true,
           stdio: 'ignore'
         });
