@@ -31,11 +31,14 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
   const fetchUserServers = async () => {
     try {
       const res = await axios.get('/api/servers/my-servers');
-      if (res.data) {
+      if (Array.isArray(res.data)) {
         setServers(res.data);
+      } else {
+        setServers([]);
       }
     } catch (err) {
       console.error('Failed to fetch user servers:', err);
+      setServers([]);
     }
   };
 
@@ -121,7 +124,7 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
         <div className="rail-separator"></div>
 
         <div className="rail-servers">
-          {servers.map(srv => (
+          {(Array.isArray(servers) ? servers : []).map(srv => (
             <div 
               key={srv.id}
               className={`rail-icon server-icon ${selectedServer?.id === srv.id ? 'active' : ''}`}
@@ -309,11 +312,11 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
               <div className="lobby-menu" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div>
                   <h4 style={{ margin: '0 0 10px 0', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '1px' }}>Your Servers</h4>
-                  {servers.length === 0 ? (
+                  {(Array.isArray(servers) ? servers : []).length === 0 ? (
                     <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.85rem', padding: '10px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>No servers joined yet. Tap the 🧭 Discover icon to explore public servers, or tap the ➕ icon to create your own.</div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {servers.map(srv => (
+                      {(Array.isArray(servers) ? servers : []).map(srv => (
                         <div 
                           key={srv.id}
                           onClick={() => { setSelectedServer(srv); setSelectedDM(null); setActiveTab('servers'); setViewingFriends(false); }}
@@ -473,7 +476,7 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
 
       {/* Toast Notifications Container */}
       <div className="toasts-container">
-        {notifications.map(notif => (
+        {(Array.isArray(notifications) ? notifications : []).map(notif => (
           <div 
             key={notif.id} 
             className="toast-notification"

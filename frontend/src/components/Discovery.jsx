@@ -22,14 +22,16 @@ function Discovery({ currentUser }) {
         axios.get('/api/servers/my-servers')
       ]);
 
-      const publicServers = discRes.data || [];
-      const myServers = myRes.data || [];
+      const publicServers = Array.isArray(discRes?.data) ? discRes.data : [];
+      const myServers = Array.isArray(myRes?.data) ? myRes.data : [];
 
       const ids = new Set(myServers.map(m => m.id));
       setJoinedServerIds(ids);
       setServers(publicServers);
     } catch (err) {
       console.error('Failed to fetch discovery servers:', err);
+      setServers([]);
+      setJoinedServerIds(new Set());
     } finally {
       setLoading(false);
     }

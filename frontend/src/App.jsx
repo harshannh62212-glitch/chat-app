@@ -105,13 +105,23 @@ function App() {
         if (!url || !url.startsWith('http')) return false;
         try {
           const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 1800);
-          const res = await fetch(`${url}/ping`, {
-            signal: controller.signal,
-            headers: { 'bypass-tunnel-reminder': 'true' }
-          });
-          clearTimeout(timeout);
-          return res.ok;
+          const timeout = setTimeout(() => controller.abort(), 2000);
+          try {
+            const res = await fetch(`${url}/ping`, {
+              signal: controller.signal,
+              headers: { 'bypass-tunnel-reminder': 'true' }
+            });
+            clearTimeout(timeout);
+            return res.ok;
+          } catch {
+            // Fallback check
+            const resNoCors = await fetch(`${url}/ping`, {
+              signal: controller.signal,
+              mode: 'no-cors'
+            });
+            clearTimeout(timeout);
+            return resNoCors && resNoCors.type === 'opaque';
+          }
         } catch {
           return false;
         }

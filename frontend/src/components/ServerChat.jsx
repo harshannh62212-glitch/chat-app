@@ -95,7 +95,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   const [showMembers, setShowMembers] = useState(true);
   const [showGiphy, setShowGiphy] = useState(false);
   const [showTunnelWarning, setShowTunnelWarning] = useState(false);
-  const [currentSocketUrl, setCurrentSocketUrl] = useState(socketUrl);
+  const [currentSocketUrl, setCurrentSocketUrl] = useState(getActiveSocketUrl());
 
   useEffect(() => {
     const handleConnectError = (err) => {

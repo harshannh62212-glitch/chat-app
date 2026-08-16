@@ -1,12 +1,13 @@
 import React from 'react';
 
-function ServerList({ servers, onSelectServer, selectedServer }) {
+function ServerList({ servers = [], onSelectServer, selectedServer }) {
+  const list = Array.isArray(servers) ? servers : [];
   return (
     <div className="server-list">
-      {servers.length === 0 ? (
+      {list.length === 0 ? (
         <p className="empty-message">No servers yet</p>
       ) : (
-        servers.map(server => (
+        list.map(server => (
           <div
             key={server.id}
             className={`server-item ${selectedServer?.id === server.id ? 'active' : ''}`}

@@ -16,9 +16,10 @@ function DMList({ onSelectDM, selectedDM, viewingFriends, onShowFriends }) {
   const fetchConversations = async () => {
     try {
       const response = await axios.get('/api/messages/dm-conversations/list');
-      setConversations(response.data);
+      setConversations(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       console.error('Failed to fetch conversations:', err);
+      setConversations([]);
     }
   };
 
@@ -39,9 +40,10 @@ function DMList({ onSelectDM, selectedDM, viewingFriends, onShowFriends }) {
       const response = await axios.get('/api/users/search', {
         params: { q: queryVal }
       });
-      setSearchResults(response.data);
+      setSearchResults(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       console.error('Failed to search users:', err);
+      setSearchResults([]);
     }
   };
 
