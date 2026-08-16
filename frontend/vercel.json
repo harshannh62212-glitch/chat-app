@@ -1,23 +1,8 @@
 {
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/resolve-tunnel",
-      "dest": "/api/resolve-tunnel"
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "https://documentary-mary-camping-legendary.trycloudflare.com/api/$1"
-    },
-    {
-      "src": "/socket.io/(.*)",
-      "dest": "https://documentary-mary-camping-legendary.trycloudflare.com/socket.io/$1"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/.*",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
