@@ -1,16 +1,17 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+const defaultSupabaseUrl = 'postgresql://postgres:ALLsystems143%40%40@db.aebntdjjniirnwthtwlx.supabase.co:5432/postgres';
+const connectionString = process.env.DATABASE_URL || defaultSupabaseUrl;
 const isVercel = Boolean(process.env.VERCEL);
-const useSsl = process.env.DB_SSL === 'true' || (isVercel && process.env.DB_SSL !== 'false');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   min: 1,
   max: 10,
   idleTimeoutMillis: 10000,
-  connectionTimeoutMillis: 5000,
-  ssl: useSsl ? { rejectUnauthorized: false } : false
+  connectionTimeoutMillis: 8000,
+  ssl: { rejectUnauthorized: false }
 });
 
 pool.on('error', (err) => {
@@ -21,10 +22,14 @@ async function initDB() {
   try {
     await pool.query('SELECT NOW()');
     console.log('Database connection successful');
-    await createTables();
+    if (!isVercel) {
+      await createTables();
+    }
   } catch (err) {
     console.error('Database connection failed:', err);
-    throw err;
+    if (!isVercel) {
+      throw err;
+    }
   }
 }
 

@@ -16,35 +16,10 @@ if (localStorage.getItem('custom_proxy_target') === fallbackURL) {
   localStorage.removeItem('custom_proxy_target');
 }
 
-// In production (Vercel), check for localstorage custom proxy target for sandbox testing
+// In production (Vercel), use native same-origin API routes backed by Supabase
 const savedProxyTarget = localStorage.getItem('custom_proxy_target');
 axios.defaults.baseURL = savedProxyTarget || (import.meta.env.PROD ? '' : 'http://localhost:8000');
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
-
-// Add failover interceptor to switch to Render backend on network/tunnel errors
-axios.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-    const isNetworkError = !error.response || error.message === 'Network Error';
-    
-    if (isNetworkError && originalRequest && !originalRequest._retry) {
-      const currentTarget = axios.defaults.baseURL;
-      
-      if (currentTarget !== fallbackURL) {
-        console.warn('[AXIOS] Network error on current target. Failing over to Render backend:', fallbackURL);
-        
-        originalRequest._retry = true;
-        localStorage.setItem('custom_proxy_target', fallbackURL);
-        axios.defaults.baseURL = fallbackURL;
-        originalRequest.baseURL = fallbackURL;
-        
-        return axios(originalRequest);
-      }
-    }
-    return Promise.reject(error);
-  }
-);
 
 import ThermalsPage from './pages/ThermalsPage';
 import AdminPanel from './components/AdminPanel';
@@ -196,12 +171,32 @@ function App() {
             }
           }
 
-          if (tunnel) {
-            console.log('[AXIOS] Bypassing Vercel proxy. Connecting directly to tunnel:', tunnel);
-            axios.defaults.baseURL = tunnel;
+          // Only use tunnel if it is alive and responsive
+          if (tunnel && tunnel.startsWith('http')) {
+            try {
+              const pingController = new AbortController();
+              const pingTimeout = setTimeout(() => pingController.abort(), 1200);
+              const pingRes = await fetch(`${tunnel}/ping`, { 
+                signal: pingController.signal,
+                headers: { 'bypass-tunnel-reminder': 'true' }
+              });
+              clearTimeout(pingTimeout);
+              if (pingRes.ok) {
+                console.log('[AXIOS] Verified active home tunnel. Connecting directly to:', tunnel);
+                axios.defaults.baseURL = tunnel;
+              } else {
+                console.log('[AXIOS] Tunnel unreachable. Staying on Vercel Cloud Serverless backend.');
+                axios.defaults.baseURL = '';
+              }
+            } catch (pingErr) {
+              console.log('[AXIOS] Tunnel offline. Operating in Cloud Mode via Vercel.');
+              axios.defaults.baseURL = '';
+            }
+          } else {
+            axios.defaults.baseURL = '';
           }
         } catch (err) {
-          // Ignore if configs are not served
+          axios.defaults.baseURL = '';
         }
       }
     };
@@ -410,6 +405,8 @@ function App() {
             onToggleToSpotify={() => setCurrentPortal('spotify')}
             onToggleToYouTube={() => setCurrentPortal('youtube')}
           />
+        ) : currentPortal === 'youtube' ? (
+          <YouTubePage onBack={() => setCurrentPortal('chat')} />
         ) : (
           <Dashboard 
             user={currentUser} 
@@ -419,6 +416,7 @@ function App() {
             onToggleToSpotify={() => setCurrentPortal('spotify')}
             onToggleToYouTube={() => setCurrentPortal('youtube')}
             onToggleToGames={() => setCurrentPortal('games')}
+            onToggleToYouTube={() => setCurrentPortal('youtube')}
           />
         )
       ) : showAuth ? (

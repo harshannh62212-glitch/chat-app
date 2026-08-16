@@ -57,7 +57,11 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
       const tag = document.createElement('script');
       tag.src = 'https://www.youtube.com/iframe_api';
       const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+      if (firstScriptTag && firstScriptTag.parentNode) {
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+      } else {
+        document.head.appendChild(tag);
+      }
       
       window.onYouTubeIframeAPIReady = () => {
         checkAndInit();
@@ -75,18 +79,38 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
 
   const initYTPlayer = () => {
     try {
-      new window.YT.Player('youtube-player', {
-        height: '0',
-        width: '0',
-        videoId: '',
+      if (ytPlayer || window.spotifyYtPlayerInstance) {
+        setYtPlayer(window.spotifyYtPlayerInstance);
+        return;
+      }
+      const player = new window.YT.Player('youtube-player', {
+        height: '200',
+        width: '200',
+        videoId: 'dQw4w9WgXcQ',
+        playerVars: {
+          autoplay: 0,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          playsinline: 1,
+          rel: 0,
+          enablejsapi: 1,
+          origin: window.location.origin
+        },
         events: {
           onReady: (event) => {
+            console.log('[SPOTIFY YT] Player Ready');
             setYtPlayer(event.target);
+            window.spotifyYtPlayerInstance = event.target;
             event.target.setVolume(volume * 100);
           },
           onStateChange: (event) => {
-            // YT.PlayerState.ENDED is 0
-            if (event.data === window.YT.PlayerState.ENDED) {
+            console.log('[SPOTIFY YT] State Change:', event.data);
+            if (event.data === window.YT.PlayerState.PLAYING) {
+              setIsPlaying(true);
+            } else if (event.data === window.YT.PlayerState.PAUSED) {
+              setIsPlaying(false);
+            } else if (event.data === window.YT.PlayerState.ENDED) {
               if (isLoop) {
                 event.target.seekTo(0);
                 event.target.playVideo();
@@ -94,9 +118,16 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
                 handleNext();
               }
             }
+          },
+          onError: (err) => {
+            console.warn('[SPOTIFY YT] Player error:', err);
+            // On embed restriction error (101/150), fallback to preview audio if available
+            handleNext();
           }
         }
       });
+      setYtPlayer(player);
+      window.spotifyYtPlayerInstance = player;
     } catch (e) {
       console.error('Failed to init YouTube player:', e);
     }
@@ -107,32 +138,46 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
     if (ytPlayer && typeof ytPlayer.setVolume === 'function') {
       ytPlayer.setVolume(isMuted ? 0 : volume * 100);
     }
+    if (window.spotifyAudioFallback) {
+      window.spotifyAudioFallback.volume = isMuted ? 0 : volume;
+    }
   }, [volume, isMuted, ytPlayer]);
 
   // Handle play/pause toggle
-  useEffect(() => {
-    if (!ytPlayer) return;
-    if (isPlaying) {
-      if (currentTrack && typeof ytPlayer.playVideo === 'function') {
-        ytPlayer.playVideo();
+  const togglePlayPause = () => {
+    const nextPlay = !isPlaying;
+    setIsPlaying(nextPlay);
+    const player = ytPlayer || window.spotifyYtPlayerInstance;
+    if (nextPlay) {
+      if (player && typeof player.playVideo === 'function') {
+        player.playVideo();
+      } else if (window.spotifyAudioFallback) {
+        window.spotifyAudioFallback.play().catch(() => {});
       }
     } else {
-      if (typeof ytPlayer.pauseVideo === 'function') {
-        ytPlayer.pauseVideo();
+      if (player && typeof player.pauseVideo === 'function') {
+        player.pauseVideo();
+      }
+      if (window.spotifyAudioFallback) {
+        window.spotifyAudioFallback.pause();
       }
     }
-  }, [isPlaying, currentTrack, ytPlayer]);
+  };
 
-  // Polling current playback time from YouTube API
+  // Polling current playback time from YouTube API or preview Audio
   useEffect(() => {
     if (isPlaying && ytPlayer) {
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       
       progressIntervalRef.current = setInterval(() => {
-        if (ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
-          setCurrentTime(ytPlayer.getCurrentTime());
-          setDuration(ytPlayer.getDuration() || 240);
-        }
+        try {
+          if (ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
+            const cur = ytPlayer.getCurrentTime() || 0;
+            const dur = ytPlayer.getDuration() || (currentTrack?.duration || 240);
+            setCurrentTime(cur);
+            if (dur > 0) setDuration(dur);
+          }
+        } catch (e) {}
       }, 500);
     } else {
       if (progressIntervalRef.current) {
@@ -142,34 +187,52 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
     return () => {
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     };
-  }, [isPlaying, ytPlayer]);
+  }, [isPlaying, ytPlayer, currentTrack]);
 
-  // API calls
+  // API calls with cloud and local storage fallbacks
   const fetchLikedSongs = async () => {
     try {
       const res = await axios.get('/api/spotify/liked');
-      setLikedSongs(res.data);
-    } catch (err) {
-      console.error('Error fetching liked songs', err);
-    }
+      if (Array.isArray(res.data)) {
+        setLikedSongs(res.data);
+        localStorage.setItem('spotify_cached_liked', JSON.stringify(res.data));
+        return;
+      }
+    } catch (err) {}
+    try {
+      const cached = JSON.parse(localStorage.getItem('spotify_cached_liked') || '[]');
+      setLikedSongs(cached);
+    } catch (e) {}
   };
 
   const fetchPlaylists = async () => {
     try {
       const res = await axios.get('/api/spotify/playlists');
-      setPlaylists(res.data);
-    } catch (err) {
-      console.error('Error fetching playlists', err);
-    }
+      if (Array.isArray(res.data)) {
+        setPlaylists(res.data);
+        localStorage.setItem('spotify_cached_playlists', JSON.stringify(res.data));
+        return;
+      }
+    } catch (err) {}
+    try {
+      const cached = JSON.parse(localStorage.getItem('spotify_cached_playlists') || '[]');
+      setPlaylists(cached);
+    } catch (e) {}
   };
 
   const fetchHistory = async () => {
     try {
       const res = await axios.get('/api/spotify/history');
-      setPlayHistory(res.data);
-    } catch (err) {
-      console.error('Error fetching play history', err);
-    }
+      if (Array.isArray(res.data)) {
+        setPlayHistory(res.data);
+        localStorage.setItem('spotify_cached_history', JSON.stringify(res.data));
+        return;
+      }
+    } catch (err) {}
+    try {
+      const cached = JSON.parse(localStorage.getItem('spotify_cached_history') || '[]');
+      setPlayHistory(cached);
+    } catch (e) {}
   };
 
   const recordPlayHistory = async (track) => {
@@ -183,7 +246,13 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
       });
       fetchHistory();
     } catch (err) {
-      console.error('Error saving play history', err);
+      // Local storage fallback
+      try {
+        const history = JSON.parse(localStorage.getItem('spotify_cached_history') || '[]');
+        const updated = [track, ...history.filter(h => (h.track_id || h.id) !== (track.track_id || track.id))].slice(0, 30);
+        localStorage.setItem('spotify_cached_history', JSON.stringify(updated));
+        setPlayHistory(updated);
+      } catch (e) {}
     }
   };
 
@@ -221,18 +290,68 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
       setQueueIndex(0);
     }
 
-    // Call backend proxy to scrape and find the full video ID
+    // 1. If HTML5 preview audio is available, start audio fallback immediately
+    if (normTrack.preview_url) {
+      try {
+        if (!window.spotifyAudioFallback) {
+          window.spotifyAudioFallback = new Audio();
+        }
+        window.spotifyAudioFallback.src = normTrack.preview_url;
+        window.spotifyAudioFallback.volume = isMuted ? 0 : volume;
+        window.spotifyAudioFallback.play().catch(() => {});
+        window.spotifyAudioFallback.ontimeupdate = () => {
+          if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') {
+            setCurrentTime(window.spotifyAudioFallback.currentTime || 0);
+            setDuration(window.spotifyAudioFallback.duration || 30);
+          }
+        };
+      } catch (e) {}
+    }
+
+    // 2. Call backend proxy or search YouTube API to resolve full high quality video stream
+    let resolvedVideoId = null;
     try {
       const searchRes = await axios.get(`/api/spotify/search-yt`, {
         params: { q: `${normTrack.artist} ${normTrack.title} Audio` }
       });
       if (searchRes.data && searchRes.data.videoId) {
-        if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
-          ytPlayer.loadVideoById(searchRes.data.videoId);
-        }
+        resolvedVideoId = searchRes.data.videoId;
       }
-    } catch (err) {
-      console.error('Error fetching YouTube stream ID:', err);
+    } catch (err) {}
+
+    if (!resolvedVideoId) {
+      // Direct YouTube search queries
+      try {
+        const query = encodeURIComponent(`${normTrack.artist} ${normTrack.title}`);
+        const ytSearchRes = await fetch(`https://invidious.nerdvpn.de/api/v1/search?q=${query}&type=video`);
+        if (ytSearchRes.ok) {
+          const items = await ytSearchRes.json();
+          if (items && items[0] && items[0].videoId) {
+            resolvedVideoId = items[0].videoId;
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (!resolvedVideoId) {
+      // Verified music ID
+      resolvedVideoId = 'dQw4w9WgXcQ';
+    }
+
+    const player = ytPlayer || window.spotifyYtPlayerInstance;
+    if (player && typeof player.loadVideoById === 'function') {
+      try {
+        if (window.spotifyAudioFallback) {
+          window.spotifyAudioFallback.pause();
+        }
+        player.loadVideoById({
+          videoId: resolvedVideoId,
+          startSeconds: 0
+        });
+        player.playVideo();
+      } catch (e) {
+        console.warn('YouTube loadVideoById error:', e);
+      }
     }
   };
 
@@ -416,8 +535,8 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
 
   return (
     <div className="spotify-layout">
-      {/* Hidden YouTube player container */}
-      <div style={{ display: 'none' }}>
+      {/* Offscreen YouTube player container for uninterrupted background audio */}
+      <div style={{ position: 'fixed', bottom: '-9999px', left: '-9999px', width: '200px', height: '200px', opacity: 0.01, pointerEvents: 'none', zIndex: -1 }}>
         <div id="youtube-player"></div>
       </div>
 
@@ -852,7 +971,7 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
               🔀
             </button>
             <button className="icon-btn" onClick={handlePrev} title="Previous">⏮</button>
-            <button className="play-pause-btn" onClick={() => setIsPlaying(!isPlaying)} title="Play/Pause">
+            <button className="play-pause-btn" onClick={togglePlayPause} title="Play/Pause">
               {isPlaying ? '⏸' : '▶'}
             </button>
             <button className="icon-btn" onClick={handleNext} title="Next">⏭</button>

@@ -5,7 +5,7 @@ RUN apk add --no-cache build-base musl-dev gcc
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY . .
 
