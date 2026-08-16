@@ -69,12 +69,37 @@ export default function YouTubeDashboard({ user, onLogout, onToggleToChat, onTog
     }
   };
 
+  // Helper to extract video ID from raw text or URLs (e.g. youtube.com/watch?v=xxx, youtu.be/xxx, or raw 11-char ID)
+  const extractVideoId = (input) => {
+    if (!input) return null;
+    const clean = input.trim();
+    if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) return clean;
+    const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    return match ? match[1] : null;
+  };
+
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
 
-    const trimmed = searchQuery.trim().toLowerCase();
-    const cacheKey = `search_${trimmed}`;
+    const trimmed = searchQuery.trim();
+    
+    // 1. Check if user entered a direct YouTube URL or raw Video ID (Instant playback of ANY video in YouTube's library)
+    const directId = extractVideoId(trimmed);
+    if (directId) {
+      const directVideo = {
+        videoId: directId,
+        title: `YouTube Video (${directId})`,
+        channelTitle: 'Direct Link Playback',
+        thumbnail: `https://i.ytimg.com/vi/${directId}/hqdefault.jpg`,
+        views: 'Direct Play',
+        duration: 'Full'
+      };
+      handleSelectVideo(directVideo);
+      return;
+    }
+
+    const cacheKey = `search_${trimmed.toLowerCase()}`;
     if (ramVideoCache.has(cacheKey)) {
       setVideos(ramVideoCache.get(cacheKey));
       setCurrentView('feed');
@@ -83,18 +108,50 @@ export default function YouTubeDashboard({ user, onLogout, onToggleToChat, onTog
 
     setLoading(true);
     try {
+      // 1. Try Backend search route
       const res = await axios.get('/api/youtube/search', {
         params: { q: trimmed }
       });
-      const results = res.data?.results || [];
-      ramVideoCache.set(cacheKey, results);
-      setVideos(results);
-      setCurrentView('feed');
+      if (res.data?.results && res.data.results.length > 0) {
+        ramVideoCache.set(cacheKey, res.data.results);
+        setVideos(res.data.results);
+        setCurrentView('feed');
+        setLoading(false);
+        return;
+      }
     } catch (err) {
-      console.error('Error searching YouTube:', err);
-    } finally {
-      setLoading(false);
+      console.warn('Backend YouTube search failed, querying public YouTube library index:', err.message);
     }
+
+    // 2. Client-side Universal Fallback (Invidious / Piped / YouTube Public Search)
+    try {
+      const publicSearchUrl = `https://invidious.jing.rocks/api/v1/search?q=${encodeURIComponent(trimmed)}&type=video`;
+      const fallbackRes = await fetch(publicSearchUrl);
+      if (fallbackRes.ok) {
+        const data = await fallbackRes.json();
+        const mapped = data.map(item => ({
+          videoId: item.videoId,
+          title: item.title || 'Untitled',
+          channelTitle: item.author || 'YouTube Creator',
+          views: item.viewCountText || (item.viewCount ? `${(item.viewCount / 1000).toFixed(1)}K views` : ''),
+          duration: item.lengthSeconds ? `${Math.floor(item.lengthSeconds / 60)}:${(item.lengthSeconds % 60).toString().padStart(2, '0')}` : '',
+          thumbnail: item.videoThumbnails?.find(t => t.quality === 'medium')?.url || `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`
+        }));
+        if (mapped.length > 0) {
+          ramVideoCache.set(cacheKey, mapped);
+          setVideos(mapped);
+          setCurrentView('feed');
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (fallbackErr) {
+      console.warn('Invidious fallback unreachable:', fallbackErr);
+    }
+
+    // 3. Fallback to direct player generation
+    setLoading(false);
+    setCurrentView('feed');
   };
 
   const handleSelectVideo = (video) => {
@@ -177,7 +234,7 @@ export default function YouTubeDashboard({ user, onLogout, onToggleToChat, onTog
             <input 
               type="text"
               className="yt-search-input"
-              placeholder="Search millions of songs, videos, podcasts & live streams..."
+              placeholder="Search entire YouTube library by song title, channel name, or paste any YouTube URL / ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
