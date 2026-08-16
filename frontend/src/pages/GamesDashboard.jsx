@@ -1,24 +1,37 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { HOUSE_HUNTERS_GAMES } from '../utils/houseHuntersGames';
 import '../styles/Games.css';
 
-// 10 games with description, icon, difficulty, theme color
-const GAMES_LIST = [
-  { id: 'snake', name: 'Neon Snake', desc: 'Slither around the neon grid. Eat glowing energy spheres to grow without hitting the borders or yourself.', icon: '🐍', diff: 'easy', color: '#2ecc71' },
-  { id: 'tetris', name: 'Retro Tetris', desc: 'Stack the falling geometric shapes. Clear full rows to boost your score and speed up levels.', icon: '🧱', diff: 'hard', color: '#a55eea' },
-  { id: 'memory', name: 'Memory Match', desc: 'Flip and match pairs of colorful emojis in as few moves as possible. Test your brain speed.', icon: '🧠', diff: 'easy', color: '#ff4757' },
-  { id: 'g2048', name: '2048 Puzzle', desc: 'Slide adjacent tiles of the same value to combine them. Work your way up to the ultimate 2048 tile.', icon: '🔢', diff: 'medium', color: '#ffd32a' },
-  { id: 'mines', name: 'Minesweeper', desc: 'Clear the board without detonating hidden explosives. Use logic and numerical clues.', icon: '💣', diff: 'medium', color: '#ff5e57' },
-  { id: 'ttt', name: 'Tic-Tac-Toe AI', desc: 'Engage in a battle of wits against a smart virtual AI player. Play X and get three in a row.', icon: '❌', diff: 'easy', color: '#45aaf2' },
-  { id: 'breakout', name: 'Brick Breaker', desc: 'Control the bottom paddle and bounce the ball to shatter the wall of colored bricks overhead.', icon: '⚪', diff: 'medium', color: '#fffa65' },
-  { id: 'mole', name: 'Whack-a-Mole', desc: 'Whack the moles as they pop out of the ground. Speed increases as time ticks down!', icon: '🐹', diff: 'easy', color: '#ff9f43' },
-  { id: 'wordle', name: 'Word Guesser', desc: 'Guess the secret 5-letter word in 6 tries. Color-coded feedback guides your next steps.', icon: '📝', diff: 'medium', color: '#0be881' },
-  { id: 'invaders', name: 'Space Invaders', desc: 'Defend Earth from columns of descending alien invaders. Fire lasers and dodge incoming plasma.', icon: '👾', diff: 'hard', color: '#3818e8' }
+// 10 Built-in Retro Mini-Games
+const BUILTIN_GAMES_LIST = [
+  { id: 'snake', title: 'Neon Snake', desc: 'Slither around the neon grid. Eat glowing energy spheres to grow.', icon: '🐍', diff: 'easy', color: '#2ecc71', category: 'arcade' },
+  { id: 'tetris', title: 'Retro Tetris', desc: 'Stack the falling geometric shapes. Clear full rows to boost your score.', icon: '🧱', diff: 'hard', color: '#a55eea', category: 'arcade' },
+  { id: 'memory', title: 'Memory Match', desc: 'Flip and match pairs of colorful emojis in as few moves as possible.', icon: '🧠', diff: 'easy', color: '#ff4757', category: 'puzzle' },
+  { id: 'g2048', title: '2048 Puzzle', desc: 'Slide adjacent tiles of the same value to combine them to 2048.', icon: '🔢', diff: 'medium', color: '#ffd32a', category: 'puzzle' },
+  { id: 'mines', title: 'Minesweeper', desc: 'Clear the board without detonating hidden explosives.', icon: '💣', diff: 'medium', color: '#ff5e57', category: 'puzzle' },
+  { id: 'ttt', title: 'Tic-Tac-Toe AI', desc: 'Engage in a battle of wits against a smart virtual AI player.', icon: '❌', diff: 'easy', color: '#45aaf2', category: 'casual' },
+  { id: 'breakout', title: 'Brick Breaker', desc: 'Bounce the ball to shatter the wall of colored bricks overhead.', icon: '⚪', diff: 'medium', color: '#fffa65', category: 'arcade' },
+  { id: 'mole', title: 'Whack-a-Mole', desc: 'Whack the moles as they pop out of the ground.', icon: '🐹', diff: 'easy', color: '#ff9f43', category: 'arcade' },
+  { id: 'wordle', title: 'Word Guesser', desc: 'Guess the secret 5-letter word in 6 tries.', icon: '📝', diff: 'medium', color: '#0be881', category: 'puzzle' },
+  { id: 'invaders', title: 'Space Invaders', desc: 'Defend Earth from columns of descending alien invaders.', icon: '👾', diff: 'hard', color: '#3818e8', category: 'arcade' }
 ];
 
 export default function GamesDashboard({ user, onLogout, onToggleToChat, onToggleToSpotify, onToggleToYouTube }) {
-  const [activeGameId, setActiveGameId] = useState(null);
+  const [activeGame, setActiveGame] = useState(null); // { id, title, file, isBuiltin }
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [favorites, setFavorites] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('wired_games_favorites') || '[]');
+    } catch {
+      return [];
+    }
+  });
 
-  // Play beep sound using Web Audio API
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const iframeContainerRef = useRef(null);
+
+  // Play audio beep feedback
   const playBeep = (freq = 440, type = 'sine', duration = 0.08) => {
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -33,17 +46,110 @@ export default function GamesDashboard({ user, onLogout, onToggleToChat, onToggl
       osc.start();
       osc.stop(audioCtx.currentTime + duration);
     } catch (e) {
-      // Audio context block/unsupported
+      // Audio context error
     }
   };
+
+  const toggleFavorite = (gameSlug, e) => {
+    if (e) e.stopPropagation();
+    setFavorites(prev => {
+      const isFav = prev.includes(gameSlug);
+      const updated = isFav ? prev.filter(s => s !== gameSlug) : [...prev, gameSlug];
+      try {
+        localStorage.setItem('wired_games_favorites', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Storage error:', err);
+      }
+      return updated;
+    });
+  };
+
+  // Categories list
+  const categories = [
+    { id: 'all', label: '🎮 All Games' },
+    { id: 'favorites', label: '⭐ Favorites' },
+    { id: 'action', label: '⚔️ Action & Fighting' },
+    { id: 'horror', label: '👻 Horror' },
+    { id: 'shooter', label: '🎯 Shooters' },
+    { id: 'sports', label: '⚽ Sports' },
+    { id: 'racing', label: '🏎️ Racing & Driving' },
+    { id: 'rpg', label: '🗡️ RPG & Adventure' },
+    { id: 'puzzle', label: '🧩 Puzzle & Strategy' },
+    { id: 'arcade', label: '🕹️ Retro Arcade' },
+    { id: 'sandbox', label: '🌍 Sandbox & Building' },
+    { id: 'builtin', label: '👾 Built-in Mini Games' }
+  ];
+
+  // Combined games catalog
+  const allCatalog = useMemo(() => {
+    const hhList = HOUSE_HUNTERS_GAMES.map(g => ({
+      ...g,
+      isBuiltin: false
+    }));
+    const builtinList = BUILTIN_GAMES_LIST.map(g => ({
+      id: g.id,
+      slug: `builtin-${g.id}`,
+      title: g.title,
+      desc: g.desc,
+      icon: g.icon,
+      color: g.color,
+      category: 'builtin',
+      isBuiltin: true
+    }));
+    return [...hhList, ...builtinList];
+  }, []);
+
+  // Filtered games
+  const filteredGames = useMemo(() => {
+    let list = allCatalog;
+
+    if (activeCategory === 'favorites') {
+      list = list.filter(g => favorites.includes(g.slug));
+    } else if (activeCategory === 'builtin') {
+      list = list.filter(g => g.isBuiltin);
+    } else if (activeCategory !== 'all') {
+      list = list.filter(g => g.category === activeCategory);
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(g => g.title.toLowerCase().includes(q) || (g.category && g.category.toLowerCase().includes(q)));
+    }
+
+    return list;
+  }, [allCatalog, activeCategory, searchQuery, favorites]);
+
+  // Fullscreen handlers
+  const handleToggleFullscreen = async () => {
+    if (!iframeContainerRef.current) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+      } else {
+        await iframeContainerRef.current.requestFullscreen();
+        setIsFullscreen(true);
+      }
+    } catch (err) {
+      console.error('Fullscreen toggle error:', err);
+    }
+  };
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
 
   return (
     <div className="games-dashboard-container">
       {/* HEADER */}
       <header className="games-header">
         <div className="games-header-title">
-          <span className="arcade-badge">ARCADE</span>
-          <h1>Gamer Hub</h1>
+          <span className="arcade-badge">ARCADE 150+</span>
+          <h1>House Hunters & Retro Hub</h1>
         </div>
 
         <div className="games-header-actions">
@@ -69,64 +175,189 @@ export default function GamesDashboard({ user, onLogout, onToggleToChat, onToggl
 
       {/* DASHBOARD BODY */}
       <div className="games-content">
-        {!activeGameId ? (
+        {!activeGame ? (
           <div>
-            <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '8px', letterSpacing: '0.5px' }}>Explore Games</h2>
-            <p style={{ color: '#a4b0be', marginBottom: '32px' }}>Choose a retro arcade game or strategic puzzle to play directly inside your dashboard portal.</p>
-            <div className="games-grid">
-              {GAMES_LIST.map(game => (
-                <div 
-                  key={game.id} 
-                  className="game-card"
+            {/* HERO / SEARCH BAR */}
+            <div className="games-hero-section">
+              <div className="games-hero-text">
+                <h2>Unlimited Games Arcade</h2>
+                <p>Play over 145+ full-version web games, action titles, 3D racers, sandbox worlds, and retro classics directly in your browser.</p>
+              </div>
+
+              <div className="games-search-box">
+                <span className="games-search-icon">🔍</span>
+                <input 
+                  type="text" 
+                  className="games-search-input"
+                  placeholder="Search 150+ games (e.g. 1v1.lol, FNAF, Minecraft, Drift Hunters, GTA, Balatro)..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button className="games-search-clear" onClick={() => setSearchQuery('')}>✕</button>
+                )}
+              </div>
+            </div>
+
+            {/* CATEGORIES PILLS */}
+            <div className="games-categories-scroll">
+              {categories.map(cat => (
+                <button
+                  key={cat.id}
+                  className={`game-cat-pill ${activeCategory === cat.id ? 'active' : ''}`}
                   onClick={() => {
-                    playBeep(520, 'square', 0.12);
-                    setActiveGameId(game.id);
+                    playBeep(480, 'sine', 0.05);
+                    setActiveCategory(cat.id);
                   }}
-                  style={{ '--game-theme': game.color }}
                 >
-                  <div className="game-card-icon">
-                    {game.icon}
-                  </div>
-                  <div className="game-card-info">
-                    <h3>{game.name}</h3>
-                    <p>{game.desc}</p>
-                    <div className="game-card-meta">
-                      <span className={`game-difficulty diff-${game.diff}`}>{game.diff}</span>
-                      <span className="play-action">PLAY NOW →</span>
-                    </div>
-                  </div>
-                </div>
+                  {cat.label}
+                  {cat.id === 'favorites' && favorites.length > 0 && ` (${favorites.length})`}
+                </button>
               ))}
             </div>
+
+            <div className="games-count-bar">
+              <span>Showing <strong>{filteredGames.length}</strong> of {allCatalog.length} games</span>
+            </div>
+
+            {/* GAMES GRID */}
+            {filteredGames.length === 0 ? (
+              <div className="games-empty-state">
+                <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🕹️</div>
+                <h3>No games found</h3>
+                <p>No games matched your search query or filter. Try typing another game name or selecting All Games.</p>
+                <button className="portal-nav-btn" onClick={() => { setSearchQuery(''); setActiveCategory('all'); }} style={{ marginTop: '16px' }}>
+                  Reset Filters
+                </button>
+              </div>
+            ) : (
+              <div className="house-hunters-grid">
+                {filteredGames.map(game => {
+                  const isFav = favorites.includes(game.slug);
+                  return (
+                    <div 
+                      key={game.slug || game.id} 
+                      className="hh-game-card"
+                      onClick={() => {
+                        playBeep(520, 'square', 0.12);
+                        setActiveGame(game);
+                      }}
+                    >
+                      <div className="hh-card-media">
+                        {game.logo ? (
+                          <img 
+                            src={game.logo} 
+                            alt={game.title} 
+                            className="hh-card-img" 
+                            loading="lazy" 
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div className="hh-card-fallback" style={{ display: game.logo ? 'none' : 'flex' }}>
+                          <span style={{ fontSize: '2.5rem' }}>{game.icon || '🎮'}</span>
+                        </div>
+                        <button 
+                          className={`hh-fav-btn ${isFav ? 'active' : ''}`}
+                          onClick={(e) => toggleFavorite(game.slug, e)}
+                          title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                        >
+                          ★
+                        </button>
+                        <div className="hh-play-overlay">
+                          <span className="hh-play-badge">▶ PLAY</span>
+                        </div>
+                      </div>
+                      <div className="hh-card-info">
+                        <h4 className="hh-card-title" title={game.title}>{game.title}</h4>
+                        <div className="hh-card-tags">
+                          <span className="hh-cat-tag">{game.category || 'Game'}</span>
+                          {game.isBuiltin && <span className="hh-builtin-tag">Retro</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ) : (
+          /* ACTIVE GAME PLAYER */
           <div className="active-game-container">
             <div className="game-back-bar">
               <button 
                 className="portal-nav-btn" 
                 onClick={() => {
                   playBeep(330, 'sawtooth', 0.1);
-                  setActiveGameId(null);
+                  setActiveGame(null);
                 }}
               >
-                ← Back to Game List
+                ← Back to Game Catalog
               </button>
               <div className="game-title-row">
-                <span style={{ fontSize: '1.8rem' }}>
-                  {GAMES_LIST.find(g => g.id === activeGameId)?.icon}
-                </span>
-                <h2>{GAMES_LIST.find(g => g.id === activeGameId)?.name}</h2>
+                <h2>{activeGame.title}</h2>
+                <span className="hh-cat-tag" style={{ textTransform: 'uppercase' }}>{activeGame.category}</span>
+              </div>
+              <div className="game-player-actions">
+                {!activeGame.isBuiltin && (
+                  <>
+                    <button 
+                      className="portal-nav-btn"
+                      onClick={() => {
+                        window.open(activeGame.file, '_blank', 'noopener,noreferrer');
+                      }}
+                      title="Open game in a separate full browser tab"
+                    >
+                      ↗ Popout Tab
+                    </button>
+                    <button 
+                      className="portal-nav-btn"
+                      onClick={handleToggleFullscreen}
+                      title="Toggle Fullscreen"
+                    >
+                      ⛶ {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                    </button>
+                  </>
+                )}
+                <button 
+                  className={`portal-nav-btn ${favorites.includes(activeGame.slug) ? 'fav-active' : ''}`}
+                  onClick={() => toggleFavorite(activeGame.slug)}
+                  title="Favorite Game"
+                >
+                  {favorites.includes(activeGame.slug) ? '★ Favorited' : '☆ Favorite'}
+                </button>
               </div>
             </div>
 
-            {/* Render selected game */}
-            <GameRenderer gameId={activeGameId} playBeep={playBeep} />
+            {/* Render either House Hunters Web Game Iframe or Builtin Game */}
+            {!activeGame.isBuiltin ? (
+              <div ref={iframeContainerRef} className={`hh-iframe-wrapper ${isFullscreen ? 'fullscreen' : ''}`}>
+                <iframe
+                  src={activeGame.file}
+                  title={activeGame.title}
+                  className="hh-game-iframe"
+                  allowFullScreen={true}
+                  sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms allow-downloads allow-modals"
+                  referrerPolicy="no-referrer"
+                />
+                {isFullscreen && (
+                  <button className="hh-exit-fs-floating-btn" onClick={handleToggleFullscreen}>
+                    ✕ Exit Fullscreen (ESC)
+                  </button>
+                )}
+              </div>
+            ) : (
+              <GameRenderer gameId={activeGame.id} playBeep={playBeep} />
+            )}
           </div>
         )}
       </div>
     </div>
   );
 }
+
 
 // RENDER CORRESPONDING GAME COMPONENT
 function GameRenderer({ gameId, playBeep }) {

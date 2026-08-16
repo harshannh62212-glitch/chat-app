@@ -532,3 +532,335 @@
   }
 }
 
+/* ==========================================================================
+   HOUSE HUNTERS ARCADE EXPANSION STYLES
+   ========================================================================== */
+.games-hero-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.games-hero-text h2 {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #fff 0%, #a55eea 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 6px;
+}
+
+.games-hero-text p {
+  color: #94a3b8;
+  font-size: 1rem;
+  max-width: 800px;
+}
+
+.games-search-box {
+  display: flex;
+  align-items: center;
+  position: relative;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0 16px;
+  max-width: 720px;
+  transition: all 0.2s ease;
+}
+
+.games-search-box:focus-within {
+  border-color: #a55eea;
+  box-shadow: 0 0 16px rgba(165, 94, 234, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.games-search-icon {
+  font-size: 1.1rem;
+  margin-right: 12px;
+  opacity: 0.6;
+}
+
+.games-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 14px 0;
+  color: #fff;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.games-search-clear {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.games-categories-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  scrollbar-width: thin;
+}
+
+.game-cat-pill {
+  white-space: nowrap;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.game-cat-pill:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.game-cat-pill.active {
+  background: #a55eea;
+  color: #fff;
+  border-color: #a55eea;
+  box-shadow: 0 0 12px rgba(165, 94, 234, 0.4);
+}
+
+.games-count-bar {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-bottom: 20px;
+}
+
+.house-hunters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 18px;
+}
+
+.hh-game-card {
+  background: #15161e;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.hh-game-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(165, 94, 234, 0.5);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4), 0 0 16px rgba(165, 94, 234, 0.2);
+}
+
+.hh-card-media {
+  position: relative;
+  aspect-ratio: 16 / 11;
+  background: #0f1015;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hh-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.hh-game-card:hover .hh-card-img {
+  transform: scale(1.06);
+}
+
+.hh-card-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+}
+
+.hh-fav-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.4);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 2;
+}
+
+.hh-fav-btn:hover {
+  color: #fbbf24;
+  transform: scale(1.15);
+}
+
+.hh-fav-btn.active {
+  color: #fbbf24;
+  background: rgba(0, 0, 0, 0.85);
+  border-color: #fbbf24;
+}
+
+.hh-play-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.hh-game-card:hover .hh-play-overlay {
+  opacity: 1;
+}
+
+.hh-play-badge {
+  background: #a55eea;
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 12px rgba(165, 94, 234, 0.5);
+}
+
+.hh-card-info {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.hh-card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+.hh-card-tags {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.hh-cat-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.hh-builtin-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #2ecc71;
+  background: rgba(46, 204, 113, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Player Frame Styles */
+.game-player-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.fav-active {
+  color: #fbbf24 !important;
+  border-color: rgba(251, 191, 36, 0.4) !important;
+}
+
+.hh-iframe-wrapper {
+  position: relative;
+  width: 100%;
+  height: 80vh;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+}
+
+.hh-game-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+.hh-iframe-wrapper.fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 99999;
+  border-radius: 0;
+}
+
+.hh-exit-fs-floating-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.2s ease;
+}
+
+.hh-exit-fs-floating-btn:hover {
+  background: #ff4757;
+  border-color: #ff4757;
+}
+
+.games-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 16px;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+}
+
+
