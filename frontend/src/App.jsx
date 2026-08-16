@@ -88,119 +88,82 @@ function App() {
     return () => clearInterval(interval);
   }, [tunnelResolved]);
 
+
   useEffect(() => {
-    // Resolve direct tunnel URL in production to bypass Vercel serverless latency
-    const resolveDirectTarget = async () => {
+    // Smart Multi-Cloud Load Balancer: tests cloud fleet -> Vercel edge -> Home server
+    const resolveBestBackend = async () => {
       const saved = localStorage.getItem('custom_proxy_target');
-      if (!saved && import.meta.env.PROD) {
+      if (saved) {
+        axios.defaults.baseURL = saved;
+        return;
+      }
+
+      // Configure multi-cloud pool of free tiers
+      const cloudBackends = [
+        import.meta.env.VITE_KOYEB_BACKEND_URL,
+        import.meta.env.VITE_FLY_BACKEND_URL,
+        import.meta.env.VITE_RENDER_BACKEND_URL,
+        'https://chat-app-backend-render.onrender.com'
+      ].filter(Boolean);
+
+      // Fast concurrent health ping utility
+      const checkNodeHealth = async (url) => {
+        if (!url || !url.startsWith('http')) return false;
         try {
-          let tunnel = '';
-          // Try fetching from Vercel Serverless resolver first (same-origin, bypasses ad-blockers)
-          try {
-            const resolverRes = await fetch('/api/resolve-tunnel');
-            if (resolverRes.ok) {
-              const data = await resolverRes.json();
-              if (data && data.url) {
-                tunnel = data.url;
-                console.log('[AXIOS] Resolved active tunnel URL from Vercel Resolver:', tunnel);
-              }
-            }
-          } catch (resolverErr) {
-            console.warn('[AXIOS] Failed to fetch tunnel URL from Vercel Resolver:', resolverErr);
-          }
-
-          // Try fetching from Supabase REST API fallback
-          if (!tunnel) {
-            try {
-              let supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            if (!supabaseUrl || supabaseUrl.includes('trycloudflare.com')) {
-              supabaseUrl = 'https://aebntdjjniirnwthtwlx.supabase.co';
-            }
-            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
-            if (supabaseUrl && supabaseAnonKey) {
-              const res = await fetch(`${supabaseUrl}/rest/v1/system_config?key=eq.active_tunnel_url`, {
-                headers: {
-                  'apikey': supabaseAnonKey,
-                  'Authorization': `Bearer ${supabaseAnonKey}`
-                }
-              });
-              if (res.ok) {
-                const data = await res.json();
-                if (data && data[0] && data[0].value) {
-                  tunnel = data[0].value;
-                  console.log('[AXIOS] Resolved active tunnel URL from Supabase:', tunnel);
-                }
-              }
-            }
-          } catch (supabaseErr) {
-            console.warn('[AXIOS] Failed to fetch tunnel URL from Supabase:', supabaseErr);
-          }
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 1500);
+          const res = await fetch(`${url}/ping`, {
+            signal: controller.signal,
+            headers: { 'bypass-tunnel-reminder': 'true' }
+          });
+          clearTimeout(timeout);
+          return res.ok;
+        } catch {
+          return false;
         }
+      };
 
-          // Try fetching dedicated tunnel.json first
-          if (!tunnel) {
-            try {
-              const tunnelRes = await fetch('/tunnel.json');
-              if (tunnelRes.ok && tunnelRes.headers.get('content-type')?.includes('application/json')) {
-                const data = await tunnelRes.json();
-                if (data && data.url) {
-                  tunnel = data.url;
-                }
-              }
-            } catch (e) {
-              // Ignore and fall back to vercel.json
-            }
-          }
-
-          // Fall back to vercel.json
-          if (!tunnel) {
-            const res = await fetch('/vercel.json');
-            if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
-              const config = await res.json();
-              if (config.rewrites) {
-                const apiRewrite = config.rewrites.find(r => r.source === '/api/(.*)');
-                if (apiRewrite && apiRewrite.destination && apiRewrite.destination.startsWith('http')) {
-                  tunnel = apiRewrite.destination.split('/api/')[0];
-                }
-              } else if (config.routes) {
-                const apiRoute = config.routes.find(r => r.src === '/api/(.*)');
-                if (apiRoute && apiRoute.dest && apiRoute.dest.startsWith('http')) {
-                  tunnel = apiRoute.dest.split('/api/')[0];
-                }
-              }
-            }
-          }
-
-          // Only use tunnel if it is alive and responsive
-          if (tunnel && tunnel.startsWith('http')) {
-            try {
-              const pingController = new AbortController();
-              const pingTimeout = setTimeout(() => pingController.abort(), 1200);
-              const pingRes = await fetch(`${tunnel}/ping`, { 
-                signal: pingController.signal,
-                headers: { 'bypass-tunnel-reminder': 'true' }
-              });
-              clearTimeout(pingTimeout);
-              if (pingRes.ok) {
-                console.log('[AXIOS] Verified active home tunnel. Connecting directly to:', tunnel);
-                axios.defaults.baseURL = tunnel;
-              } else {
-                console.log('[AXIOS] Tunnel unreachable. Staying on Vercel Cloud Serverless backend.');
-                axios.defaults.baseURL = '';
-              }
-            } catch (pingErr) {
-              console.log('[AXIOS] Tunnel offline. Operating in Cloud Mode via Vercel.');
-              axios.defaults.baseURL = '';
-            }
-          } else {
-            axios.defaults.baseURL = '';
-          }
-        } catch (err) {
-          axios.defaults.baseURL = '';
+      // 1. Check free cloud fleet first
+      for (const nodeUrl of cloudBackends) {
+        const isHealthy = await checkNodeHealth(nodeUrl);
+        if (isHealthy) {
+          console.log('[LOAD BALANCER] Connected to 24/7 Cloud Node:', nodeUrl);
+          axios.defaults.baseURL = nodeUrl;
+          return;
         }
       }
+
+      // 2. Fetch home server tunnel from Supabase system_config
+      let homeTunnel = '';
+      try {
+        let supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aebntdjjniirnwthtwlx.supabase.co';
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
+        const res = await fetch(`${supabaseUrl}/rest/v1/system_config?key=eq.active_tunnel_url`, {
+          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data[0]?.value) {
+            homeTunnel = data[0].value;
+          }
+        }
+      } catch (e) {
+        console.warn('[LOAD BALANCER] Supabase lookup error:', e);
+      }
+
+      // 3. If Home Server is alive, use it
+      if (homeTunnel && await checkNodeHealth(homeTunnel)) {
+        console.log('[LOAD BALANCER] Connected to Bare-Metal Home Server:', homeTunnel);
+        axios.defaults.baseURL = homeTunnel;
+        return;
+      }
+
+      // 4. Default to Vercel Serverless Edge (always active same-origin)
+      console.log('[LOAD BALANCER] Operating on Vercel Serverless Edge Cloud.');
+      axios.defaults.baseURL = '';
     };
-    resolveDirectTarget().finally(() => {
+
+    resolveBestBackend().finally(() => {
       setTunnelResolved(true);
     });
 
