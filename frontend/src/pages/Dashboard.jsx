@@ -10,7 +10,7 @@ import FriendsPanel from '../components/FriendsPanel';
 import Logo from '../components/Logo';
 import '../styles/Dashboard.css';
 
-function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, onToggleToGames, onToggleToYouTube }) {
+function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, onToggleToYouTube, onToggleToGames }) {
   const [activeTab, setActiveTab] = useState('servers');
   const [selectedServer, setSelectedServer] = useState(null);
   const [selectedDM, setSelectedDM] = useState(null);
