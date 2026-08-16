@@ -6,11 +6,11 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "https://springfield-definition-bin-configurations.trycloudflare.com/api/$1"
+      "dest": "https://documentary-mary-camping-legendary.trycloudflare.com/api/$1"
     },
     {
       "src": "/socket.io/(.*)",
-      "dest": "https://springfield-definition-bin-configurations.trycloudflare.com/socket.io/$1"
+      "dest": "https://documentary-mary-camping-legendary.trycloudflare.com/socket.io/$1"
     },
     {
       "handle": "filesystem"

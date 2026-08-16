@@ -18,6 +18,21 @@ if (process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN) {
   }
 }
 
+function sendNtfy(message, isError = false) {
+  const topic = process.env.NTFY_TOPIC || 'chatapp-alerts-nhharshan';
+  const fetch = globalThis.fetch || require('node-fetch');
+  fetch(`https://ntfy.sh/${topic}`, {
+    method: 'POST',
+    body: message,
+    headers: {
+      'Title': isError ? 'ChatApp DOWN Alert' : 'ChatApp ONLINE',
+      'Priority': isError ? 'urgent' : 'default',
+      'Tags': isError ? 'warning,loudspeaker' : 'white_check_mark'
+    }
+  }).then(() => console.log(`[NTFY] Alert sent to topic: ${topic}`))
+    .catch(err => console.error('[NTFY] Send error:', err.message));
+}
+
 function sendSMS(message) {
   if (!smsClient) return;
   const from = process.env.TWILIO_FROM;
@@ -31,11 +46,13 @@ function sendSMS(message) {
     .then(() => console.log('SMS sent'))
     .catch(err => console.error('SMS send error:', err.message));
 }
-module.exports = { sendSMS };
+
 
 
 const HEALTH_URL = process.env.HEALTH_URL || `http://localhost:${process.env.PORT || 8000}/api/health`;
 const STATUS_FILE = path.resolve(__dirname, '../../public/healthStatus.json');
+
+let lastHealthState = true;
 
 async function checkHealth() {
   try {
@@ -46,30 +63,37 @@ async function checkHealth() {
       message: res.data?.message || 'OK'
     };
     fs.writeFileSync(STATUS_FILE, JSON.stringify(status, null, 2));
-    console.log('Health check OK');
-    // Notify via SMS (optional)
-    sendSMS(`✅ Health check OK at ${status.timestamp}`);
+    if (!lastHealthState) {
+      console.log('Health check recovered');
+      sendNtfy(`Server is back ONLINE at ${status.timestamp}`, false);
+      sendSMS(`✅ Server RECOVERED at ${status.timestamp}`);
+    }
+    lastHealthState = true;
   } catch (err) {
+    const errorDetails = err.response ? `HTTP ${err.response.status}: ${err.response.statusText}` : (err.code ? `Connection Code: ${err.code} (${err.message})` : err.message);
     const status = {
       ok: false,
       timestamp: new Date().toISOString(),
-      error: err.message
+      error: errorDetails
     };
     fs.writeFileSync(STATUS_FILE, JSON.stringify(status, null, 2));
-    console.error('Health check failed:', err.message);
-    // Notify via SMS (optional)
-    sendSMS(`❌ Health check FAILED at ${status.timestamp}: ${status.error}`);
+    console.error('Health check failed:', errorDetails);
+    if (lastHealthState) {
+      sendNtfy(`Website is DOWN!\nError Details: ${errorDetails}\nTime: ${new Date().toLocaleTimeString()}`, true);
+      sendSMS(`❌ Health check FAILED at ${status.timestamp}: ${errorDetails}`);
+    }
+    lastHealthState = false;
   }
 }
 
 function startHealthCheck() {
   if (process.env.VERCEL) return;
   checkHealth();
-  setInterval(checkHealth, 5 * 60 * 1000);
+  setInterval(checkHealth, 15 * 1000); // Check every 15 seconds
 }
 
 if (require.main === module) {
   startHealthCheck();
 }
 
-module.exports = { sendSMS, checkHealth, startHealthCheck };
+module.exports = { sendSMS, sendNtfy, checkHealth, startHealthCheck };

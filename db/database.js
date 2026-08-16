@@ -6,8 +6,8 @@ const useSsl = process.env.DB_SSL === 'true' || (isVercel && process.env.DB_SSL 
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  min: isVercel ? 0 : 2,
-  max: isVercel ? 20 : 150,
+  min: 1,
+  max: 10,
   idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 5000,
   ssl: useSsl ? { rejectUnauthorized: false } : false
@@ -486,8 +486,18 @@ async function createTables() {
         EXECUTE FUNCTION public.check_message_content_moderation();
     `);
 
-    console.log('Tables created successfully');
-  } catch (err) {
+      // Auto-sync sequence counters for tables with SERIAL primary keys
+      const serialTables = ['servers', 'chatrooms', 'server_members', 'server_messages', 'direct_messages', 'friendships', 'bans', 'banned_words', 'reports', 'archived_friendships'];
+      for (const table of serialTables) {
+        try {
+          await client.query(`SELECT setval(pg_get_serial_sequence('${table}', 'id'), COALESCE(MAX(id), 1)) FROM ${table};`);
+        } catch (seqErr) {
+          // ignore if sequence doesn't exist
+        }
+      }
+
+      console.log('Tables created successfully');
+    } catch (err) {
     console.error('Error creating tables:', err);
     throw err;
   } finally {

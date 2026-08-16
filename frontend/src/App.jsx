@@ -4,6 +4,7 @@ import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import SpotifyDashboard from './pages/SpotifyDashboard';
 import GamesDashboard from './pages/GamesDashboard';
+import YouTubeDashboard from './pages/YouTubeDashboard';
 import LandingPage from './pages/LandingPage';
 import axios from 'axios';
 import './styles/App.css';
@@ -390,6 +391,15 @@ function App() {
             setUser={setCurrentUser} 
             onLogout={handleLogout} 
             onToggleToChat={() => setCurrentPortal('chat')}
+            onToggleToYouTube={() => setCurrentPortal('youtube')}
+            onToggleToGames={() => setCurrentPortal('games')}
+          />
+        ) : currentPortal === 'youtube' ? (
+          <YouTubeDashboard
+            user={currentUser}
+            onLogout={handleLogout}
+            onToggleToChat={() => setCurrentPortal('chat')}
+            onToggleToSpotify={() => setCurrentPortal('spotify')}
             onToggleToGames={() => setCurrentPortal('games')}
           />
         ) : currentPortal === 'games' ? (
@@ -398,6 +408,7 @@ function App() {
             onLogout={handleLogout}
             onToggleToChat={() => setCurrentPortal('chat')}
             onToggleToSpotify={() => setCurrentPortal('spotify')}
+            onToggleToYouTube={() => setCurrentPortal('youtube')}
           />
         ) : (
           <Dashboard 
@@ -406,6 +417,7 @@ function App() {
             onLogout={handleLogout} 
             batteryInfo={batteryInfo}
             onToggleToSpotify={() => setCurrentPortal('spotify')}
+            onToggleToYouTube={() => setCurrentPortal('youtube')}
             onToggleToGames={() => setCurrentPortal('games')}
           />
         )

@@ -15,7 +15,7 @@ const GAMES_LIST = [
   { id: 'invaders', name: 'Space Invaders', desc: 'Defend Earth from columns of descending alien invaders. Fire lasers and dodge incoming plasma.', icon: '👾', diff: 'hard', color: '#3818e8' }
 ];
 
-export default function GamesDashboard({ user, onLogout, onToggleToChat, onToggleToSpotify }) {
+export default function GamesDashboard({ user, onLogout, onToggleToChat, onToggleToSpotify, onToggleToYouTube }) {
   const [activeGameId, setActiveGameId] = useState(null);
 
   // Play beep sound using Web Audio API
@@ -49,6 +49,9 @@ export default function GamesDashboard({ user, onLogout, onToggleToChat, onToggl
         <div className="games-header-actions">
           <button className="portal-nav-btn chat-btn" onClick={onToggleToChat}>
             💬 Open Chat Portal
+          </button>
+          <button className="portal-nav-btn youtube-btn" onClick={onToggleToYouTube} style={{ background: '#ff0000', borderColor: '#ff0000' }}>
+            ▶️ Open WiredTube
           </button>
           <button className="portal-nav-btn music-btn" onClick={onToggleToSpotify}>
             🎵 Open Spotify Portal

@@ -46,6 +46,24 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
+// Get user's servers (default root GET /api/servers)
+router.get('/', authMiddleware, async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT s.id, s.name, s.description, s.owner_id, s.is_public, s.avatar_url, s.created_at
+       FROM servers s
+       INNER JOIN server_members sm ON s.id = sm.server_id
+       WHERE sm.user_id = $1
+       ORDER BY s.created_at DESC`,
+      [req.userId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch servers' });
+  }
+});
+
 // Get all public servers (discovery page)
 router.get('/discovery', async (req, res) => {
   try {

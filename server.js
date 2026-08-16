@@ -68,6 +68,7 @@ const messageRoutes = require('./routes/messages');
 const userRoutes = require('./routes/users');
 const reportRoutes = require('./routes/report');
 const spotifyRoutes = require('./routes/spotify');
+const youtubeRoutes = require('./routes/youtube');
 const { filterContent, containsBannedWords } = require('./utils/contentFilter');
 const { startHealthCheck } = require('./backend/scripts/healthCheck');
 
@@ -77,7 +78,23 @@ function startTunnelUrlWatcher() {
 
   console.log('[TUNNEL WATCHER] Starting active Cloudflare tunnel watcher...');
   
+  const ensureCloudflaredRunning = () => {
+    const { exec, spawn } = require('child_process');
+    exec('pgrep -f "cloudflared tunnel"', (err, stdout) => {
+      if (err || !stdout.trim()) {
+        console.log('[TUNNEL WATCHER] Cloudflare tunnel process not found. Auto-launching cloudflared...');
+        const logPath = path.join(__dirname, 'cloudflared.log');
+        const child = spawn('cloudflared', ['tunnel', '--logfile', logPath, '--url', 'http://127.0.0.1:8000'], {
+          detached: true,
+          stdio: 'ignore'
+        });
+        child.unref();
+      }
+    });
+  };
+
   const checkTunnelLog = async () => {
+    ensureCloudflaredRunning();
     try {
       const logPath = path.join(__dirname, 'cloudflared.log');
       if (!fs.existsSync(logPath)) {
@@ -85,9 +102,9 @@ function startTunnelUrlWatcher() {
       }
       
       const logContent = fs.readFileSync(logPath, 'utf8');
-      const match = logContent.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
-      if (match) {
-        const tunnelUrl = match[0];
+      const matches = [...logContent.matchAll(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/g)];
+      if (matches.length > 0) {
+        const tunnelUrl = matches[matches.length - 1][0];
         const currentRes = await query("SELECT value FROM system_config WHERE key = 'active_tunnel_url'");
         const currentUrl = currentRes.rows[0]?.value;
         
@@ -99,6 +116,38 @@ function startTunnelUrlWatcher() {
             ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = CURRENT_TIMESTAMP;
           `, [tunnelUrl]);
         }
+
+        const jsonContent = JSON.stringify({ url: tunnelUrl }, null, 2);
+        const p1 = path.join(__dirname, 'public', 'tunnel.json');
+        const p2 = path.join(__dirname, 'frontend', 'public', 'tunnel.json');
+        if (!fs.existsSync(p1) || fs.readFileSync(p1, 'utf8') !== jsonContent) {
+          fs.writeFileSync(p1, jsonContent, 'utf8');
+        }
+        if (fs.existsSync(path.dirname(p2)) && (!fs.existsSync(p2) || fs.readFileSync(p2, 'utf8') !== jsonContent)) {
+          fs.writeFileSync(p2, jsonContent, 'utf8');
+        }
+
+        // Sync vercel.json rewrites with active tunnel URL
+        const vercelPaths = [
+          path.join(__dirname, 'vercel.json'),
+          path.join(__dirname, 'frontend', 'vercel.json'),
+          path.join(__dirname, 'frontend', 'dist', 'vercel.json')
+        ];
+
+        for (const vp of vercelPaths) {
+          if (fs.existsSync(vp)) {
+            try {
+              let vContent = fs.readFileSync(vp, 'utf8');
+              const updatedVContent = vContent.replace(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/g, tunnelUrl);
+              if (vContent !== updatedVContent) {
+                fs.writeFileSync(vp, updatedVContent, 'utf8');
+                console.log(`[TUNNEL WATCHER] Updated ${path.basename(vp)} rewrites to: ${tunnelUrl}`);
+              }
+            } catch (e) {
+              console.error(`[TUNNEL WATCHER] Failed to update ${vp}:`, e.message);
+            }
+          }
+        }
       }
     } catch (err) {
       console.error('[TUNNEL WATCHER] Error checking/updating tunnel URL:', err);
@@ -106,7 +155,7 @@ function startTunnelUrlWatcher() {
   };
 
   // Run initial check and then poll every 15 seconds
-  setTimeout(checkTunnelLog, 5000);
+  setTimeout(checkTunnelLog, 2000);
   setInterval(checkTunnelLog, 15000);
 }
 
@@ -217,13 +266,28 @@ const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
 app.set('trust proxy', 1);
 
-// Rate limiting – max 100 requests per 15 minutes per IP
+// Rate limiting – max 2000 requests per 15 minutes per IP, excluding health checks and status polling
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 2000,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false },
+  skip: (req) => {
+    const p = req.path || req.url || '';
+    return (
+      p === '/ping' ||
+      p === '/api/ping' ||
+      p === '/api/health' ||
+      p === '/api/resolve-tunnel' ||
+      p === '/api/system/status' ||
+      p.startsWith('/socket.io') ||
+      p.endsWith('.json') ||
+      p.endsWith('.html') ||
+      p.endsWith('.js') ||
+      p.endsWith('.css')
+    );
+  },
   message: { error: 'Too many requests, please try again later.' }
 }));
 
@@ -239,6 +303,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/spotify', spotifyRoutes);
+app.use('/api/youtube', youtubeRoutes);
 app.use('/api', reportRoutes);
 
 const os = require('os');
@@ -957,7 +1022,9 @@ async function getLocalOllamaModel() {
     if (res.ok) {
       const data = await res.json();
       if (data && data.models && data.models.length > 0) {
-        const preferred = data.models.find(m => m.name.includes('gemma') || m.name.includes('llama') || m.name.includes('qwen'));
+        const preferred = data.models.find(m => m.name.includes('llama')) ||
+                          data.models.find(m => m.name.includes('gemma')) ||
+                          data.models.find(m => m.name.includes('qwen'));
         return preferred ? preferred.name : data.models[0].name;
       }
     }
@@ -998,9 +1065,9 @@ Respond ONLY with this JSON:
 
   // 1. Try local Ollama
   try {
-    const localModel = await getLocalOllamaModel() || 'gemma3:270m';
+    const localModel = await getLocalOllamaModel() || 'llama3.2:1b';
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
 
     const response = await fetch('http://127.0.0.1:11434/api/generate', {
       method: 'POST',
@@ -1036,7 +1103,7 @@ Respond ONLY with this JSON:
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-        const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash';
+        const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash-lite';
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1068,10 +1135,13 @@ Respond ONLY with this JSON:
     
     // Delete from DB (since client might have written it by now)
     try {
-      if (type === 'server') {
-        await query("DELETE FROM server_messages WHERE id = $1", [id]);
-      } else {
-        await query("DELETE FROM direct_messages WHERE id = $1", [id]);
+      const numericId = parseInt(id, 10);
+      if (!isNaN(numericId)) {
+        if (type === 'server') {
+          await query("DELETE FROM server_messages WHERE id = $1", [numericId]);
+        } else {
+          await query("DELETE FROM direct_messages WHERE id = $1", [numericId]);
+        }
       }
     } catch (e) {
       console.error('[ASYNC MODERATOR] DB delete failed:', e.message);
@@ -1305,8 +1375,34 @@ async function handleLocalBotResponse(serverId, chatroomId, content, senderId) {
         console.log(`[LOCAL BOT] Success generating response.`);
       }
     } catch (e) {
-      console.warn(`[LOCAL BOT] Local model generate failed:`, e.message);
-      botResponse = "Sorry, my local 1B model is currently unavailable.";
+      console.warn(`[LOCAL BOT] Local model generate failed, attempting Gemini fallback:`, e.message);
+    }
+
+    if (!botResponse) {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (apiKey) {
+        try {
+          console.log(`[LOCAL BOT] Querying Gemini Flash fallback...`);
+          const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash-lite';
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: `You are a friendly AI assistant for a chat platform. Respond concisely to: ${prompt}` }] }]
+            })
+          });
+          if (response.ok) {
+            const json = await response.json();
+            botResponse = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+          }
+        } catch (gemErr) {
+          console.error('[LOCAL BOT] Gemini fallback failed:', gemErr.message);
+        }
+      }
+    }
+
+    if (!botResponse) {
+      botResponse = "Sorry, my AI model is currently unavailable.";
     }
 
     const result = await query(
@@ -1372,9 +1468,9 @@ async function runGeminiModeration() {
 
       // Try local Ollama (Llama 3.2) first
       try {
-        const localModel = await getLocalOllamaModel() || 'gemma3:270m';
+        const localModel = await getLocalOllamaModel() || 'llama3.2:1b';
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1200);
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
 
         const response = await fetch('http://127.0.0.1:11434/api/generate', {
           method: 'POST',
@@ -1407,7 +1503,8 @@ async function runGeminiModeration() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+            const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash-lite';
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               signal: controller.signal,
@@ -1483,7 +1580,8 @@ async function runGeminiModeration() {
 
         const promptText = `Analyze this user profile picture. Is this image appropriate for a general-audience chat platform? It should not contain nudity, sexually suggestive content, hate symbols, graphic violence, drugs/weapons, or harassment. Respond with JSON: {"appropriate": true} or {"appropriate": false, "reason": "reason"}.`;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+        const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash-lite';
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1616,7 +1714,7 @@ if (require.main === module) {
     try {
       optimizeCpuGovernor();
       optimizeRamAndVirtualMemory();
-      server.listen(PORT, () => {
+      server.listen(PORT, '0.0.0.0', () => {
         console.log(`Server running on port ${PORT}`);
         startHealthCheck();
       });

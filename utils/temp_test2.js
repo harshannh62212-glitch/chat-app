@@ -154,7 +154,7 @@ async function loadCustomBannedWords() {
  */
 function normalizeText(text) {
   let cleaned = text
-    .replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '')   // zero-width / soft-hyphen
+    .replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '')
     .replace(/[àáâãäå]/gi, 'a')
     .replace(/[èéêë]/gi, 'e')
     .replace(/[ìíîï]/gi, 'i')
@@ -165,23 +165,26 @@ function normalizeText(text) {
     .replace(/[@]/g, 'a')
     .replace(/[$]/g, 's')
     .replace(/!/g, 'i')
-    .replace(/\*+/g, '')           // strip asterisks used as bypass
-    .replace(/(.)\1{3,}/g, '$1$1'); // collapse excessive repeated chars (fuuuck → fuuck)
+    .replace(/\*+/g, '')
+    .replace(/(.)\1{3,}/g, '');
 
-  // Replace l33tspeak digits ONLY when embedded inside or adjacent to words/letters,
-  // preserving standalone numbers (timestamps, IDs like 1785123456789 or 123)
+  // Replace l33tspeak digits when adjacent to letters or embedded in words
   cleaned = cleaned.replace(/\d+/g, (match, offset, str) => {
+    // If it's a long number (2+ digits) NOT adjacent to letters at start or end, leave it
     const prev = str[offset - 1] || '';
     const next = str[offset + match.length] || '';
     const isAdjacentToLetter = /[a-z]/i.test(prev) || /[a-z]/i.test(next);
     if (match.length >= 2 && !isAdjacentToLetter) {
       return match;
     }
+    // Replace l33t digits inside words
     const map = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't' };
     return match.split('').map(c => (isAdjacentToLetter || match.length === 1) ? (map[c] || c) : c).join('');
   });
 
   return cleaned.toLowerCase();
+}/g, '$1$1') // collapse excessive repeated chars (fuuuck → fuuck)
+    .toLowerCase();
 }
 
 /**
@@ -292,7 +295,7 @@ function getBannedWordsFound(text) {
   return found;
 }
 
-module.exports = {
+module.exports = { BYPASS_PATTERNS, BANNED_WORDS, 
   filterContent,
   containsBannedWords,
   getBannedWordsFound,

@@ -82,17 +82,29 @@ User report: "${description.trim()}"
 Respond ONLY with this JSON structure:
 { "evaluation": "LEGITIMATE" | "VAGUE" | "SPAM" | "ABUSIVE" }`;
 
-  // 1. Try local Ollama (llama3.2:3b) with a strict timeout to prevent hangs
+  // 1. Try local Ollama with dynamic model lookup and generous 3.5s timeout
   try {
+    let localModel = 'llama3.2:1b';
+    try {
+      const tagsRes = await fetch('http://127.0.0.1:11434/api/tags');
+      if (tagsRes.ok) {
+        const tagsData = await tagsRes.json();
+        if (tagsData?.models?.length > 0) {
+          const pref = tagsData.models.find(m => m.name.includes('llama') || m.name.includes('gemma') || m.name.includes('qwen'));
+          localModel = pref ? pref.name : tagsData.models[0].name;
+        }
+      }
+    } catch (e) {}
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
 
     const response = await fetch('http://127.0.0.1:11434/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
-        model: 'llama3.2:3b',
+        model: localModel,
         prompt: prompt,
         format: 'json',
         stream: false
@@ -106,7 +118,7 @@ Respond ONLY with this JSON structure:
       const parsed = JSON.parse(json.response.trim());
       const ev = parsed?.evaluation?.toUpperCase();
       if (['LEGITIMATE', 'VAGUE', 'SPAM', 'ABUSIVE'].includes(ev)) {
-        console.log(`[AI EVALUATION - OLLAMA] Local model evaluated report: ${ev}`);
+        console.log(`[AI EVALUATION - OLLAMA] Local model (${localModel}) evaluated report: ${ev}`);
         return ev;
       }
     }
@@ -121,7 +133,8 @@ Respond ONLY with this JSON structure:
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+      const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-1.5-flash';
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,

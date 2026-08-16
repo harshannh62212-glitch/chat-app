@@ -1,0 +1,31 @@
+#!/bin/bash
+# ==============================================================================
+# Worldwide SSH Tunnel Setup Guide & Automation Script
+# ==============================================================================
+
+echo "========================================================"
+echo "      🚀 WIRED-IO WORLDWIDE SSH VIA CLOUDFLARE TUNNEL"
+echo "========================================================"
+echo ""
+echo "Step 1: Ensure macOS Remote Login (SSH) is enabled on this machine."
+echo "  -> Open System Settings > General > Sharing > Enable 'Remote Login'."
+echo "  -> Or run: sudo systemsetup -setremotelogin on"
+echo ""
+echo "Step 2: Start a Cloudflare SSH Tunnel on this Mac."
+echo "  Run this command to expose port 22 securely worldwide:"
+echo "  --------------------------------------------------------"
+echo "  cloudflared tunnel --url tcp://localhost:22"
+echo "  --------------------------------------------------------"
+echo ""
+echo "Step 3: Connect from ANY device or laptop worldwide."
+echo "  Option A (Quick one-liner with cloudflared installed on remote machine):"
+echo "    ssh -o ProxyCommand=\"cloudflared access ssh --hostname %h\" username@<your-tunnel-url>.trycloudflare.com"
+echo ""
+echo "  Option B (Add to ~/.ssh/config on your remote laptop):"
+echo "    Host server-remote"
+echo "      HostName <your-tunnel-url>.trycloudflare.com"
+echo "      User $(whoami)"
+echo "      ProxyCommand cloudflared access ssh --hostname %h"
+echo ""
+echo "    Then simply run: ssh server-remote (and type your password!)"
+echo "========================================================"

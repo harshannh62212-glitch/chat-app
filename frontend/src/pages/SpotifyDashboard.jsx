@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import '../styles/Spotify.css';
 
-export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToChat, onToggleToGames }) {
+export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToChat, onToggleToGames, onToggleToYouTube }) {
   const [activeTab, setActiveTab] = useState('home'); // 'home', 'search', 'liked', 'playlist-detail'
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -500,6 +500,9 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
           <div className="header-user">
             <button className="chat-toggle-btn" onClick={onToggleToChat} style={{ marginRight: '8px' }}>
               💬 Open Chat Portal
+            </button>
+            <button className="chat-toggle-btn youtube-toggle-btn" onClick={onToggleToYouTube} style={{ marginRight: '8px', background: '#ff0000', borderColor: '#ff0000' }}>
+              ▶️ Open WiredTube
             </button>
             <button className="chat-toggle-btn games-toggle-btn" onClick={onToggleToGames} style={{ marginRight: '8px', background: '#a55eea', borderColor: '#a55eea' }}>
               🎮 Open Games Portal
