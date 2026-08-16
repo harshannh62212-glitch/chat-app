@@ -149,6 +149,7 @@ export default function GamesDashboard({ user, onLogout, onToggleToChat, onToggl
       <header className="games-header">
         <div className="games-header-title">
           <span className="arcade-badge">ARCADE 150+</span>
+          <span className="under-dev-badge">🚧 UNDER DEVELOPMENT</span>
           <h1>House Hunters & Retro Hub</h1>
         </div>
 
@@ -172,6 +173,16 @@ export default function GamesDashboard({ user, onLogout, onToggleToChat, onToggl
           </button>
         </div>
       </header>
+
+      {/* UNDER DEVELOPMENT NOTIFICATION STRIP */}
+      <div className="under-dev-banner">
+        <div className="under-dev-banner-content">
+          <span className="under-dev-icon">⚠️</span>
+          <div>
+            <strong>GAMES HUB UNDER ACTIVE DEVELOPMENT:</strong> Some external game assets and high-memory titles may be optimizing or downloading. If a game fails to start, use <strong>↗ Popout Tab</strong> or try another title!
+          </div>
+        </div>
+      </div>
 
       {/* DASHBOARD BODY */}
       <div className="games-content">

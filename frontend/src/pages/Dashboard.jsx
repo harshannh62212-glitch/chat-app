@@ -201,7 +201,7 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
         <div 
           className="rail-icon games-rail-btn"
           onClick={onToggleToGames}
-          title="Open Games Arcade"
+          title="Games Arcade (Under Development 🚧)"
           style={{
             background: 'rgba(165, 94, 234, 0.15)',
             border: '1px solid rgba(165, 94, 234, 0.4)',
