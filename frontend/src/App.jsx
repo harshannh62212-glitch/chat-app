@@ -90,7 +90,7 @@ function App() {
 
 
   useEffect(() => {
-    // Smart Multi-Cloud Load Balancer: tests cloud fleet -> Vercel edge -> Home server
+    // Smart Load Balancer: Home Server Primary -> Render Cloud Failover -> Vercel Edge
     const resolveBestBackend = async () => {
       const saved = localStorage.getItem('custom_proxy_target');
       if (saved) {
@@ -98,20 +98,14 @@ function App() {
         return;
       }
 
-      // Configure multi-cloud pool of free tiers
-      const cloudBackends = [
-        import.meta.env.VITE_KOYEB_BACKEND_URL,
-        import.meta.env.VITE_FLY_BACKEND_URL,
-        import.meta.env.VITE_RENDER_BACKEND_URL,
-        'https://chat-app-backend-render.onrender.com'
-      ].filter(Boolean);
+      const renderCloudUrl = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
 
-      // Fast concurrent health ping utility
+      // Fast health check helper
       const checkNodeHealth = async (url) => {
         if (!url || !url.startsWith('http')) return false;
         try {
           const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 1500);
+          const timeout = setTimeout(() => controller.abort(), 1800);
           const res = await fetch(`${url}/ping`, {
             signal: controller.signal,
             headers: { 'bypass-tunnel-reminder': 'true' }
@@ -123,17 +117,7 @@ function App() {
         }
       };
 
-      // 1. Check free cloud fleet first
-      for (const nodeUrl of cloudBackends) {
-        const isHealthy = await checkNodeHealth(nodeUrl);
-        if (isHealthy) {
-          console.log('[LOAD BALANCER] Connected to 24/7 Cloud Node:', nodeUrl);
-          axios.defaults.baseURL = nodeUrl;
-          return;
-        }
-      }
-
-      // 2. Fetch home server tunnel from Supabase system_config
+      // 1. Check Home Server first (Active Cloudflare Tunnel from Supabase)
       let homeTunnel = '';
       try {
         let supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aebntdjjniirnwthtwlx.supabase.co';
@@ -148,19 +132,29 @@ function App() {
           }
         }
       } catch (e) {
-        console.warn('[LOAD BALANCER] Supabase lookup error:', e);
+        console.warn('[LOAD BALANCER] Supabase tunnel lookup error:', e);
       }
 
-      // 3. If Home Server is alive, use it
       if (homeTunnel && await checkNodeHealth(homeTunnel)) {
-        console.log('[LOAD BALANCER] Connected to Bare-Metal Home Server:', homeTunnel);
+        console.log('[LOAD BALANCER] Primary Node Active: Connected to Home Server:', homeTunnel);
         axios.defaults.baseURL = homeTunnel;
+        localStorage.setItem('active_backend_target', homeTunnel);
         return;
       }
 
-      // 4. Default to Vercel Serverless Edge (always active same-origin)
+      // 2. Home Server is offline -> Failover to Render Cloud Backend
+      console.log('[LOAD BALANCER] Home Server unreachable. Checking Render 24/7 Cloud backend...');
+      if (await checkNodeHealth(renderCloudUrl)) {
+        console.log('[LOAD BALANCER] Failover Active: Connected to Render Cloud:', renderCloudUrl);
+        axios.defaults.baseURL = renderCloudUrl;
+        localStorage.setItem('active_backend_target', renderCloudUrl);
+        return;
+      }
+
+      // 3. Fallback to Vercel Serverless Edge
       console.log('[LOAD BALANCER] Operating on Vercel Serverless Edge Cloud.');
       axios.defaults.baseURL = '';
+      localStorage.setItem('active_backend_target', window.location.origin);
     };
 
     resolveBestBackend().finally(() => {

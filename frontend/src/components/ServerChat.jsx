@@ -7,9 +7,15 @@ import GiphyPanel from './GiphyPanel';
 import ReportButton from './ReportButton';
 
 
-const savedProxyTarget = localStorage.getItem('custom_proxy_target');
-const socketUrl = savedProxyTarget || (import.meta.env.PROD ? window.location.origin : 'http://localhost:8000');
-const socket = io(socketUrl, {
+const getActiveSocketUrl = () => {
+  const saved = localStorage.getItem('custom_proxy_target');
+  if (saved) return saved;
+  const activeNode = localStorage.getItem('active_backend_target');
+  if (activeNode) return activeNode;
+  return import.meta.env.PROD ? window.location.origin : 'http://localhost:8000';
+};
+
+const socket = io(getActiveSocketUrl(), {
   autoConnect: true,
   extraHeaders: {
     'bypass-tunnel-reminder': 'true'
