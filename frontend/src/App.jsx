@@ -405,8 +405,6 @@ function App() {
             onToggleToSpotify={() => setCurrentPortal('spotify')}
             onToggleToYouTube={() => setCurrentPortal('youtube')}
           />
-        ) : currentPortal === 'youtube' ? (
-          <YouTubePage onBack={() => setCurrentPortal('chat')} />
         ) : (
           <Dashboard 
             user={currentUser} 
@@ -416,7 +414,6 @@ function App() {
             onToggleToSpotify={() => setCurrentPortal('spotify')}
             onToggleToYouTube={() => setCurrentPortal('youtube')}
             onToggleToGames={() => setCurrentPortal('games')}
-            onToggleToYouTube={() => setCurrentPortal('youtube')}
           />
         )
       ) : showAuth ? (
