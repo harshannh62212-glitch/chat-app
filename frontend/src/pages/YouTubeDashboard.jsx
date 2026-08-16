@@ -234,23 +234,63 @@ export default function YouTubeDashboard({ user, onLogout, onToggleToChat, onTog
             <input 
               type="text"
               className="yt-search-input"
-              placeholder="Search entire YouTube library by song title, channel name, or paste any YouTube URL / ID..."
+              placeholder="Paste any YouTube URL (e.g. https://youtu.be/... or watch?v=...) or search..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchQuery(val);
+                // Instant auto-play if a full YouTube URL is pasted
+                const directId = extractVideoId(val);
+                if (directId && val.trim().length >= 11 && (val.includes('http') || val.includes('youtu'))) {
+                  handleSelectVideo({
+                    videoId: directId,
+                    title: `YouTube Video (${directId})`,
+                    channelTitle: 'Direct Link Playback',
+                    thumbnail: `https://i.ytimg.com/vi/${directId}/hqdefault.jpg`,
+                    views: 'Instant Play',
+                    duration: 'Full'
+                  });
+                }
+              }}
             />
-            <button type="submit" className="yt-search-btn" title="Search">
-              🔍
+            <button type="submit" className="yt-search-btn" title="Search or Load URL">
+              ▶ Play
             </button>
           </form>
         </div>
 
         <div className="yt-header-right">
           <button 
+            className="yt-nav-btn"
+            onClick={() => {
+              const url = prompt('Paste YouTube Video URL or Video ID:');
+              if (url) {
+                const directId = extractVideoId(url);
+                if (directId) {
+                  handleSelectVideo({
+                    videoId: directId,
+                    title: `YouTube Video (${directId})`,
+                    channelTitle: 'Direct Link Playback',
+                    thumbnail: `https://i.ytimg.com/vi/${directId}/hqdefault.jpg`,
+                    views: 'Instant Play',
+                    duration: 'Full'
+                  });
+                } else {
+                  alert('Invalid YouTube URL or ID');
+                }
+              }
+            }}
+            title="Paste YouTube Video URL"
+            style={{ background: 'rgba(255, 0, 0, 0.2)', border: '1px solid rgba(255, 0, 0, 0.4)', color: '#ff4757', fontWeight: 'bold' }}
+          >
+            📋 Paste URL
+          </button>
+          <button 
             className="yt-nav-btn guide-btn"
             onClick={() => setShowTutorial(true)}
             title="Open Interactive Tutorial"
           >
-            💡 Tutorial
+            💡 Guide
           </button>
           <button 
             className="yt-nav-btn"
