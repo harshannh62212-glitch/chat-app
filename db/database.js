@@ -7,8 +7,8 @@ const isVercel = Boolean(process.env.VERCEL);
 
 const pool = new Pool({
   connectionString: connectionString,
-  min: 4,
-  max: parseInt(process.env.DB_POOL_MAX || '60', 10),
+  min: 8,
+  max: parseInt(process.env.DB_POOL_MAX || '100', 10),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
   ssl: { rejectUnauthorized: false }

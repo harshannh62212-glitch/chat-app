@@ -1,4 +1,4 @@
-process.env.UV_THREADPOOL_SIZE = 64;
+process.env.UV_THREADPOOL_SIZE = 128;
 
 const dns = require('dns');
 if (dns.setDefaultResultOrder) {

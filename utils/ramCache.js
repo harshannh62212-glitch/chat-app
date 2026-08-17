@@ -1,6 +1,6 @@
-// High-Performance In-Memory RAM Cache for Dell Latitude 5290 (Up to 12GB Heap)
+// High-Performance In-Memory RAM Cache for Dell Latitude 5290 (Up to 16GB DDR4 Heap)
 class UltraRAMCache {
-  constructor(maxItems = 100000, defaultTtlMs = 60000) {
+  constructor(maxItems = 500000, defaultTtlMs = 120000) {
     this.cache = new Map();
     this.maxItems = maxItems;
     this.defaultTtlMs = defaultTtlMs;
