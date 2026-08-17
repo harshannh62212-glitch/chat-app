@@ -575,6 +575,9 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       if (msgData.serverId === server.id || msgData.chatroom_id === selectedChatroom.id) {
         setMessages(prev => {
           if (prev.some(m => m.id === msgData.id)) return prev;
+          if (isSelf && prev.some(m => m.isOptimistic && m.content === msgData.content)) {
+            return prev.map(m => (m.isOptimistic && m.content === msgData.content) ? { ...m, id: msgData.id, isOptimistic: false } : m);
+          }
           return [...prev, msgData];
         });
       }
@@ -688,6 +691,28 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     if (!contentStr.trim() || !selectedChatroom) return;
     const filteredContent = filterContent(contentStr);
 
+    const tempId = `opt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const optimisticMsg = {
+      id: tempId,
+      senderId: currentUser.id,
+      sender_id: currentUser.id,
+      username: currentUser.username,
+      avatar_url: currentUser.avatar_url,
+      content: filteredContent,
+      serverId: server.id,
+      chatroom_id: selectedChatroom.id,
+      created_at: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
+      isOptimistic: true
+    };
+
+    // 1. INSTANT (0ms) local state update
+    setMessages(prev => [...prev, optimisticMsg]);
+
+    // 2. INSTANT Socket.IO broadcast to room
+    socket.emit('send-message', optimisticMsg);
+
+    // 3. Asynchronous DB persistence in background
     try {
       const res = await axios.post('/api/messages/server', {
         chatroomId: selectedChatroom.id,
@@ -695,17 +720,9 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       });
 
       const newMsg = res.data;
-      socket.emit('send-message', {
-        ...newMsg,
-        senderId: currentUser.id,
-        serverId: server.id
-      });
-      setMessages(prev => {
-        if (prev.some(m => m.id === newMsg.id)) return prev;
-        return [...prev, newMsg];
-      });
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: newMsg.id, isOptimistic: false } : m));
     } catch (err) {
-      console.error('Failed to send message:', err);
+      console.error('Failed to persist message to DB:', err);
     }
   };
 

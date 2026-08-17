@@ -818,14 +818,20 @@ function applyFanHardwareState() {
   } catch (e) {}
 }
 
-// Smart Thermal Daemon: Run every 500ms to outpace Dell BIOS EC watchdog which re-grabs control every ~1-2s
+// Smart Thermal Daemon: Throttled to 5000ms to conserve CPU and I/O cycles
 if (!process.env.VERCEL) {
   setInterval(() => {
     applyFanHardwareState();
-  }, 500);
+  }, 5000);
 }
 
+let cachedBattery = { percent: 100, status: 'Unknown', isCharging: true, timestamp: 0 };
 function getBatteryInfo() {
+  const now = Date.now();
+  if (now - cachedBattery.timestamp < 10000) {
+    return cachedBattery;
+  }
+
   let percent = 100;
   let status = 'Unknown';
   let isCharging = true;
@@ -848,7 +854,8 @@ function getBatteryInfo() {
         status = 'Full';
         isCharging = true;
       }
-      return { percent, status, isCharging };
+      cachedBattery = { percent, status, isCharging, timestamp: now };
+      return cachedBattery;
     } catch (e) {
       console.warn('macOS battery info fallback error:', e.message);
     }
@@ -1459,7 +1466,6 @@ async function runGeminiModeration() {
     ];
  
     if (allMsgs.length > 0) {
-      console.log(`[AI MODERATOR] Scanning ${allMsgs.length} messages...`);
       const messagesPayload = allMsgs.map(m => ({ id: m.id, content: m.content }));
       
       const prompt = `You are an AI safety moderator. Analyze the following list of chat messages and identify which ones contain inappropriate content (hate speech, harassment, graphic violence, pornography, extreme profanity/abusive language, or deliberate bypasses of word filters such as 'fuckk', 'f.u.c.k', 'b!tch', etc.).
@@ -1479,7 +1485,7 @@ async function runGeminiModeration() {
       try {
         const localModel = await getLocalOllamaModel() || 'llama3.2:1b';
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
 
         const response = await fetch('http://127.0.0.1:11434/api/generate', {
           method: 'POST',
@@ -1500,7 +1506,7 @@ async function runGeminiModeration() {
           flaggedIds = JSON.parse(json.response.trim());
         }
       } catch (err) {
-        console.warn('[AI MODERATOR] Local Llama 3.2 unavailable, falling back to Gemini:', err.message);
+        // Quiet fallback
       }
 
       // Fallback to Gemini if Ollama failed or returned invalid results
@@ -1510,7 +1516,7 @@ async function runGeminiModeration() {
           try {
             aiSource = 'GEMINI';
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
 
             const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash-lite';
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
@@ -1531,32 +1537,29 @@ async function runGeminiModeration() {
               flaggedIds = JSON.parse(textResponse.trim());
             }
           } catch (err) {
-            console.error('[AI MODERATOR] Gemini fallback failed:', err.message);
+            // Quiet fallback
           }
         }
       }
 
       // Execute moderation if we got a valid response from either AI
-      if (Array.isArray(flaggedIds)) {
-        if (flaggedIds.length > 0) {
-          console.warn(`[AI MODERATOR - ${aiSource}] Flagged messages:`, flaggedIds);
-          for (const id of flaggedIds) {
-            const msg = allMsgs.find(m => m.id.toString() === id.toString());
-            if (msg) {
-              console.warn(`[AI MODERATOR - ${aiSource}] Deleting violating message ID: ${msg.id} from sender: ${msg.sender_id}`);
-              // Delete the message
-              if (msg.type === 'server') {
-                await query("DELETE FROM server_messages WHERE id = $1", [msg.id]);
-              } else {
-                await query("DELETE FROM direct_messages WHERE id = $1", [msg.id]);
-              }
-              io.emit('message-deleted', { id: msg.id, type: msg.type });
+      if (Array.isArray(flaggedIds) && flaggedIds.length > 0) {
+        console.warn(`[AI MODERATOR - ${aiSource}] Flagged violating messages:`, flaggedIds);
+        for (const id of flaggedIds) {
+          const msg = allMsgs.find(m => m.id.toString() === id.toString());
+          if (msg) {
+            console.warn(`[AI MODERATOR - ${aiSource}] Deleting violating message ID: ${msg.id} from sender: ${msg.sender_id}`);
+            if (msg.type === 'server') {
+              await query("DELETE FROM server_messages WHERE id = $1", [msg.id]);
+            } else {
+              await query("DELETE FROM direct_messages WHERE id = $1", [msg.id]);
             }
+            io.emit('message-deleted', { id: msg.id, type: msg.type });
           }
         }
       }
 
-      // Mark processed messages as moderated
+      // Mark processed messages as moderated to prevent infinite re-scanning loops
       const processedServerIds = allMsgs.filter(m => m.type === 'server').map(m => m.id);
       const processedDmIds = allMsgs.filter(m => m.type === 'dm').map(m => m.id);
       if (processedServerIds.length > 0) {
@@ -1645,24 +1648,28 @@ async function downloadImageAsBase64(url) {
 }
 
 let isModerating = false;
+let moderationIntervalMs = 60000; // 1 minute default interval
+
 async function moderationTick() {
   if (isModerating) {
-    setTimeout(moderationTick, 30000);
+    setTimeout(moderationTick, moderationIntervalMs);
     return;
   }
   isModerating = true;
   try {
     await runGeminiModeration();
+    moderationIntervalMs = 60000;
   } catch (err) {
-    console.error('[AI MODERATOR] Tick error:', err.message);
+    console.warn('[AI MODERATOR] Moderation loop error, backing off for 3 minutes:', err.message);
+    moderationIntervalMs = 180000; // 3 min backoff
   } finally {
     isModerating = false;
-    setTimeout(moderationTick, 30000);
+    setTimeout(moderationTick, moderationIntervalMs);
   }
 }
 
 if (!process.env.VERCEL) {
-  setTimeout(moderationTick, 30000);
+  setTimeout(moderationTick, 60000);
 }
 
 function optimizeCpuGovernor() {

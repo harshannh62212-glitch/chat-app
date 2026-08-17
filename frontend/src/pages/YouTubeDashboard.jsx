@@ -194,12 +194,15 @@ export default function YouTubeDashboard({ user, onLogout, onToggleToChat, onTog
   };
 
   const categories = [
-    { id: 'music', label: '🎵 Music & Songs' },
     { id: 'all', label: '🔥 All Trending' },
+    { id: 'music', label: '🎵 Music & Hits' },
     { id: 'chill', label: '☕ Lofi & Chill' },
-    { id: 'gaming', label: '🎮 Gaming' },
-    { id: 'tech', label: '💻 Tech & Dev' },
-    { id: 'news', label: '📰 News' },
+    { id: 'gaming', label: '🎮 Gaming & Esports' },
+    { id: 'tech', label: '💻 Tech & Coding' },
+    { id: 'podcasts', label: '🎙️ Podcasts & Talks' },
+    { id: 'science', label: '🔬 Science & Space' },
+    { id: 'sports', label: '⚽ Sports & Stunts' },
+    { id: 'news', label: '📰 News & Current' }
   ];
 
   return (

@@ -1,10 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 import { filterContent } from '../utils/contentFilter';
 import { checkRateLimit } from '../utils/rateLimiter';
 import GiphyPanel from './GiphyPanel';
 import ReportButton from './ReportButton';
 
+const getActiveSocketUrl = () => {
+  const saved = localStorage.getItem('custom_proxy_target');
+  if (saved) return saved;
+  const activeNode = localStorage.getItem('active_backend_target');
+  if (activeNode) return activeNode;
+  return import.meta.env.PROD ? window.location.origin : 'http://localhost:8000';
+};
+
+const socket = io(getActiveSocketUrl(), {
+  autoConnect: true,
+  extraHeaders: {
+    'bypass-tunnel-reminder': 'true'
+  }
+});
 
 function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
   const [messages, setMessages] = useState([]);
@@ -23,7 +38,64 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
     ? `${currentUser.id}_${dmUserId}` 
     : `${dmUserId}_${currentUser.id}`;
 
-  // Verify friendship status
+  // 1. Socket.IO Real-time Room Joining & Listeners
+  useEffect(() => {
+    if (currentUser?.id && dmUserId) {
+      socket.emit('user-joined', currentUser.id, dmUserId);
+    }
+
+    const handleNewDM = (data) => {
+      // Received a DM from this person
+      if (data.senderId === dmUserId) {
+        const newMsg = {
+          id: data.id || `dm_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+          senderId: data.senderId,
+          content: data.content,
+          created_at: data.timestamp || new Date().toISOString()
+        };
+        setMessages(prev => {
+          if (prev.some(m => m.id === newMsg.id)) return prev;
+          return [...prev, newMsg];
+        });
+      }
+    };
+
+    const handleDMSent = (data) => {
+      // Confirmation/echo of DM sent to this person
+      if (data.dmWith === dmUserId) {
+        setMessages(prev => {
+          if (prev.some(m => m.isOptimistic && m.content === data.content)) {
+            return prev.map(m => (m.isOptimistic && m.content === data.content) ? { ...m, isOptimistic: false } : m);
+          }
+          if (prev.some(m => m.id === data.id)) return prev;
+          return [...prev, {
+            id: data.id || `dm_${Date.now()}`,
+            senderId: currentUser.id,
+            content: data.content,
+            created_at: data.timestamp || new Date().toISOString()
+          }];
+        });
+      }
+    };
+
+    const handleMessageDeleted = (data) => {
+      if (data.type === 'dm') {
+        setMessages(prev => prev.filter(m => m.id.toString() !== data.id.toString()));
+      }
+    };
+
+    socket.on('new-dm', handleNewDM);
+    socket.on('dm-sent', handleDMSent);
+    socket.on('message-deleted', handleMessageDeleted);
+
+    return () => {
+      socket.off('new-dm', handleNewDM);
+      socket.off('dm-sent', handleDMSent);
+      socket.off('message-deleted', handleMessageDeleted);
+    };
+  }, [currentUser?.id, dmUserId]);
+
+  // 2. Verify friendship status
   useEffect(() => {
     const checkFriendship = async () => {
       try {
@@ -142,21 +214,42 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
 
   const sendDM = async (contentStr) => {
     const filteredContent = filterContent(contentStr);
+    const tempId = `opt_dm_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
 
+    const optimisticMsg = {
+      id: tempId,
+      senderId: currentUser.id,
+      recipientId: dmUserId,
+      content: filteredContent,
+      created_at: new Date().toISOString(),
+      isOptimistic: true
+    };
+
+    // 1. INSTANT (0ms) local state update
+    setMessages(prev => [...prev, optimisticMsg]);
+
+    // 2. INSTANT Socket.IO broadcast to recipient
+    socket.emit('send-message', {
+      id: tempId,
+      senderId: currentUser.id,
+      dmWith: dmUserId,
+      content: filteredContent
+    });
+
+    // 3. Asynchronous DB persist in background
     try {
       const res = await axios.post('/api/messages/dm', {
         recipientId: dmUserId,
         content: filteredContent
       });
       const newMsg = res.data;
-      setMessages(prev => [...prev, {
+      setMessages(prev => prev.map(m => m.id === tempId ? {
+        ...m,
         id: newMsg.id,
-        senderId: newMsg.sender_id,
-        content: newMsg.content,
-        created_at: newMsg.created_at
-      }]);
+        isOptimistic: false
+      } : m));
     } catch (err) {
-      console.error('Failed to send direct message:', err);
+      console.error('Failed to persist direct message:', err);
     }
   };
 
@@ -184,131 +277,97 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
 
   return (
     <div className="direct-message">
-      <div className="chat-header">
-        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="dm-header">
+        <div className="dm-header-left">
           {onBack && (
-            <button 
-              className="mobile-back-btn" 
-              onClick={onBack}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#fff',
-                fontSize: '22px',
-                cursor: 'pointer',
-                marginRight: '8px',
-                display: 'none',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '4px 8px',
-                borderRadius: '6px',
-                transition: 'background 0.2s'
-              }}
-            >
+            <button className="mobile-back-btn" onClick={onBack} title="Back to conversations">
               ←
             </button>
           )}
-          💬 {dmUsername}
-        </h2>
-        <div className="header-info">
-          <span className="chat-header-brand" style={{ color: '#00ffff', fontWeight: 'bold', letterSpacing: '0.5px', fontSize: '0.85em', textTransform: 'uppercase', marginRight: '10px' }}>wired-io</span>
-          <button 
-            className="header-settings-btn"
-            onClick={onOpenSettings}
-            title="Settings"
-          >
-            ⚙️
-          </button>
+          <div className="dm-avatar">
+            {dmWith.avatar_url ? (
+              <img src={dmWith.avatar_url} alt={dmUsername} />
+            ) : (
+              dmUsername.substring(0, 2).toUpperCase()
+            )}
+          </div>
+          <div className="dm-user-info">
+            <span className="dm-username">@{dmUsername}</span>
+            <span className="dm-status-badge">Direct Conversation</span>
+          </div>
+        </div>
+        <div className="dm-header-actions">
+          {friendCheckLoading ? (
+            <span className="friend-status-loading">Checking...</span>
+          ) : friendshipStatus === 'none' ? (
+            <button className="add-friend-btn" onClick={handleAddFriend}>
+              ➕ Add Friend
+            </button>
+          ) : friendshipStatus === 'incoming_pending' ? (
+            <div className="friend-action-group">
+              <button className="accept-friend-btn" onClick={handleAcceptFriend}>
+                ✓ Accept Friend Request
+              </button>
+              <button className="decline-friend-btn" onClick={handleDeclineFriend}>
+                ✕
+              </button>
+            </div>
+          ) : friendshipStatus === 'outgoing_pending' ? (
+            <span className="pending-status-text">⏳ Friend Request Sent</span>
+          ) : (
+            <span className="friend-badge">👥 Friends</span>
+          )}
+          <ReportButton 
+            contentType="user" 
+            targetId={dmUserId} 
+            reportedUsername={dmUsername} 
+          />
         </div>
       </div>
 
-      {friendCheckLoading ? (
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#72767d' }}>
-          Loading profile...
-        </div>
-      ) : friendshipStatus !== 'friend' ? (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '40px', textAlign: 'center' }}>
-          <div className="welcome-island" style={{ maxWidth: '480px', padding: '40px', background: 'rgba(23, 25, 35, 0.5)', borderRadius: '24px', border: '1px solid rgba(255, 255, 255, 0.06)', boxShadow: '0 20px 50px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
-            <div style={{ position: 'relative', width: '100px', height: '100px' }}>
+      <div className="dm-messages">
+        {loading ? (
+          <div className="dm-loading">Loading messages...</div>
+        ) : messages.length === 0 ? (
+          <div className="dm-empty">
+            <div className="dm-empty-avatar">
               {dmWith.avatar_url ? (
-                <img src={dmWith.avatar_url} alt={dmUsername} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '2px solid #5865f2' }} />
+                <img src={dmWith.avatar_url} alt={dmUsername} />
               ) : (
-                <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', fontWeight: 'bold', border: '2px solid #5865f2' }}>
-                  {dmUsername ? dmUsername[0].toUpperCase() : '?'}
-                </div>
+                dmUsername.substring(0, 2).toUpperCase()
               )}
             </div>
-            <div>
-              <h2 style={{ fontSize: '1.8em', marginBottom: '8px', color: '#fff' }}>{dmUsername}</h2>
-              <p style={{ color: '#72767d', fontSize: '0.95em', lineHeight: '1.5' }}>
-                You are not friends with {dmUsername} yet. Direct messaging is restricted to friends only.
-              </p>
-            </div>
-            
-            <div style={{ width: '100%', marginTop: '10px' }}>
-              {friendshipStatus === 'incoming_pending' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <p style={{ color: '#00ffff', fontSize: '0.85em', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px' }}>
-                    Sent you a friend request
-                  </p>
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <button
-                      onClick={handleAcceptFriend}
-                      style={{ flex: 1, padding: '12px', background: '#248046', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-                    >
-                      ✓ Accept Request
-                    </button>
-                    <button
-                      onClick={handleDeclineFriend}
-                      style={{ flex: 1, padding: '12px', background: 'rgba(240,71,71,0.1)', color: '#f04747', border: '1px solid rgba(240,71,71,0.3)', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-                    >
-                      ✕ Decline
-                    </button>
-                  </div>
-                </div>
-              ) : friendshipStatus === 'outgoing_pending' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.9em', color: '#b9bbbe', fontStyle: 'italic' }}>
-                    Friend request is pending
-                  </span>
-                  <button
-                    onClick={handleDeclineFriend}
-                    style={{ width: '100%', padding: '12px', background: 'rgba(255, 255, 255, 0.05)', color: '#fff', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-                  >
-                    Cancel Sent Request
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleAddFriend}
-                  style={{ width: '100%', padding: '12px', background: '#5865f2', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-                >
-                  + Add Friend
-                </button>
-              )}
-            </div>
+            <h3>This is the beginning of your direct message history with @{dmUsername}.</h3>
+            <p>Say hello to start the conversation!</p>
           </div>
-        </div>
-      ) : (
-        <>
-          <div className="messages">
-            {loading ? (
-              <p>Loading messages...</p>
-            ) : messages.length === 0 ? (
-              <p className="no-messages">No messages yet. Start the conversation!</p>
-            ) : (
-              messages.map((msg) => (
-                <div 
-                  key={msg.id} 
-                  className={`message ${msg.senderId === currentUser.id ? 'sent' : 'received'}`}
-                  style={{ position: 'relative' }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '0.85em', color: '#72767d', fontWeight: 'bold' }}>
-                      {msg.senderId === currentUser.id ? 'You' : dmUsername}
+        ) : (
+          messages.map(msg => {
+            const isSelf = msg.senderId === currentUser.id;
+            return (
+              <div key={msg.id} className={`dm-message ${isSelf ? 'self' : 'other'} ${msg.isOptimistic ? 'optimistic-message' : ''}`}>
+                <div className="dm-message-avatar">
+                  {isSelf ? (
+                    currentUser.avatar_url ? (
+                      <img src={currentUser.avatar_url} alt={currentUser.username} />
+                    ) : (
+                      currentUser.username.substring(0, 2).toUpperCase()
+                    )
+                  ) : dmWith.avatar_url ? (
+                    <img src={dmWith.avatar_url} alt={dmUsername} />
+                  ) : (
+                    dmUsername.substring(0, 2).toUpperCase()
+                  )}
+                </div>
+                <div className="dm-message-content">
+                  <div className="dm-message-header">
+                    <span className="dm-message-author">
+                      {isSelf ? currentUser.username : dmUsername}
                     </span>
-                    {(msg.senderId === currentUser.id || currentUser.is_admin) && (
-                      <button
+                    <span className="dm-message-time">
+                      {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
+                    </span>
+                    {isSelf && (
+                      <button 
                         className="delete-msg-btn"
                         onClick={() => handleDeleteMessage(msg.id)}
                         title="Delete Message"
@@ -316,49 +375,48 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
                         🗑️
                       </button>
                     )}
-                    <ReportButton messageId={msg.id} />
                   </div>
-                  {msg.content.startsWith('http') && msg.content.includes('giphy.com') ? (
-                    <img src={msg.content} className="message-gif" alt="GIF" />
-                  ) : (
-                    <p>{msg.content}</p>
-                  )}
-                  <span className="timestamp">
-                    {new Date(msg.created_at).toLocaleTimeString()}
-                  </span>
+                  <div className="dm-message-body">
+                    {msg.content.startsWith('http') && (msg.content.includes('.gif') || msg.content.includes('giphy.com') || msg.content.includes('tenor.com')) ? (
+                      <img src={msg.content} alt="GIF" className="chat-gif" />
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
                 </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+              </div>
+            );
+          })
+        )}
+        <div ref={messagesEndRef} />
+      </div>
 
-          <form onSubmit={handleSendMessage} className="message-input-form-wrapper">
-            {showGiphy && (
-              <GiphyPanel 
-                onSelectGif={handleSelectGif}
-                onClose={() => setShowGiphy(false)}
-              />
-            )}
-            <div className="message-input">
-              <button 
-                type="button" 
-                className="giphy-toggle-btn"
-                onClick={() => setShowGiphy(!showGiphy)}
-                title="Send a GIF"
-              >
-                GIF
-              </button>
-              <input
-                type="text"
-                placeholder="Type a message..."
-                value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
-              />
-              <button type="submit">Send</button>
-            </div>
-          </form>
-        </>
-      )}
+      <div className="dm-input-area">
+        {showGiphy && (
+          <div className="giphy-popover">
+            <GiphyPanel onSelectGif={handleSelectGif} onClose={() => setShowGiphy(false)} />
+          </div>
+        )}
+        <form onSubmit={handleSendMessage} className="dm-form">
+          <button 
+            type="button" 
+            className="gif-btn"
+            onClick={() => setShowGiphy(!showGiphy)}
+            title="Choose a GIF"
+          >
+            GIF
+          </button>
+          <input
+            type="text"
+            placeholder={`Message @${dmUsername}`}
+            value={messageInput}
+            onChange={(e) => setMessageInput(e.target.value)}
+          />
+          <button type="submit" className="dm-send-btn">
+            Send
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

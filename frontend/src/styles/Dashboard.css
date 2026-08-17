@@ -1589,4 +1589,22 @@ body.theme-cyberpunk-neon {
   }
 }
 
+/* Instant Optimistic Message UI */
+.optimistic-message {
+  opacity: 0.88;
+  transition: opacity 0.25s ease-out;
+  animation: optimisticFadeIn 0.15s ease-out;
+}
+
+@keyframes optimisticFadeIn {
+  from {
+    opacity: 0.3;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 0.88;
+    transform: translateY(0);
+  }
+}
+
 
