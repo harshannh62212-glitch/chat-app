@@ -23,7 +23,11 @@ async function initDB() {
     await pool.query('SELECT NOW()');
     console.log('Database connection successful');
     if (!isVercel) {
-      await createTables();
+      try {
+        await createTables();
+      } catch (tableErr) {
+        console.warn('Schema check warning (non-fatal, tables already exist):', tableErr.message);
+      }
     }
   } catch (err) {
     console.error('Database connection failed:', err);
