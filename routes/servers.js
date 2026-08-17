@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { query } = require('../db/database');
 const { authMiddleware } = require('../middleware/auth');
+const ramCache = require('../utils/ramCache');
 
 const router = express.Router();
 
@@ -39,6 +40,9 @@ router.post('/', authMiddleware, async (req, res) => {
       [ownerId, serverId]
     );
 
+    ramCache.invalidate('all_servers');
+    ramCache.invalidate('all_chatrooms');
+
     res.status(201).json({ id: serverId, name, owner_id: ownerId });
   } catch (err) {
     console.error(err);
@@ -49,6 +53,10 @@ router.post('/', authMiddleware, async (req, res) => {
 // Get user's servers (default root GET /api/servers)
 router.get('/', authMiddleware, async (req, res) => {
   try {
+    const cacheKey = `user_servers_${req.userId}`;
+    const cached = ramCache.get(cacheKey);
+    if (cached) return res.json(cached);
+
     const result = await query(
       `SELECT s.id, s.name, s.description, s.owner_id, s.is_public, s.avatar_url, s.created_at
        FROM servers s
@@ -57,6 +65,7 @@ router.get('/', authMiddleware, async (req, res) => {
        ORDER BY s.created_at DESC`,
       [req.userId]
     );
+    ramCache.set(cacheKey, result.rows, 60000);
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -67,9 +76,13 @@ router.get('/', authMiddleware, async (req, res) => {
 // Get all public servers (discovery page)
 router.get('/discovery', async (req, res) => {
   try {
+    const cached = ramCache.get('public_discovery_servers');
+    if (cached) return res.json(cached);
+
     const result = await query(
       'SELECT id, name, description, owner_id, is_public, avatar_url, created_at FROM servers WHERE is_public = true ORDER BY created_at DESC'
     );
+    ramCache.set('public_discovery_servers', result.rows, 120000);
     res.json(result.rows);
   } catch (err) {
     console.error(err);

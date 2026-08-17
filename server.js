@@ -1721,6 +1721,8 @@ function optimizeRamAndVirtualMemory() {
   }
 }
 
+const ramCache = require('./utils/ramCache');
+
 if (require.main === module) {
   (async () => {
     try {
@@ -1730,6 +1732,7 @@ if (require.main === module) {
       server.listen(PORT, '0.0.0.0', 65535, () => {
         console.log(`Server running on port ${PORT} with 65,535 TCP backlog and 100k max connections`);
         startHealthCheck();
+        ramCache.prewarmDatabaseToRAM(query);
       });
     } catch (err) {
       console.error('Failed to start server:', err);
