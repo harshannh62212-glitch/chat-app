@@ -148,9 +148,9 @@ export default function GamesDashboard({ user, onLogout, onToggleToChat, onToggl
       {/* HEADER */}
       <header className="games-header">
         <div className="games-header-title">
-          <span className="arcade-badge">ARCADE 150+</span>
-          <span className="under-dev-badge">🚧 UNDER DEVELOPMENT</span>
-          <h1>House Hunters & Retro Hub</h1>
+          <span className="arcade-badge">WIRED ARCADE 150+</span>
+          <span className="under-dev-badge" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#ffffff', borderColor: '#10b981' }}>⚡ SELF-HOSTED</span>
+          <h1>Wired Arcade & Gaming Hub</h1>
         </div>
 
         <div className="games-header-actions">
@@ -174,15 +174,6 @@ export default function GamesDashboard({ user, onLogout, onToggleToChat, onToggl
         </div>
       </header>
 
-      {/* UNDER DEVELOPMENT NOTIFICATION STRIP */}
-      <div className="under-dev-banner">
-        <div className="under-dev-banner-content">
-          <span className="under-dev-icon">⚠️</span>
-          <div>
-            <strong>GAMES HUB UNDER ACTIVE DEVELOPMENT:</strong> Some external game assets and high-memory titles may be optimizing or downloading. If a game fails to start, use <strong>↗ Popout Tab</strong> or try another title!
-          </div>
-        </div>
-      </div>
 
       {/* DASHBOARD BODY */}
       <div className="games-content">
@@ -342,7 +333,7 @@ export default function GamesDashboard({ user, onLogout, onToggleToChat, onToggl
               </div>
             </div>
 
-            {/* Render either House Hunters Web Game Iframe or Builtin Game */}
+            {/* Render either Self-Hosted Web Game Iframe or Builtin Game */}
             {!activeGame.isBuiltin ? (
               <div ref={iframeContainerRef} className={`hh-iframe-wrapper ${isFullscreen ? 'fullscreen' : ''}`}>
                 <iframe
@@ -350,8 +341,7 @@ export default function GamesDashboard({ user, onLogout, onToggleToChat, onToggl
                   title={activeGame.title}
                   className="hh-game-iframe"
                   allowFullScreen={true}
-                  sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms allow-downloads allow-modals"
-                  referrerPolicy="no-referrer"
+                  allow="autoplay; fullscreen; pointer-lock; gamepad; accelerometer; gyroscope; clipboard-write; encrypted-media"
                 />
                 {isFullscreen && (
                   <button className="hh-exit-fs-floating-btn" onClick={handleToggleFullscreen}>

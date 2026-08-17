@@ -25,14 +25,27 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
   // Player state
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [loadingTrack, setLoadingTrack] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(0.5);
+  const [volume, setVolume] = useState(0.7);
   const [isMuted, setIsMuted] = useState(false);
   const [isLoop, setIsLoop] = useState(false);
   const [isShuffle, setIsShuffle] = useState(false);
   const [currentQueue, setCurrentQueue] = useState([]);
   const [queueIndex, setQueueIndex] = useState(-1);
+
+  // Synchronized refs to avoid stale closures in player callbacks
+  const isLoopRef = useRef(isLoop);
+  const isShuffleRef = useRef(isShuffle);
+  const currentQueueRef = useRef(currentQueue);
+  const queueIndexRef = useRef(queueIndex);
+  const pendingPlayRef = useRef(null);
+
+  useEffect(() => { isLoopRef.current = isLoop; }, [isLoop]);
+  useEffect(() => { isShuffleRef.current = isShuffle; }, [isShuffle]);
+  useEffect(() => { currentQueueRef.current = currentQueue; }, [currentQueue]);
+  useEffect(() => { queueIndexRef.current = queueIndex; }, [queueIndex]);
 
   // YouTube Player ref and timer
   const [ytPlayer, setYtPlayer] = useState(null);
@@ -44,7 +57,7 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
     fetchPlaylists();
     fetchHistory();
 
-    // Load YouTube API
+    // Load YouTube IFrame API
     const checkAndInit = () => {
       if (window.YT && window.YT.Player) {
         initYTPlayer();
@@ -86,7 +99,6 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
       const player = new window.YT.Player('youtube-player', {
         height: '200',
         width: '200',
-        videoId: 'dQw4w9WgXcQ',
         playerVars: {
           autoplay: 0,
           controls: 0,
@@ -103,15 +115,25 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
             setYtPlayer(event.target);
             window.spotifyYtPlayerInstance = event.target;
             event.target.setVolume(volume * 100);
+            if (pendingPlayRef.current) {
+              const pending = pendingPlayRef.current;
+              pendingPlayRef.current = null;
+              event.target.loadVideoById({
+                videoId: pending.videoId,
+                startSeconds: 0
+              });
+              event.target.playVideo();
+            }
           },
           onStateChange: (event) => {
             console.log('[SPOTIFY YT] State Change:', event.data);
             if (event.data === window.YT.PlayerState.PLAYING) {
               setIsPlaying(true);
+              setLoadingTrack(false);
             } else if (event.data === window.YT.PlayerState.PAUSED) {
               setIsPlaying(false);
             } else if (event.data === window.YT.PlayerState.ENDED) {
-              if (isLoop) {
+              if (isLoopRef.current) {
                 event.target.seekTo(0);
                 event.target.playVideo();
               } else {
@@ -121,7 +143,8 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
           },
           onError: (err) => {
             console.warn('[SPOTIFY YT] Player error:', err);
-            // On embed restriction error (101/150), fallback to preview audio if available
+            setLoadingTrack(false);
+            // Advance to next song on unplayable / embedding restricted tracks
             handleNext();
           }
         }
@@ -135,45 +158,41 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
 
   // Sync volume
   useEffect(() => {
-    if (ytPlayer && typeof ytPlayer.setVolume === 'function') {
-      ytPlayer.setVolume(isMuted ? 0 : volume * 100);
-    }
-    if (window.spotifyAudioFallback) {
-      window.spotifyAudioFallback.volume = isMuted ? 0 : volume;
+    const player = ytPlayer || window.spotifyYtPlayerInstance;
+    if (player && typeof player.setVolume === 'function') {
+      player.setVolume(isMuted ? 0 : Math.round(volume * 100));
     }
   }, [volume, isMuted, ytPlayer]);
 
   // Handle play/pause toggle
   const togglePlayPause = () => {
-    const nextPlay = !isPlaying;
-    setIsPlaying(nextPlay);
     const player = ytPlayer || window.spotifyYtPlayerInstance;
-    if (nextPlay) {
-      if (player && typeof player.playVideo === 'function') {
-        player.playVideo();
-      } else if (window.spotifyAudioFallback) {
-        window.spotifyAudioFallback.play().catch(() => {});
-      }
+    if (!player) return;
+
+    if (isPlaying) {
+      try {
+        if (typeof player.pauseVideo === 'function') player.pauseVideo();
+      } catch (e) {}
+      setIsPlaying(false);
     } else {
-      if (player && typeof player.pauseVideo === 'function') {
-        player.pauseVideo();
-      }
-      if (window.spotifyAudioFallback) {
-        window.spotifyAudioFallback.pause();
-      }
+      try {
+        if (typeof player.playVideo === 'function') player.playVideo();
+      } catch (e) {}
+      setIsPlaying(true);
     }
   };
 
-  // Polling current playback time from YouTube API or preview Audio
+  // Polling current playback time from YouTube API
   useEffect(() => {
-    if (isPlaying && ytPlayer) {
+    if (isPlaying) {
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       
       progressIntervalRef.current = setInterval(() => {
+        const player = ytPlayer || window.spotifyYtPlayerInstance;
         try {
-          if (ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
-            const cur = ytPlayer.getCurrentTime() || 0;
-            const dur = ytPlayer.getDuration() || (currentTrack?.duration || 240);
+          if (player && typeof player.getCurrentTime === 'function') {
+            const cur = player.getCurrentTime() || 0;
+            const dur = player.getDuration() || (currentTrack?.duration || 240);
             setCurrentTime(cur);
             if (dur > 0) setDuration(dur);
           }
@@ -198,11 +217,12 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
         localStorage.setItem('spotify_cached_liked', JSON.stringify(res.data));
         return;
       }
-    } catch (err) {}
-    try {
-      const cached = JSON.parse(localStorage.getItem('spotify_cached_liked') || '[]');
-      setLikedSongs(cached);
-    } catch (e) {}
+    } catch (err) {
+      try {
+        const cached = JSON.parse(localStorage.getItem('spotify_cached_liked') || '[]');
+        setLikedSongs(cached);
+      } catch (e) {}
+    }
   };
 
   const fetchPlaylists = async () => {
@@ -213,11 +233,12 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
         localStorage.setItem('spotify_cached_playlists', JSON.stringify(res.data));
         return;
       }
-    } catch (err) {}
-    try {
-      const cached = JSON.parse(localStorage.getItem('spotify_cached_playlists') || '[]');
-      setPlaylists(cached);
-    } catch (e) {}
+    } catch (err) {
+      try {
+        const cached = JSON.parse(localStorage.getItem('spotify_cached_playlists') || '[]');
+        setPlaylists(cached);
+      } catch (e) {}
+    }
   };
 
   const fetchHistory = async () => {
@@ -228,13 +249,15 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
         localStorage.setItem('spotify_cached_history', JSON.stringify(res.data));
         return;
       }
-    } catch (err) {}
-    try {
-      const cached = JSON.parse(localStorage.getItem('spotify_cached_history') || '[]');
-      setPlayHistory(cached);
-    } catch (e) {}
+    } catch (err) {
+      try {
+        const cached = JSON.parse(localStorage.getItem('spotify_cached_history') || '[]');
+        setPlayHistory(cached);
+      } catch (e) {}
+    }
   };
 
+  // Record history
   const recordPlayHistory = async (track) => {
     try {
       await axios.post('/api/spotify/history', {
@@ -246,7 +269,6 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
       });
       fetchHistory();
     } catch (err) {
-      // Local storage fallback
       try {
         const history = JSON.parse(localStorage.getItem('spotify_cached_history') || '[]');
         const updated = [track, ...history.filter(h => (h.track_id || h.id) !== (track.track_id || track.id))].slice(0, 30);
@@ -256,32 +278,40 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
     }
   };
 
-  // Play a specific track (loads full YouTube stream)
+  // Play a specific track (loads full YouTube music stream)
   const handlePlayTrack = async (track, listToSetAsQueue = []) => {
+    const rawCover = track.cover_url || track.artworkUrl100 || track.artworkUrl60 || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=300&auto=format&fit=crop';
+    const hiResCover = rawCover.replace('100x100bb', '500x500bb').replace('60x60bb', '500x500bb');
+
     const normTrack = {
-      track_id: track.track_id || track.trackId?.toString() || track.id?.toString(),
-      title: track.title || track.trackName,
-      artist: track.artist || track.artistName,
+      track_id: track.track_id || track.trackId?.toString() || track.id?.toString() || `${Date.now()}`,
+      title: track.title || track.trackName || 'Unknown Title',
+      artist: track.artist || track.artistName || 'Unknown Artist',
       album: track.album || track.collectionName || '',
       duration: track.duration || Math.round((track.trackTimeMillis || 240000) / 1000),
-      preview_url: track.preview_url || track.previewUrl,
-      cover_url: track.cover_url || track.artworkUrl100 || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=300&auto=format&fit=crop'
+      cover_url: hiResCover,
+      videoId: track.videoId || null
     };
 
     setCurrentTrack(normTrack);
     setIsPlaying(true);
+    setLoadingTrack(true);
+    setCurrentTime(0);
     recordPlayHistory(normTrack);
 
     if (listToSetAsQueue && listToSetAsQueue.length > 0) {
-      const normQueue = listToSetAsQueue.map(t => ({
-        track_id: t.track_id || t.trackId?.toString() || t.id?.toString(),
-        title: t.title || t.trackName,
-        artist: t.artist || t.artistName,
-        album: t.album || t.collectionName || '',
-        duration: t.duration || Math.round((t.trackTimeMillis || 240000) / 1000),
-        preview_url: t.preview_url || t.previewUrl,
-        cover_url: t.cover_url || t.artworkUrl100 || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=300&auto=format&fit=crop'
-      }));
+      const normQueue = listToSetAsQueue.map(t => {
+        const c = (t.cover_url || t.artworkUrl100 || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=300&auto=format&fit=crop').replace('100x100bb', '500x500bb');
+        return {
+          track_id: t.track_id || t.trackId?.toString() || t.id?.toString(),
+          title: t.title || t.trackName,
+          artist: t.artist || t.artistName,
+          album: t.album || t.collectionName || '',
+          duration: t.duration || Math.round((t.trackTimeMillis || 240000) / 1000),
+          cover_url: c,
+          videoId: t.videoId || null
+        };
+      });
       setCurrentQueue(normQueue);
       const matchedIndex = normQueue.findIndex(q => q.track_id === normTrack.track_id);
       setQueueIndex(matchedIndex >= 0 ? matchedIndex : 0);
@@ -290,60 +320,62 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
       setQueueIndex(0);
     }
 
-    // 1. If HTML5 preview audio is available, start audio fallback immediately
-    if (normTrack.preview_url) {
-      try {
-        if (!window.spotifyAudioFallback) {
-          window.spotifyAudioFallback = new Audio();
-        }
-        window.spotifyAudioFallback.src = normTrack.preview_url;
-        window.spotifyAudioFallback.volume = isMuted ? 0 : volume;
-        window.spotifyAudioFallback.play().catch(() => {});
-        window.spotifyAudioFallback.ontimeupdate = () => {
-          if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') {
-            setCurrentTime(window.spotifyAudioFallback.currentTime || 0);
-            setDuration(window.spotifyAudioFallback.duration || 30);
-          }
-        };
-      } catch (e) {}
-    }
+    // Resolve full high quality YouTube stream
+    let resolvedVideoId = normTrack.videoId;
 
-    // 2. Call backend proxy or search YouTube API to resolve full high quality video stream
-    let resolvedVideoId = null;
-    try {
-      const searchRes = await axios.get(`/api/spotify/search-yt`, {
-        params: { q: `${normTrack.artist} ${normTrack.title} Audio` }
-      });
-      if (searchRes.data && searchRes.data.videoId) {
-        resolvedVideoId = searchRes.data.videoId;
+    if (!resolvedVideoId) {
+      try {
+        const searchRes = await axios.get('/api/spotify/search-yt', {
+          params: { q: `${normTrack.artist} ${normTrack.title} Audio` },
+          timeout: 6000
+        });
+        if (searchRes.data && searchRes.data.videoId) {
+          resolvedVideoId = searchRes.data.videoId;
+        }
+      } catch (err) {
+        try {
+          const searchRes2 = await axios.get('/api/spotify/search-yt', {
+            params: { q: `${normTrack.title} ${normTrack.artist}` },
+            timeout: 6000
+          });
+          if (searchRes2.data && searchRes2.data.videoId) {
+            resolvedVideoId = searchRes2.data.videoId;
+          }
+        } catch (err2) {}
       }
-    } catch (err) {}
+    }
 
+    // Direct mirror fallback if backend proxy is delayed or unreachable
     if (!resolvedVideoId) {
-      // Direct YouTube search queries
-      try {
-        const query = encodeURIComponent(`${normTrack.artist} ${normTrack.title}`);
-        const ytSearchRes = await fetch(`https://invidious.nerdvpn.de/api/v1/search?q=${query}&type=video`);
-        if (ytSearchRes.ok) {
-          const items = await ytSearchRes.json();
-          if (items && items[0] && items[0].videoId) {
-            resolvedVideoId = items[0].videoId;
+      const publicMirrors = [
+        `https://invidious.nerdvpn.de/api/v1/search?q=${encodeURIComponent(`${normTrack.artist} ${normTrack.title} audio`)}&type=video`,
+        `https://invidious.jing.rocks/api/v1/search?q=${encodeURIComponent(`${normTrack.artist} ${normTrack.title} audio`)}&type=video`,
+        `https://inv.tux.pizza/api/v1/search?q=${encodeURIComponent(`${normTrack.artist} ${normTrack.title} audio`)}&type=video`
+      ];
+
+      for (const mirrorUrl of publicMirrors) {
+        try {
+          const ytSearchRes = await fetch(mirrorUrl, { signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined });
+          if (ytSearchRes.ok) {
+            const items = await ytSearchRes.json();
+            if (Array.isArray(items) && items[0] && items[0].videoId && items[0].videoId !== 'dQw4w9WgXcQ') {
+              resolvedVideoId = items[0].videoId;
+              break;
+            }
           }
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
     }
 
     if (!resolvedVideoId) {
-      // Verified music ID
-      resolvedVideoId = 'dQw4w9WgXcQ';
+      setLoadingTrack(false);
+      console.warn('Could not resolve audio stream for:', normTrack.title);
+      return;
     }
 
     const player = ytPlayer || window.spotifyYtPlayerInstance;
     if (player && typeof player.loadVideoById === 'function') {
       try {
-        if (window.spotifyAudioFallback) {
-          window.spotifyAudioFallback.pause();
-        }
         player.loadVideoById({
           videoId: resolvedVideoId,
           startSeconds: 0
@@ -352,33 +384,39 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
       } catch (e) {
         console.warn('YouTube loadVideoById error:', e);
       }
+    } else {
+      pendingPlayRef.current = { videoId: resolvedVideoId };
     }
   };
 
   const handleNext = () => {
-    if (currentQueue.length === 0 || queueIndex < 0) return;
+    const queue = currentQueueRef.current;
+    const curIdx = queueIndexRef.current;
+    if (!queue || queue.length === 0 || curIdx < 0) return;
     
-    let nextIdx = queueIndex + 1;
-    if (isShuffle) {
-      nextIdx = Math.floor(Math.random() * currentQueue.length);
-    } else if (nextIdx >= currentQueue.length) {
+    let nextIdx = curIdx + 1;
+    if (isShuffleRef.current) {
+      nextIdx = Math.floor(Math.random() * queue.length);
+    } else if (nextIdx >= queue.length) {
       nextIdx = 0; // Wrap around
     }
     
     setQueueIndex(nextIdx);
-    handlePlayTrack(currentQueue[nextIdx], currentQueue);
+    handlePlayTrack(queue[nextIdx], queue);
   };
 
   const handlePrev = () => {
-    if (currentQueue.length === 0 || queueIndex < 0) return;
+    const queue = currentQueueRef.current;
+    const curIdx = queueIndexRef.current;
+    if (!queue || queue.length === 0 || curIdx < 0) return;
     
-    let prevIdx = queueIndex - 1;
+    let prevIdx = curIdx - 1;
     if (prevIdx < 0) {
-      prevIdx = currentQueue.length - 1; // Wrap to end
+      prevIdx = queue.length - 1; // Wrap to end
     }
     
     setQueueIndex(prevIdx);
-    handlePlayTrack(currentQueue[prevIdx], currentQueue);
+    handlePlayTrack(queue[prevIdx], queue);
   };
 
   // Searching (iTunes Search API)
@@ -971,8 +1009,8 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
               🔀
             </button>
             <button className="icon-btn" onClick={handlePrev} title="Previous">⏮</button>
-            <button className="play-pause-btn" onClick={togglePlayPause} title="Play/Pause">
-              {isPlaying ? '⏸' : '▶'}
+            <button className="play-pause-btn" onClick={togglePlayPause} title={loadingTrack ? 'Loading track...' : isPlaying ? 'Pause' : 'Play'}>
+              {loadingTrack ? '⏳' : isPlaying ? '⏸' : '▶'}
             </button>
             <button className="icon-btn" onClick={handleNext} title="Next">⏭</button>
             <button 

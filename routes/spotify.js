@@ -9,52 +9,75 @@ const axios = require('axios');
 router.get('/search-yt', authMiddleware, async (req, res) => {
   try {
     const { q } = req.query;
-    if (!q) return res.status(400).json({ error: 'Query required' });
+    if (!q || !q.trim()) return res.status(400).json({ error: 'Query required' });
     
-    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q.trim())}`;
     const response = await axios.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9'
       },
-      timeout: 6000
+      timeout: 9000
     });
     
     const html = response.data;
     let videoId = null;
     
-    // Pattern 1: JSON videoId structure
-    const jsonMatch = html.match(/"videoId"\s*:\s*"([^"]+)"/);
+    // 1. Structured ytInitialData JSON extraction
+    const jsonMatch = html.match(/var ytInitialData = ({.*?});<\/script>/s) ||
+                      html.match(/ytInitialData\s*=\s*({.+?});/s);
     if (jsonMatch && jsonMatch[1]) {
-      videoId = jsonMatch[1];
-    }
-    
-    // Pattern 2: watch?v= link structure
-    if (!videoId) {
-      const linkMatch = html.match(/\/watch\?v=([a-zA-Z0-9_-]{11})/);
-      if (linkMatch && linkMatch[1]) {
-        videoId = linkMatch[1];
+      try {
+        const data = JSON.parse(jsonMatch[1]);
+        const contents = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents;
+        if (Array.isArray(contents)) {
+          for (const section of contents) {
+            const itemSection = section?.itemSectionRenderer?.contents;
+            if (Array.isArray(itemSection)) {
+              for (const item of itemSection) {
+                if (item?.videoRenderer?.videoId) {
+                  videoId = item.videoRenderer.videoId;
+                  break;
+                }
+              }
+            }
+            if (videoId) break;
+          }
+        }
+      } catch (parseErr) {
+        console.warn('[SPOTIFY SEARCH] JSON parse error in ytInitialData:', parseErr.message);
       }
     }
-
-    // Pattern 3: watch URL inside text
+    
+    // 2. Pattern: videoId in JSON stream
     if (!videoId) {
-      const textMatch = html.match(/watch\?v=([a-zA-Z0-9_-]{11})/);
-      if (textMatch && textMatch[1]) {
-        videoId = textMatch[1];
+      const rawMatch = html.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/);
+      if (rawMatch && rawMatch[1] && rawMatch[1] !== 'dQw4w9WgXcQ') {
+        videoId = rawMatch[1];
+      }
+    }
+    
+    // 3. Pattern: watch?v= link structure
+    if (!videoId) {
+      const linkMatches = [...html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)];
+      for (const m of linkMatches) {
+        if (m[1] && m[1] !== 'dQw4w9WgXcQ') {
+          videoId = m[1];
+          break;
+        }
       }
     }
     
     if (videoId) {
-      res.json({ videoId });
+      return res.json({ videoId });
     } else {
-      console.warn(`[YOUTUBE SCRAPER] No video found for "${q}". Using chill music fallback.`);
-      res.json({ videoId: 'jfKfPfyJRdk' }); // Fallback to Lofi Girl
+      console.warn(`[YOUTUBE SCRAPER] No video found for "${q}".`);
+      return res.status(404).json({ error: 'Track video stream not found' });
     }
   } catch (err) {
-    console.error('Error searching YouTube:', err.message);
-    res.json({ videoId: 'jfKfPfyJRdk' }); // Graceful fallback
+    console.error('Error searching YouTube for Spotify track:', err.message);
+    res.status(500).json({ error: 'Search failed' });
   }
 });
 

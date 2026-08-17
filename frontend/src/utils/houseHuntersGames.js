@@ -2,7 +2,7 @@
 
 const BASE_URL = 'https://house-hunters.epusara.com';
 
-export const HOUSE_HUNTERS_GAMES = [
+const RAW_GAMES = [
   { id: 184, slug: "10-minutes-till-dawn", title: "10 Minutes Till Dawn", logo: `${BASE_URL}/images/game-covers/10-minutes-till-dawn.webp`, file: `${BASE_URL}/games/cl10minutestildawn.html`, category: "action" },
   { id: 173, slug: "12-mini-battles", title: "12 Mini Battles", logo: `${BASE_URL}/images/game-covers/12-mini-battles.webp`, file: `${BASE_URL}/games/12%20Mini%20Battles.html`, category: "multiplayer" },
   { id: 205, slug: "2048", title: "2048", logo: `${BASE_URL}/images/game-covers/2048.png`, file: `${BASE_URL}/games/cl2048.html`, category: "puzzle" },
@@ -227,3 +227,11 @@ export const HOUSE_HUNTERS_GAMES = [
   { id: 244, slug: "omori", title: "Omori", logo: `${BASE_URL}/images/game-covers/omori.png`, file: `${BASE_URL}/games/Omori.html`, category: "rpg" },
   { id: 245, slug: "tung-tung-horror", title: "Tung Tung Horror", logo: `${BASE_URL}/images/game-covers/tungtung.jpeg`, file: `${BASE_URL}/games/tung.html`, category: "horror" }
 ];
+
+export const HOUSE_HUNTERS_GAMES = RAW_GAMES.map(game => ({
+  ...game,
+  file: `/api/games/play?file=${encodeURIComponent(game.file)}`,
+  logo: `/api/games/cover?url=${encodeURIComponent(game.logo)}`,
+  rawFile: game.file,
+  rawLogo: game.logo
+}));
