@@ -131,8 +131,15 @@ router.post('/server', authMiddleware, async (req, res) => {
     const enriched = {
       ...message,
       username: user.username,
-      avatar_url: user.avatar_url
+      avatar_url: user.avatar_url,
+      serverId: message.server_id,
+      chatroom_id: chatroomId
     };
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('new-message', enriched);
+    }
 
     res.status(201).json(enriched);
   } catch (err) {
@@ -158,7 +165,25 @@ router.post('/dm', authMiddleware, async (req, res) => {
       [senderId, recipientId, content]
     );
 
-    res.status(201).json(insertResult.rows[0]);
+    const msg = insertResult.rows[0];
+    const io = req.app.get('io');
+    if (io) {
+      const payload = {
+        id: msg.id,
+        senderId: msg.sender_id,
+        sender_id: msg.sender_id,
+        recipient_id: msg.recipient_id,
+        dmWith: recipientId,
+        content: msg.content,
+        created_at: msg.created_at,
+        timestamp: msg.created_at
+      };
+      io.to(`user-${recipientId}`).emit('new-dm', payload);
+      io.to(`user-${senderId}`).emit('dm-sent', payload);
+      io.emit('new-dm-global', payload);
+    }
+
+    res.status(201).json(msg);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to send direct message' });
