@@ -1,6 +1,6 @@
-// High-Performance In-Memory RAM Cache calibrated for 9GB Heap Allocation
+// High-Performance In-Memory RAM Cache calibrated for 16GB Heap on 24GB System
 class UltraRAMCache {
-  constructor(maxItems = 350000, defaultTtlMs = 120000) {
+  constructor(maxItems = 600000, defaultTtlMs = 120000) {
     this.cache = new Map();
     this.maxItems = maxItems;
     this.defaultTtlMs = defaultTtlMs;
