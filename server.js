@@ -1248,16 +1248,19 @@ io.on('connection', (socket) => {
         handleLocalBotResponse(serverId, chatroom_id, filteredContent, senderId);
       }
     } else if (dmWith) {
-      io.to(`user-${dmWith}`).emit('new-dm', {
+      const payload = {
+        id: data.id || `dm_${Date.now()}`,
+        tempId: data.tempId || data.id || null,
         senderId,
-        content: filteredContent,
-        timestamp: new Date()
-      });
-      io.to(`user-${senderId}`).emit('dm-sent', {
+        sender_id: senderId,
+        recipient_id: dmWith,
         dmWith,
         content: filteredContent,
-        timestamp: new Date()
-      });
+        created_at: data.created_at || new Date().toISOString(),
+        timestamp: data.created_at || new Date().toISOString()
+      };
+      io.to(`user-${dmWith}`).emit('new-dm', payload);
+      io.to(`user-${senderId}`).emit('dm-sent', payload);
       // ── Layer 3: AI async eval ──
       evaluateMessageAsync(data.id, filteredContent, 'dm');
     }

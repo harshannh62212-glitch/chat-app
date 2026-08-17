@@ -151,7 +151,7 @@ router.post('/server', authMiddleware, async (req, res) => {
 // Post direct message
 router.post('/dm', authMiddleware, async (req, res) => {
   try {
-    const { recipientId, content } = req.body;
+    const { recipientId, content, tempId } = req.body;
     const senderId = req.userId;
 
     if (!recipientId || !content || content.trim().length < 2) {
@@ -170,6 +170,7 @@ router.post('/dm', authMiddleware, async (req, res) => {
     if (io) {
       const payload = {
         id: msg.id,
+        tempId: tempId || null,
         senderId: msg.sender_id,
         sender_id: msg.sender_id,
         recipient_id: msg.recipient_id,
@@ -180,10 +181,9 @@ router.post('/dm', authMiddleware, async (req, res) => {
       };
       io.to(`user-${recipientId}`).emit('new-dm', payload);
       io.to(`user-${senderId}`).emit('dm-sent', payload);
-      io.emit('new-dm-global', payload);
     }
 
-    res.status(201).json(msg);
+    res.status(201).json({ ...msg, tempId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to send direct message' });

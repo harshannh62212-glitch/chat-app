@@ -36,7 +36,7 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
   const dmUserId = dmWith.id || dmWith.other_user_id;
   const dmUsername = dmWith.username;
 
-  // 1. Fetch DMs helper
+  // 1. Fetch DMs helper with zero duplicate ghosting
   const fetchDMs = async () => {
     try {
       const res = await axios.get(`/api/messages/dm/${dmUserId}`);
@@ -49,11 +49,13 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
           content: m.content,
           created_at: m.created_at
         }));
+
         setMessages(prev => {
-          // Reconcile optimistic messages
-          const optimisticMsgs = prev.filter(m => m.isOptimistic);
-          const mappedIds = new Set(mapped.map(m => m.id));
-          const stillPending = optimisticMsgs.filter(opt => !mapped.some(m => m.content === opt.content));
+          // Keep only optimistic messages that haven't landed in the DB yet
+          const stillPending = prev.filter(p => 
+            p.isOptimistic && 
+            !mapped.some(m => m.id === p.id || (m.content === p.content && m.sender_id === p.sender_id))
+          );
           return [...mapped, ...stillPending];
         });
       }
@@ -64,43 +66,67 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
     }
   };
 
-  // 2. Real-Time Socket.IO Streaming
+  // 2. Real-Time Socket.IO Streaming with precise targeted handlers
   useEffect(() => {
     if (currentUser?.id && dmUserId) {
       socket.emit('user-joined', currentUser.id, dmUserId);
     }
 
+    // Handle incoming DM from partner
     const handleNewDM = (data) => {
-      if (data.senderId === dmUserId || data.sender_id === dmUserId || data.dmWith === dmUserId) {
+      const sender = data.sender_id || data.senderId;
+      const recipient = data.recipient_id || data.recipientId;
+      
+      // Strict filter: ONLY messages FROM the partner TO current user
+      if (sender === dmUserId) {
         const newMsg = {
           id: data.id || `dm_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-          senderId: data.senderId || data.sender_id,
-          sender_id: data.senderId || data.sender_id,
-          recipient_id: data.recipient_id,
+          senderId: sender,
+          sender_id: sender,
+          recipient_id: recipient,
           content: data.content,
           created_at: data.created_at || data.timestamp || new Date().toISOString()
         };
+
         setMessages(prev => {
           if (prev.some(m => m.id === newMsg.id)) return prev;
-          if (prev.some(m => m.content === newMsg.content && m.isOptimistic)) {
-            return prev.map(m => (m.content === newMsg.content && m.isOptimistic) ? { ...newMsg, isOptimistic: false } : m);
-          }
           return [...prev, newMsg];
         });
       }
     };
 
+    // Handle confirmation of sent message
     const handleDMSent = (data) => {
-      if (data.dmWith === dmUserId || data.recipient_id === dmUserId) {
+      const recipient = data.recipient_id || data.dmWith;
+      const sender = data.sender_id || data.senderId;
+
+      if ((sender === currentUser.id || !sender) && (recipient === dmUserId)) {
         setMessages(prev => {
-          if (prev.some(m => m.isOptimistic && m.content === data.content)) {
-            return prev.map(m => (m.isOptimistic && m.content === data.content) ? { ...m, isOptimistic: false, id: data.id || m.id } : m);
+          // Match and confirm optimistic message
+          const targetTempId = data.tempId || data.id;
+          const matchIndex = prev.findIndex(m => 
+            (m.tempId && (m.tempId === targetTempId || m.id === targetTempId)) ||
+            (m.isOptimistic && m.content === data.content)
+          );
+
+          if (matchIndex !== -1) {
+            const copy = [...prev];
+            copy[matchIndex] = {
+              ...copy[matchIndex],
+              id: data.id || copy[matchIndex].id,
+              tempId: undefined,
+              isOptimistic: false,
+              created_at: data.created_at || copy[matchIndex].created_at
+            };
+            return copy;
           }
+
           if (prev.some(m => m.id === data.id)) return prev;
           return [...prev, {
             id: data.id || `dm_${Date.now()}`,
             senderId: currentUser.id,
             sender_id: currentUser.id,
+            recipient_id: dmUserId,
             content: data.content,
             created_at: data.created_at || data.timestamp || new Date().toISOString()
           }];
@@ -115,17 +141,15 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
     };
 
     socket.on('new-dm', handleNewDM);
-    socket.on('new-dm-global', handleNewDM);
     socket.on('dm-sent', handleDMSent);
     socket.on('message-deleted', handleMessageDeleted);
 
-    // Initial load + silent 2-second background sync
+    // Initial load + silent 3-second background sync
     fetchDMs();
-    const syncInterval = setInterval(fetchDMs, 2000);
+    const syncInterval = setInterval(fetchDMs, 3000);
 
     return () => {
       socket.off('new-dm', handleNewDM);
-      socket.off('new-dm-global', handleNewDM);
       socket.off('dm-sent', handleDMSent);
       socket.off('message-deleted', handleMessageDeleted);
       clearInterval(syncInterval);
@@ -226,10 +250,11 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
 
   const sendDM = async (contentStr) => {
     const filteredContent = filterContent(contentStr);
-    const tempId = `opt_dm_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+    const tempId = `opt_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
     const optimisticMsg = {
       id: tempId,
+      tempId: tempId,
       senderId: currentUser.id,
       sender_id: currentUser.id,
       recipient_id: dmUserId,
@@ -238,28 +263,32 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
       isOptimistic: true
     };
 
-    // 1. INSTANT (0ms) local state update
+    // 1. Instant 0ms local state insertion
     setMessages(prev => [...prev, optimisticMsg]);
 
-    // 2. INSTANT Socket.IO broadcast to recipient
+    // 2. Instant Socket.IO emission to recipient
     socket.emit('send-message', {
       id: tempId,
+      tempId: tempId,
       senderId: currentUser.id,
       dmWith: dmUserId,
       content: filteredContent
     });
 
-    // 3. Background DB persist
+    // 3. Background DB persist with tempId
     try {
       const res = await axios.post('/api/messages/dm', {
         recipientId: dmUserId,
-        content: filteredContent
+        content: filteredContent,
+        tempId: tempId
       });
       const newMsg = res.data;
-      setMessages(prev => prev.map(m => m.id === tempId ? {
+      setMessages(prev => prev.map(m => (m.tempId === tempId || m.id === tempId) ? {
         ...m,
         id: newMsg.id,
-        isOptimistic: false
+        tempId: undefined,
+        isOptimistic: false,
+        created_at: newMsg.created_at || m.created_at
       } : m));
     } catch (err) {
       console.error('Failed to persist direct message:', err);
