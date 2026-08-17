@@ -1,8 +1,22 @@
 const express = require('express');
 const { query } = require('../db/database');
 const { authMiddleware } = require('../middleware/auth');
+const batchWriter = require('../utils/batchWriter');
+const ramCache = require('../utils/ramCache');
 
 const router = express.Router();
+
+// Helper to get cached user profile
+async function getCachedUserProfile(userId) {
+  const cacheKey = `user_prof_${userId}`;
+  const cached = ramCache.get(cacheKey);
+  if (cached) return cached;
+
+  const res = await query('SELECT username, avatar_url FROM users WHERE id = $1', [userId]);
+  const user = res.rows[0] || { username: 'Unknown', avatar_url: '' };
+  ramCache.set(cacheKey, user, 300000); // 5 min TTL
+  return user;
+}
 
 // Get messages in a chatroom
 router.get('/chatroom/:chatroomId', authMiddleware, async (req, res) => {
@@ -100,7 +114,7 @@ router.get('/dm-conversations/list', authMiddleware, async (req, res) => {
   }
 });
 
-// Post message in chatroom
+// Post message in chatroom with ultra-fast batch database writer
 router.post('/server', authMiddleware, async (req, res) => {
   try {
     const { chatroomId, content } = req.body;
@@ -110,27 +124,19 @@ router.post('/server', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Message must be at least 2 characters long' });
     }
 
-    const insertResult = await query(
-      `INSERT INTO server_messages (sender_id, chatroom_id, content) 
-       VALUES ($1, $2, $3) 
-       RETURNING id, sender_id, chatroom_id, content, created_at`,
-      [senderId, chatroomId, content]
-    );
-
-    const message = insertResult.rows[0];
-
-    const userResult = await query('SELECT username, avatar_url FROM users WHERE id = $1', [senderId]);
-    const user = userResult.rows[0];
+    // High throughput batch write to database
+    const message = await batchWriter.enqueue(senderId, chatroomId, content);
+    const user = await getCachedUserProfile(senderId);
 
     const enriched = {
       ...message,
-      username: user ? user.username : 'Unknown',
-      avatar_url: user ? user.avatar_url : ''
+      username: user.username,
+      avatar_url: user.avatar_url
     };
 
     res.status(201).json(enriched);
   } catch (err) {
-    console.error(err);
+    console.error('[MESSAGES API ERROR]', err);
     res.status(500).json({ error: 'Failed to send message' });
   }
 });
