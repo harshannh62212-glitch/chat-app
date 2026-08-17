@@ -186,6 +186,9 @@ function App() {
       let homeTunnel = '';
       try {
         let supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aebntdjjniirnwthtwlx.supabase.co';
+        if (!supabaseUrl || !supabaseUrl.includes('supabase.co')) {
+          supabaseUrl = 'https://aebntdjjniirnwthtwlx.supabase.co';
+        }
         const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
         const res = await fetch(`${supabaseUrl}/rest/v1/system_config?key=eq.active_tunnel_url`, {
           headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}` }
@@ -256,12 +259,23 @@ function App() {
       axios.get('/api/auth/me')
         .then((res) => {
           setCurrentUser(res.data);
+          localStorage.setItem('chat_user', JSON.stringify(res.data));
         })
-        .catch(() => {
-          localStorage.removeItem('chat_token');
-          localStorage.removeItem('chat_user');
-          delete axios.defaults.headers.common['Authorization'];
-          setCurrentUser(null);
+        .catch((err) => {
+          if (err.response && err.response.status === 401) {
+            localStorage.removeItem('chat_token');
+            localStorage.removeItem('chat_user');
+            delete axios.defaults.headers.common['Authorization'];
+            setCurrentUser(null);
+          } else {
+            // On temporary connection glitch, preserve cached user so session is not lost
+            const cachedUser = localStorage.getItem('chat_user');
+            if (cachedUser) {
+              try {
+                setCurrentUser(JSON.parse(cachedUser));
+              } catch(e) {}
+            }
+          }
         })
         .finally(() => {
           setLoadingApp(false);

@@ -6,15 +6,15 @@
     },
     {
       "source": "/api/(.*)",
-      "destination": "https://character-tension-bangkok-nomination.trycloudflare.com/api/$1"
+      "destination": "https://garlic-survey-closed-volunteer.trycloudflare.com/api/$1"
     },
     {
       "source": "/socket.io/(.*)",
-      "destination": "https://character-tension-bangkok-nomination.trycloudflare.com/socket.io/$1"
+      "destination": "https://garlic-survey-closed-volunteer.trycloudflare.com/socket.io/$1"
     },
     {
       "source": "/ping",
-      "destination": "https://character-tension-bangkok-nomination.trycloudflare.com/ping"
+      "destination": "https://garlic-survey-closed-volunteer.trycloudflare.com/ping"
     },
     {
       "source": "/(.*)",

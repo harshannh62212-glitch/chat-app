@@ -105,18 +105,21 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
       {/* 1. Leftmost Server Rail (Narrow Icon Column) */}
       <div className="discord-server-rail">
 
-        <div className="brand-logo-container">
+        <div 
+          className="brand-logo-container" 
+          onClick={() => { setActiveTab('servers'); setSelectedServer(null); setSelectedDM(null); setViewingFriends(false); }}
+          title="Main Lobby"
+          style={{ cursor: 'pointer' }}
+        >
           <Logo width={36} height={36} />
         </div>
 
         <div className="rail-separator"></div>
 
-
-
         <div 
           className={`rail-icon home-icon ${activeTab === 'dms' && !selectedServer ? 'active' : ''}`}
-          onClick={() => { setActiveTab('dms'); setSelectedServer(null); setSelectedDM(null); setViewingFriends(false); }}
-          title="Direct Messages"
+          onClick={() => { setActiveTab('dms'); setSelectedServer(null); setSelectedDM(null); setViewingFriends(true); }}
+          title="Direct Messages & Friends"
         >
           💬
         </div>
