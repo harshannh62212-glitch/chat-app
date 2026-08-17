@@ -24,53 +24,46 @@ const socket = io(getActiveSocketUrl(), {
   }
 });
 
-// Universal bulletproof message updater that guarantees ZERO duplicate bubbles
+// Universal bulletproof message updater that guarantees zero duplicates
 const upsertMessage = (prev, newMsg) => {
   if (!newMsg || !newMsg.content) return prev;
 
+  const newId = newMsg.id ? String(newMsg.id) : null;
+  const newTempId = newMsg.tempId ? String(newMsg.tempId) : null;
   const newSenderId = newMsg.sender_id || newMsg.senderId;
 
-  // 1. Match by exact permanent ID
-  const matchById = prev.findIndex(m => m.id && newMsg.id && String(m.id) === String(newMsg.id));
-  if (matchById !== -1) {
-    const updated = [...prev];
-    updated[matchById] = { ...updated[matchById], ...newMsg, isOptimistic: false };
-    return updated;
-  }
-
-  // 2. Match by temporary client nonce / tempId
-  if (newMsg.tempId) {
-    const matchByTemp = prev.findIndex(m => (m.tempId && m.tempId === newMsg.tempId) || (m.id && m.id === newMsg.tempId));
-    if (matchByTemp !== -1) {
-      const updated = [...prev];
-      updated[matchByTemp] = { ...updated[matchByTemp], ...newMsg, tempId: undefined, isOptimistic: false };
-      return updated;
+  // 1. Exact match by permanent database ID
+  if (newId) {
+    const idx = prev.findIndex(m => m.id && String(m.id) === newId);
+    if (idx !== -1) {
+      const copy = [...prev];
+      copy[idx] = { ...copy[idx], ...newMsg, isOptimistic: false };
+      return copy;
     }
   }
 
-  // 3. Match pending optimistic message by same author + same content
-  const matchOptimistic = prev.findIndex(m => 
-    m.isOptimistic && 
-    (m.sender_id === newSenderId || m.senderId === newSenderId) && 
-    m.content.trim() === newMsg.content.trim()
-  );
-  if (matchOptimistic !== -1) {
-    const updated = [...prev];
-    updated[matchOptimistic] = { ...updated[matchOptimistic], ...newMsg, tempId: undefined, isOptimistic: false };
-    return updated;
+  // 2. Match by temporary optimistic tempId
+  if (newTempId) {
+    const idx = prev.findIndex(m => (m.tempId && String(m.tempId) === newTempId) || (m.id && String(m.id) === newTempId));
+    if (idx !== -1) {
+      const copy = [...prev];
+      copy[idx] = { ...copy[idx], ...newMsg, tempId: undefined, isOptimistic: false };
+      return copy;
+    }
   }
 
-  // 4. Match identical content from the same author sent within 4 seconds (prevents duplicate echoes)
-  const isDuplicate = prev.some(m => {
-    const mSenderId = m.sender_id || m.senderId;
-    if (mSenderId !== newSenderId) return false;
-    if (m.content.trim() !== newMsg.content.trim()) return false;
-    const timeDiff = Math.abs(new Date(m.created_at || Date.now()).getTime() - new Date(newMsg.created_at || Date.now()).getTime());
-    return timeDiff < 4000;
-  });
-
-  if (isDuplicate) {
-    return prev;
+  // 3. Match pending optimistic message with matching author & content
+  if (!newMsg.isOptimistic) {
+    const optIdx = prev.findIndex(m => 
+      m.isOptimistic && 
+      (m.sender_id === newSenderId || m.senderId === newSenderId) && 
+      m.content.trim() === newMsg.content.trim()
+    );
+    if (optIdx !== -1) {
+      const copy = [...prev];
+      copy[optIdx] = { ...copy[optIdx], ...newMsg, tempId: undefined, isOptimistic: false };
+      return copy;
+    }
   }
 
   return [...prev, newMsg];
@@ -103,7 +96,7 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
         }));
 
         setMessages(prev => {
-          // Keep only optimistic messages that haven't landed in the DB yet
+          // Keep only optimistic in-flight messages that have not yet landed in the DB
           const stillPending = prev.filter(p => 
             p.isOptimistic && 
             !mapped.some(m => String(m.id) === String(p.id) || (m.content.trim() === p.content.trim() && (m.sender_id === p.sender_id || m.sender_id === p.senderId)))
@@ -129,10 +122,10 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
       const sender = data.sender_id || data.senderId;
       const recipient = data.recipient_id || data.recipientId;
       
-      // Strict filter: ONLY messages FROM the partner TO current user
+      // Strict filter: ONLY incoming messages FROM the partner
       if (sender === dmUserId) {
         const newMsg = {
-          id: data.id || `dm_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+          id: data.id,
           senderId: sender,
           sender_id: sender,
           recipient_id: recipient,
@@ -144,7 +137,7 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
       }
     };
 
-    // Handle confirmation of sent message
+    // Handle confirmation of sent message from another tab or client
     const handleDMSent = (data) => {
       const recipient = data.recipient_id || data.dmWith;
       const sender = data.sender_id || data.senderId;
@@ -296,7 +289,7 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
     // 1. Instant 0ms local state insertion
     setMessages(prev => upsertMessage(prev, optimisticMsg));
 
-    // 2. Background DB persist with tempId (routes/messages.js will emit socket event on success)
+    // 2. Authoritative database persistence & socket broadcast via API
     try {
       const res = await axios.post('/api/messages/dm', {
         recipientId: dmUserId,

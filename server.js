@@ -1248,21 +1248,11 @@ io.on('connection', (socket) => {
         handleLocalBotResponse(serverId, chatroom_id, filteredContent, senderId);
       }
     } else if (dmWith) {
-      const payload = {
-        id: data.id || `dm_${Date.now()}`,
-        tempId: data.tempId || data.id || null,
-        senderId,
-        sender_id: senderId,
-        recipient_id: dmWith,
-        dmWith,
-        content: filteredContent,
-        created_at: data.created_at || new Date().toISOString(),
-        timestamp: data.created_at || new Date().toISOString()
-      };
-      io.to(`user-${dmWith}`).emit('new-dm', payload);
-      io.to(`user-${senderId}`).emit('dm-sent', payload);
+      // DMs are authoritatively persisted and broadcast by /api/messages/dm with the real database ID
       // ── Layer 3: AI async eval ──
-      evaluateMessageAsync(data.id, filteredContent, 'dm');
+      if (data.id) {
+        evaluateMessageAsync(data.id, filteredContent, 'dm');
+      }
     }
   });
 
