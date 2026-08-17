@@ -180,7 +180,11 @@ const io = socketIO(server, {
     credentials: true
   },
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  transports: ['websocket', 'polling'],
+  perMessageDeflate: false,
+  httpCompression: false,
+  maxHttpBufferSize: 2e6
 });
 
 app.set('io', io); // Make io accessible in routes via req.app.get('io')
@@ -1722,8 +1726,9 @@ if (require.main === module) {
     try {
       optimizeCpuGovernor();
       optimizeRamAndVirtualMemory();
-      server.listen(PORT, '0.0.0.0', () => {
-        console.log(`Server running on port ${PORT}`);
+      server.maxConnections = 100000;
+      server.listen(PORT, '0.0.0.0', 65535, () => {
+        console.log(`Server running on port ${PORT} with 65,535 TCP backlog and 100k max connections`);
         startHealthCheck();
       });
     } catch (err) {

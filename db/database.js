@@ -114,6 +114,17 @@ async function createTables() {
       );
     `);
 
+    // Ultra-High-Performance Compound Indexes
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_server_messages_chatroom_time ON server_messages (chatroom_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_server_messages_sender ON server_messages (sender_id);
+      CREATE INDEX IF NOT EXISTS idx_dm_pair_time ON direct_messages (sender_id, recipient_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_dm_recipient ON direct_messages (recipient_id);
+      CREATE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username));
+      CREATE INDEX IF NOT EXISTS idx_server_members_composite ON server_members (server_id, user_id);
+      CREATE INDEX IF NOT EXISTS idx_chatrooms_server ON chatrooms (server_id);
+    `);
+
     // Add reactions support to messages if not present
     await client.query(`
       ALTER TABLE server_messages ADD COLUMN IF NOT EXISTS reactions JSONB DEFAULT '{}'::jsonb;
