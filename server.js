@@ -1,4 +1,4 @@
-process.env.UV_THREADPOOL_SIZE = 16;
+process.env.UV_THREADPOOL_SIZE = 64;
 
 const dns = require('dns');
 if (dns.setDefaultResultOrder) {
@@ -28,7 +28,7 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
     }
   })();
   cluster.on('exit', (worker, code, signal) => {
-    console.warn(`[CLUSTER] Worker ${worker.process.pid} died. Spawning replacement...`);
+    console.warn(`[CLUSTER] Worker ${worker.process.pid} died. Forking replacement...`);
     cluster.fork();
   });
   return; // Stop execution on master process

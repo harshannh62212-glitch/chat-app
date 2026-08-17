@@ -6,11 +6,11 @@ const connectionString = process.env.DATABASE_URL || defaultSupabaseUrl;
 const isVercel = Boolean(process.env.VERCEL);
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  min: 1,
-  max: 10,
-  idleTimeoutMillis: 10000,
-  connectionTimeoutMillis: 8000,
+  connectionString: connectionString,
+  min: 4,
+  max: parseInt(process.env.DB_POOL_MAX || '60', 10),
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
   ssl: { rejectUnauthorized: false }
 });
 

@@ -97,8 +97,8 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
         return;
       }
       const player = new window.YT.Player('youtube-player', {
-        height: '200',
-        width: '200',
+        height: '100%',
+        width: '100%',
         playerVars: {
           autoplay: 0,
           controls: 0,
@@ -107,6 +107,7 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
           playsinline: 1,
           rel: 0,
           enablejsapi: 1,
+          iv_load_policy: 3,
           origin: window.location.origin
         },
         events: {
@@ -126,7 +127,6 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
             }
           },
           onStateChange: (event) => {
-            console.log('[SPOTIFY YT] State Change:', event.data);
             if (event.data === window.YT.PlayerState.PLAYING) {
               setIsPlaying(true);
               setLoadingTrack(false);
@@ -142,10 +142,8 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
             }
           },
           onError: (err) => {
-            console.warn('[SPOTIFY YT] Player error:', err);
+            console.warn('[SPOTIFY YT] Player notice / embedding event:', err.data || err);
             setLoadingTrack(false);
-            // Advance to next song on unplayable / embedding restricted tracks
-            handleNext();
           }
         }
       });
@@ -573,9 +571,27 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
 
   return (
     <div className="spotify-layout">
-      {/* Offscreen YouTube player container for uninterrupted background audio */}
-      <div style={{ position: 'fixed', bottom: '-9999px', left: '-9999px', width: '200px', height: '200px', opacity: 0.01, pointerEvents: 'none', zIndex: -1 }}>
-        <div id="youtube-player"></div>
+      {/* Mini Video / Stream Screen - kept inside viewport to prevent browser audio suspension */}
+      <div 
+        style={{ 
+          position: 'fixed', 
+          bottom: '96px', 
+          right: '16px', 
+          width: '180px', 
+          height: '102px', 
+          borderRadius: '10px', 
+          overflow: 'hidden', 
+          zIndex: 85, 
+          background: '#000',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.7)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          pointerEvents: 'none',
+          opacity: currentTrack ? 1 : 0,
+          transform: currentTrack ? 'translateY(0)' : 'translateY(20px)',
+          transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}
+      >
+        <div id="youtube-player" style={{ width: '100%', height: '100%' }}></div>
       </div>
 
       {/* Sidebar Panel */}
