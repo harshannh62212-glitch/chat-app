@@ -126,38 +126,38 @@ function LandingPage({ onEnterPortal }) {
         <div className="features-grid">
           <div className="feature-card" onClick={handleFeatureClick} style={{ cursor: 'pointer' }}>
             <div className="feature-icon-wrapper">💬</div>
-            <h4>Real-time Channels</h4>
-            <p>Create server rooms instantly for focused discussions, developer logs, and project check-ins with sub-second sync.</p>
-          </div>
-
-          <div className="feature-card" onClick={handleFeatureClick} style={{ cursor: 'pointer' }}>
-            <div className="feature-icon-wrapper">🔒</div>
-            <h4>Secure Direct Messages</h4>
-            <p>Directly chat with team members in isolated private sessions, featuring instant status alerts and active indicators.</p>
+            <h4>Real-time Chat & Servers</h4>
+            <p>Create Discord-style community servers, voice & video channels, rich markdown DMs, and real-time typing indicators.</p>
           </div>
 
           <div className="feature-card" onClick={handleFeatureClick} style={{ cursor: 'pointer' }}>
             <div className="feature-icon-wrapper">🎵</div>
-            <h4>Integrated Music Player</h4>
-            <p>Seamlessly stream songs, search library catalogs, create custom playlists, and play music directly from the sidebar.</p>
+            <h4>WiredMusic Streaming</h4>
+            <p>Stream millions of songs in high quality, create custom playlists, search global charts, and listen uninterrupted in the background.</p>
           </div>
 
           <div className="feature-card" onClick={handleFeatureClick} style={{ cursor: 'pointer' }}>
-            <div className="feature-icon-wrapper">✨</div>
-            <h4>Cosmic Theme Customization</h4>
-            <p>Personalize your experience by switching cosmic themes, adapting font selections, adjusting sizes, and spacing details.</p>
+            <div className="feature-icon-wrapper">▶️</div>
+            <h4>WiredTube Video Portal</h4>
+            <p>Watch trending videos, music videos, podcasts, and gaming streams with distraction-free cinema mode and instant URL playback.</p>
+          </div>
+
+          <div className="feature-card" onClick={handleFeatureClick} style={{ cursor: 'pointer' }}>
+            <div className="feature-icon-wrapper">🎮</div>
+            <h4>Wired Arcade (150+ Games)</h4>
+            <p>Play 150+ full-screen self-hosted web games including 1v1.lol, FNAF, Subway Surfers, 2048, and 10 retro canvas arcade classics.</p>
           </div>
 
           <div className="feature-card" onClick={handleFeatureClick} style={{ cursor: 'pointer' }}>
             <div className="feature-icon-wrapper">🎬</div>
-            <h4>GIF Panel Integration</h4>
-            <p>Search and send trending animations instantly with our native Giphy system, bringing chats to life in real-time.</p>
+            <h4>GIF & Reaction Suite</h4>
+            <p>Search and send trending animations instantly with our native Giphy integration, emoji reactions, and message threads.</p>
           </div>
 
           <div className="feature-card" onClick={handleFeatureClick} style={{ cursor: 'pointer' }}>
-            <div className="feature-icon-wrapper">⚡</div>
-            <h4>Automated Word Filtering</h4>
-            <p>Maintain healthy workspaces by leveraging our dynamic content system to censor unwanted terms immediately.</p>
+            <div className="feature-icon-wrapper">🛡️</div>
+            <h4>AI-Powered Moderation</h4>
+            <p>Keep communities safe with automated content evaluation, active word filtering, spam detection, and instant server controls.</p>
           </div>
         </div>
       </section>
