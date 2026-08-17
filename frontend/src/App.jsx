@@ -22,6 +22,27 @@ axios.defaults.baseURL = savedProxyTarget || (import.meta.env.PROD ? '' : 'http:
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
 axios.defaults.timeout = 8000;
 
+// Specialized Task-Based Multi-Tier Router
+const renderCloudBase = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
+axios.interceptors.request.use((config) => {
+  const url = config.url || '';
+  const homeTarget = localStorage.getItem('active_home_target');
+
+  // 1. Heavy Scrapers & Media Proxies -> Dedicated to Render Cloud
+  if (url.includes('/api/spotify/search-yt') || url.includes('/api/youtube/') || url.includes('/api/games/')) {
+    if (renderCloudBase && !config.baseURL?.includes('localhost')) {
+      config.baseURL = renderCloudBase;
+    }
+  } 
+  // 2. Ultra-Fast Real-Time Messaging & Cache -> Dedicated to Latitude 5290 Home Node
+  else if (url.includes('/api/messages/') || url.includes('/api/servers') || url.includes('/api/channels')) {
+    if (homeTarget) {
+      config.baseURL = homeTarget;
+    }
+  }
+  return config;
+});
+
 // Active Dynamic Load Balancer & Failover Interceptor
 let consecutiveSluggishCount = 0;
 axios.interceptors.response.use(
@@ -183,6 +204,7 @@ function App() {
         console.log('[LOAD BALANCER] Primary Node Active: Connected to Home Server:', homeTunnel);
         axios.defaults.baseURL = homeTunnel;
         localStorage.setItem('active_backend_target', homeTunnel);
+        localStorage.setItem('active_home_target', homeTunnel);
         return;
       }
 
