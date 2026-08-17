@@ -20,6 +20,40 @@ if (localStorage.getItem('custom_proxy_target') === fallbackURL) {
 const savedProxyTarget = localStorage.getItem('custom_proxy_target');
 axios.defaults.baseURL = savedProxyTarget || (import.meta.env.PROD ? '' : 'http://localhost:8000');
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
+axios.defaults.timeout = 8000;
+
+// Active Dynamic Load Balancer & Failover Interceptor
+let consecutiveSluggishCount = 0;
+axios.interceptors.response.use(
+  (response) => {
+    consecutiveSluggishCount = 0;
+    return response;
+  },
+  async (error) => {
+    const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+    const isNetworkOrServerDown = !error.response || error.response?.status >= 502;
+
+    if (isTimeout || isNetworkOrServerDown) {
+      consecutiveSluggishCount++;
+      if (consecutiveSluggishCount >= 2) {
+        const renderCloudUrl = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
+        const currentTarget = axios.defaults.baseURL;
+
+        if (currentTarget && currentTarget.includes('trycloudflare.com')) {
+          console.warn('[LOAD BALANCER DYNAMIC FAILOVER] Home Server saturated/sluggish. Auto-failing over to Render 24/7 Cloud:', renderCloudUrl);
+          axios.defaults.baseURL = renderCloudUrl;
+          localStorage.setItem('active_backend_target', renderCloudUrl);
+        } else if (currentTarget === renderCloudUrl) {
+          console.warn('[LOAD BALANCER DYNAMIC FAILOVER] Render Cloud saturated. Auto-failing over to Vercel Serverless Edge Cloud.');
+          axios.defaults.baseURL = '';
+          localStorage.setItem('active_backend_target', window.location.origin);
+        }
+        consecutiveSluggishCount = 0;
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 import ThermalsPage from './pages/ThermalsPage';
 import AdminPanel from './components/AdminPanel';
