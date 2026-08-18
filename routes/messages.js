@@ -26,7 +26,16 @@ router.get('/chatroom/:chatroomId', authMiddleware, async (req, res) => {
     const offset = parseInt(req.query.offset) || 0;
 
     const result = await query(
-      `SELECT sm.id, sm.content, sm.created_at, u.id as sender_id, u.username, u.avatar_url
+      `SELECT sm.id, sm.content, sm.created_at, sm.reactions, u.id as sender_id, u.username, u.avatar_url,
+        (
+          SELECT json_build_object('name', sr.name, 'color', sr.color)
+          FROM server_member_roles smr
+          JOIN server_roles sr ON smr.role_id = sr.id
+          JOIN chatrooms c ON c.id = sm.chatroom_id
+          WHERE smr.server_id = c.server_id AND smr.user_id = u.id
+          ORDER BY sr.position DESC, sr.id ASC
+          LIMIT 1
+        ) as sender_role
        FROM server_messages sm
        INNER JOIN users u ON sm.sender_id = u.id
        WHERE sm.chatroom_id = $1
@@ -128,12 +137,26 @@ router.post('/server', authMiddleware, async (req, res) => {
     const message = await batchWriter.enqueue(senderId, chatroomId, content);
     const user = await getCachedUserProfile(senderId);
 
+    // Look up sender's top role in this server
+    const roleRes = await query(
+      `SELECT sr.name, sr.color
+       FROM server_member_roles smr
+       JOIN server_roles sr ON smr.role_id = sr.id
+       JOIN chatrooms c ON c.id = $1
+       WHERE smr.server_id = c.server_id AND smr.user_id = $2
+       ORDER BY sr.position DESC, sr.id ASC
+       LIMIT 1`,
+      [chatroomId, senderId]
+    );
+    const senderRole = roleRes.rows[0] || null;
+
     const enriched = {
       ...message,
       username: user.username,
       avatar_url: user.avatar_url,
       serverId: message.server_id,
-      chatroom_id: chatroomId
+      chatroom_id: chatroomId,
+      sender_role: senderRole
     };
 
     const io = req.app.get('io');

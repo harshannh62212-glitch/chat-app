@@ -5,6 +5,9 @@ import { filterContent } from '../utils/contentFilter';
 import { checkRateLimit } from '../utils/rateLimiter';
 import GiphyPanel from './GiphyPanel';
 import ReportButton from './ReportButton';
+import ServerSettingsModal from './ServerSettingsModal';
+import MemberProfileCard from './MemberProfileCard';
+import '../styles/ServerSettings.css';
 
 
 const getActiveSocketUrl = () => {
@@ -92,10 +95,25 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   const [messages, setMessages] = useState([]);
   const [messageInput, setMessageInput] = useState('');
   const [members, setMembers] = useState([]);
+  const [serverRoles, setServerRoles] = useState([]);
+  const [showServerSettingsModal, setShowServerSettingsModal] = useState(false);
+  const [activeMemberPopover, setActiveMemberPopover] = useState(null);
   const [showMembers, setShowMembers] = useState(true);
   const [showGiphy, setShowGiphy] = useState(false);
   const [showTunnelWarning, setShowTunnelWarning] = useState(false);
   const [currentSocketUrl, setCurrentSocketUrl] = useState(getActiveSocketUrl());
+
+  // Check if currentUser can manage roles on this server
+  const isServerOwner = server.owner_id === currentUser.id;
+  const isGlobalAdmin = currentUser.is_admin || currentUser.username === 'Nxghtmare3621';
+  const hasManageRolesPerm = Array.isArray(members) && members.some(m => {
+    if (m.id !== currentUser.id) return false;
+    return Array.isArray(m.roles) && m.roles.some(r => {
+      const p = r.permissions || {};
+      return p.administrator === true || p.manage_roles === true;
+    });
+  });
+  const canManageRoles = (isServerOwner || isGlobalAdmin || hasManageRolesPerm) && server.id !== 1;
 
   useEffect(() => {
     const handleConnectError = (err) => {
@@ -525,21 +543,118 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     fetchChatrooms();
   }, [server.id]);
 
-  // Fetch members of the server
+  // Fetch members and roles of the server
+  const fetchMembers = async () => {
+    try {
+      const res = await axios.get(`/api/servers/${server.id}/members`);
+      if (res.data) {
+        setMembers(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch members:', err);
+    }
+  };
+
+  const fetchServerRoles = async () => {
+    if (server.id === 1) {
+      setServerRoles([]);
+      return;
+    }
+    try {
+      const res = await axios.get(`/api/servers/${server.id}/roles`);
+      if (res.data) {
+        setServerRoles(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch server roles:', err);
+    }
+  };
+
   useEffect(() => {
-    const fetchMembers = async () => {
-      try {
-        const res = await axios.get(`/api/servers/${server.id}/members`);
-        if (res.data) {
-          setMembers(res.data);
-        }
-      } catch (err) {
-        console.error('Failed to fetch members:', err);
+    fetchMembers();
+    fetchServerRoles();
+  }, [server.id]);
+
+  // Real-time listener for role and member changes
+  useEffect(() => {
+    const handleRolesUpdated = (data) => {
+      if (!data || data.serverId === server.id) {
+        fetchServerRoles();
+        fetchMembers();
       }
     };
 
-    fetchMembers();
+    const handleMemberRolesUpdated = (data) => {
+      if (!data || data.serverId === server.id) {
+        fetchMembers();
+      }
+    };
+
+    socket.on('server-roles-updated', handleRolesUpdated);
+    socket.on('member-roles-updated', handleMemberRolesUpdated);
+
+    return () => {
+      socket.off('server-roles-updated', handleRolesUpdated);
+      socket.off('member-roles-updated', handleMemberRolesUpdated);
+    };
   }, [server.id]);
+
+  // Helper to get top role of a member
+  const getMemberTopRole = (member) => {
+    if (!Array.isArray(member.roles) || member.roles.length === 0) return null;
+    return member.roles[0];
+  };
+
+  // Organize members into hoisted role groups + online members
+  const getGroupedMembers = () => {
+    const cleanMembers = members.filter(m => m.id !== 'bot-id');
+    const hoistedRoles = serverRoles.filter(r => r.hoist).sort((a, b) => b.position - a.position);
+    
+    const groups = [];
+    const assignedMemberIds = new Set();
+
+    hoistedRoles.forEach(role => {
+      const roleMembers = cleanMembers.filter(m => {
+        if (assignedMemberIds.has(m.id)) return false;
+        const hasRole = Array.isArray(m.roles) && m.roles.some(r => r.id === role.id);
+        return hasRole;
+      });
+
+      if (roleMembers.length > 0) {
+        roleMembers.forEach(m => assignedMemberIds.add(m.id));
+        groups.push({
+          id: `role-${role.id}`,
+          title: `${role.name.toUpperCase()} — ${roleMembers.length}`,
+          color: role.color,
+          members: roleMembers
+        });
+      }
+    });
+
+    const remaining = cleanMembers.filter(m => !assignedMemberIds.has(m.id));
+    if (remaining.length > 0) {
+      groups.push({
+        id: 'online-members',
+        title: `ONLINE — ${remaining.length}`,
+        color: '#949ba4',
+        members: remaining
+      });
+    }
+
+    return groups;
+  };
+
+  const handleOpenMemberCard = (member, e) => {
+    if (!member) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const top = Math.min(rect.top, window.innerHeight - 340);
+    const left = Math.min(rect.right + 12, window.innerWidth - 320);
+
+    setActiveMemberPopover({
+      member,
+      position: { top: `${top}px`, left: `${left}px`, isFixedCenter: false }
+    });
+  };
 
   // Fetch & listen to messages in the active chatroom
   useEffect(() => {
@@ -952,15 +1067,11 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
         </div>
 
         <div className="chat-main">
+          {/* Main Stage Grid (Discord Video Style) */}
           {inVoiceRoom && (
-            <div className="discord-voice-stage">
-              <div className="discord-stage-header">
-                <div className="stage-title-group">
-                  <span className="stage-channel-icon">🔊</span>
-                  <span className="stage-channel-name">【🔊】 VC 1</span>
-                </div>
-              </div>
-              <div className="discord-stage-grid">
+            <div className="voice-video-stage">
+              <div className="voice-stage-grid">
+                {/* Local user tile */}
                 <VideoParticipant
                   stream={localStream}
                   username={currentUser.username}
@@ -970,12 +1081,14 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                   isDeafened={isDeafened}
                   isSpeaking={isLocalSpeaking}
                 />
-                {voiceUsers.map(user => (
+
+                {/* Remote users tiles */}
+                {voiceUsers.map(u => (
                   <VideoParticipant
-                    key={user.socketId}
-                    stream={user.stream}
-                    username={user.username}
-                    avatarUrl={user.avatar_url}
+                    key={u.socketId}
+                    stream={u.stream}
+                    username={u.username}
+                    avatarUrl={u.avatarUrl}
                     isLocal={false}
                     isMuted={false}
                     isDeafened={false}
@@ -984,24 +1097,24 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                 ))}
               </div>
 
-              {/* Floating Bottom Control Bar matching screenshot */}
-              <div className="discord-stage-floating-controls">
-                <div className="floating-bar-pill">
-                  <button
+              {/* Floating Bottom Control Bar */}
+              <div className="voice-stage-controls">
+                <div className="stage-controls-group">
+                  <button 
                     className={`stage-action-btn ${isMuted ? 'active-red' : ''}`}
                     onClick={toggleMute}
-                    title={isMuted ? 'Unmute' : 'Mute'}
+                    title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
                   >
                     {isMuted ? '🎙️❌' : '🎙️'}
                   </button>
-                  <button
+                  <button 
                     className={`stage-action-btn ${isDeafened ? 'active-red' : ''}`}
                     onClick={toggleDeafen}
-                    title={isDeafened ? 'Undeafen' : 'Deafen'}
+                    title={isDeafened ? 'Undeafen Audio' : 'Deafen Audio'}
                   >
                     {isDeafened ? '🎧❌' : '🎧'}
                   </button>
-                  <button
+                  <button 
                     className={`stage-action-btn ${isVideoOff ? 'active-red' : ''}`}
                     onClick={toggleVideo}
                     title={isVideoOff ? 'Turn Camera On' : 'Turn Camera Off'}
@@ -1027,9 +1140,19 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
             ) : (
               messages.map((msg) => {
                 const isMentioned = msg.content && msg.content.toLowerCase().includes('@' + currentUser.username.toLowerCase());
+                const senderRole = msg.sender_role;
+                const senderColor = senderRole?.color || '#ffffff';
+
                 return (
                   <div key={msg.id} className={`message-wrapper ${isMentioned ? 'mentioned-message' : ''}`}>
-                    <div className="message-avatar">
+                    <div 
+                      className="message-avatar"
+                      style={{ cursor: 'pointer' }}
+                      onClick={(e) => {
+                        const senderMember = members.find(m => m.id === (msg.sender_id || msg.senderId));
+                        if (senderMember) handleOpenMemberCard(senderMember, e);
+                      }}
+                    >
                       {msg.avatar_url ? (
                         <img src={msg.avatar_url} alt={msg.username} />
                       ) : (
@@ -1038,7 +1161,33 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                     </div>
                     <div className="message-content-col">
                       <div className="message-meta">
-                        <span className="message-username">{msg.username}</span>
+                        <span 
+                          className="message-username"
+                          style={{ color: senderColor, cursor: 'pointer', fontWeight: 600 }}
+                          onClick={(e) => {
+                            const senderMember = members.find(m => m.id === (msg.sender_id || msg.senderId));
+                            if (senderMember) handleOpenMemberCard(senderMember, e);
+                          }}
+                        >
+                          {msg.username}
+                        </span>
+                        {senderRole && (
+                          <span 
+                            className="sender-role-pill"
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              color: senderRole.color,
+                              background: 'rgba(255,255,255,0.06)',
+                              border: `1px solid ${senderRole.color}40`,
+                              borderRadius: '3px',
+                              padding: '1px 5px',
+                              marginLeft: '6px'
+                            }}
+                          >
+                            ● {senderRole.name}
+                          </span>
+                        )}
                         <span className="message-timestamp">
                           {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
@@ -1152,32 +1301,92 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
         {showMembers && (
           <div className="members-sidebar">
-            <h4>Members ({members.filter(m => m.id !== 'bot-id').length})</h4>
             <div className="members-list">
-              {members.filter(m => m.id !== 'bot-id').map(member => (
-                <div 
-                  key={member.id} 
-                  className={`member-item ${member.id !== currentUser.id ? 'clickable' : ''}`}
-                  onClick={() => member.id !== currentUser.id && onStartDM && onStartDM(member)}
-                  title={member.id !== currentUser.id ? `DM ${member.username}` : 'You'}
-                  style={{ cursor: member.id !== currentUser.id ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', borderRadius: '4px' }}
-                >
-                  <div className="member-avatar-small" style={{ display: 'flex', alignItems: 'center' }}>
-                    {member.avatar_url ? (
-                      <img src={member.avatar_url} alt={member.username} style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} />
-                    ) : (
-                      <div className="avatar-placeholder-small" style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 'bold', color: '#fff' }}>
-                        {member.username ? member.username[0].toUpperCase() : '?'}
-                      </div>
-                    )}
+              {getGroupedMembers().map(group => (
+                <div key={group.id} className="member-group-section" style={{ marginBottom: '14px' }}>
+                  <h4 style={{ 
+                    fontSize: '11px', 
+                    fontWeight: 700, 
+                    textTransform: 'uppercase', 
+                    color: '#949ba4', 
+                    letterSpacing: '0.5px',
+                    padding: '4px 8px',
+                    margin: 0
+                  }}>
+                    {group.title}
+                  </h4>
+                  <div className="group-members-list" style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
+                    {group.members.map(member => {
+                      const topRole = getMemberTopRole(member);
+                      const nameColor = topRole?.color || '#dbdee1';
+                      return (
+                        <div 
+                          key={member.id} 
+                          className="member-item clickable"
+                          onClick={(e) => handleOpenMemberCard(member, e)}
+                          title={`${member.username}${topRole ? ` (${topRole.name})` : ''}`}
+                          style={{ 
+                            cursor: 'pointer', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '8px', 
+                            padding: '6px 8px', 
+                            borderRadius: '4px',
+                            transition: 'background 0.15s'
+                          }}
+                        >
+                          <div className="member-avatar-small" style={{ display: 'flex', alignItems: 'center' }}>
+                            {member.avatar_url ? (
+                              <img src={member.avatar_url} alt={member.username} style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover' }} />
+                            ) : (
+                              <div className="avatar-placeholder-small" style={{ width: '22px', height: '22px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 'bold', color: '#fff' }}>
+                                {member.username ? member.username[0].toUpperCase() : '?'}
+                              </div>
+                            )}
+                          </div>
+                          <span style={{ color: nameColor, fontWeight: 500, fontSize: '13px' }}>
+                            {member.username}
+                          </span>
+                          {member.id === server.owner_id && (
+                            <span title="Server Owner" style={{ fontSize: '12px', marginLeft: 'auto' }}>👑</span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                  <span>{member.username}</span>
                 </div>
               ))}
             </div>
           </div>
         )}
       </div>
+
+      {/* Discord-style Server Settings & Roles Manager Modal */}
+      {showServerSettingsModal && (
+        <ServerSettingsModal
+          server={server}
+          currentUser={currentUser}
+          onClose={() => setShowServerSettingsModal(false)}
+        />
+      )}
+
+      {/* Discord-style Member Profile & Roles Card */}
+      {activeMemberPopover && (
+        <MemberProfileCard
+          member={activeMemberPopover.member}
+          server={server}
+          currentUser={currentUser}
+          serverRoles={serverRoles}
+          canManageRoles={canManageRoles}
+          position={activeMemberPopover.position}
+          onStartDM={onStartDM}
+          onRolesUpdated={() => {
+            fetchMembers();
+            fetchServerRoles();
+          }}
+          onClose={() => setActiveMemberPopover(null)}
+        />
+      )}
     </div>
   );
 }

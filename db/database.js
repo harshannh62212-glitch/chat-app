@@ -93,6 +93,32 @@ async function createTables() {
       );
     `);
 
+    // Server Roles table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS server_roles (
+        id SERIAL PRIMARY KEY,
+        server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+        name VARCHAR(100) NOT NULL,
+        color VARCHAR(20) DEFAULT '#99aab5',
+        hoist BOOLEAN DEFAULT false,
+        position INTEGER DEFAULT 0,
+        permissions JSONB DEFAULT '{"administrator": false, "manage_messages": false, "manage_roles": false, "manage_channels": false, "kick_members": false}'::jsonb,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Server Member Roles mapping table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS server_member_roles (
+        id SERIAL PRIMARY KEY,
+        server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+        user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role_id INTEGER NOT NULL REFERENCES server_roles(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(server_id, user_id, role_id)
+      );
+    `);
+
     // Server messages
     await client.query(`
       CREATE TABLE IF NOT EXISTS server_messages (

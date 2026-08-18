@@ -1,0 +1,661 @@
+/* ==========================================================================
+   Discord-Themed Server Settings & Roles Manager CSS
+   ========================================================================== */
+
+.server-settings-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeInModal 0.2s ease-out;
+}
+
+@keyframes fadeInModal {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.server-settings-container {
+  width: 960px;
+  max-width: 95vw;
+  height: 650px;
+  max-height: 90vh;
+  background: #313338;
+  border-radius: 12px;
+  display: flex;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  color: #dbdee1;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Sidebar Navigation */
+.server-settings-sidebar {
+  width: 220px;
+  background: #2b2d31;
+  padding: 24px 12px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.server-settings-nav-header {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #949ba4;
+  margin-bottom: 12px;
+  padding-left: 10px;
+  letter-spacing: 0.5px;
+}
+
+.server-settings-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: #949ba4;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  text-align: left;
+  margin-bottom: 4px;
+}
+
+.server-settings-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #dbdee1;
+}
+
+.server-settings-nav-btn.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Main Content Area */
+.server-settings-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #313338;
+  position: relative;
+  overflow: hidden;
+}
+
+.server-settings-header {
+  padding: 20px 28px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.server-settings-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f2f3f5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.server-settings-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: #b5bac1;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.server-settings-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-color: #ffffff;
+}
+
+/* Roles Layout (2 Columns) */
+.roles-manager-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.roles-list-col {
+  width: 260px;
+  background: #2b2d31;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+}
+
+.create-role-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  background: #5865f2;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 12px;
+}
+
+.create-role-btn:hover {
+  background: #4752c4;
+}
+
+.roles-scroll-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.role-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s;
+  border: 1px solid transparent;
+}
+
+.role-list-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.role-list-item.selected {
+  background: rgba(88, 101, 242, 0.2);
+  border-color: rgba(88, 101, 242, 0.5);
+}
+
+.role-list-item-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.role-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.role-name-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #dbdee1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.role-member-count {
+  font-size: 11px;
+  color: #949ba4;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+/* Role Edit Column */
+.role-editor-col {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #b5bac1;
+  letter-spacing: 0.5px;
+}
+
+.role-name-input {
+  background: #1e1f22;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #f2f3f5;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.role-name-input:focus {
+  border-color: #5865f2;
+}
+
+/* Color Picker Swatches */
+.role-colors-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.color-swatch-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.color-swatch-btn:hover {
+  transform: scale(1.15);
+}
+
+.color-swatch-btn.selected {
+  border-color: #ffffff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+.custom-hex-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.custom-hex-input {
+  width: 110px;
+  background: #1e1f22;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: #f2f3f5;
+  font-size: 13px;
+  font-family: monospace;
+}
+
+.custom-color-picker-input {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 6px;
+}
+
+/* Toggle Switch */
+.toggle-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: #2b2d31;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.toggle-label-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toggle-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f2f3f5;
+}
+
+.toggle-desc {
+  font-size: 12px;
+  color: #949ba4;
+}
+
+.switch-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.switch-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #4e5058;
+  transition: 0.2s;
+  border-radius: 24px;
+}
+
+.switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.2s;
+  border-radius: 50%;
+}
+
+input:checked + .switch-slider {
+  background-color: #23a55a;
+}
+
+input:checked + .switch-slider:before {
+  transform: translateX(20px);
+}
+
+/* Permissions Checklist */
+.permissions-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.permission-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+}
+
+.perm-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.perm-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #dbdee1;
+}
+
+.perm-desc {
+  font-size: 11px;
+  color: #949ba4;
+}
+
+/* Actions Footer */
+.role-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: auto;
+}
+
+.delete-role-btn {
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid #da373c;
+  color: #da373c;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.delete-role-btn:hover {
+  background: #da373c;
+  color: #ffffff;
+}
+
+.save-role-btn {
+  padding: 8px 20px;
+  background: #23a55a;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.save-role-btn:hover {
+  background: #1a8344;
+}
+
+/* ==========================================================================
+   Member Profile Popover Card
+   ========================================================================== */
+
+.member-popover-card {
+  position: fixed;
+  width: 300px;
+  background: #232428;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  z-index: 10000;
+  color: #dbdee1;
+  font-family: 'Inter', system-ui, sans-serif;
+  animation: fadeInModal 0.15s ease-out;
+}
+
+.member-popover-banner {
+  height: 60px;
+  background: linear-gradient(135deg, #5865f2, #eb459e);
+  position: relative;
+}
+
+.member-popover-avatar-wrap {
+  position: absolute;
+  left: 16px;
+  bottom: -28px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 4px solid #232428;
+  background: #1e1f22;
+  overflow: hidden;
+}
+
+.member-popover-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.member-popover-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: #ffffff;
+  background: #5865f2;
+}
+
+.member-popover-body {
+  padding: 36px 16px 16px;
+}
+
+.member-popover-username {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f2f3f5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.member-popover-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 12px 0;
+}
+
+.member-popover-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #b5bac1;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.member-roles-chips-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.member-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #dbdee1;
+}
+
+.role-chip-remove-btn {
+  background: transparent;
+  border: none;
+  color: #949ba4;
+  cursor: pointer;
+  padding: 0;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.role-chip-remove-btn:hover {
+  color: #da373c;
+}
+
+.add-role-select-btn {
+  width: 100%;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #b5bac1;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.add-role-select-btn:hover {
+  background: rgba(88, 101, 242, 0.15);
+  border-color: #5865f2;
+  color: #ffffff;
+}
+
+.roles-dropdown-menu {
+  margin-top: 6px;
+  background: #111214;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 4px;
+  max-height: 140px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.role-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: #dbdee1;
+  font-size: 12px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.role-dropdown-item:hover {
+  background: #5865f2;
+  color: #ffffff;
+}
+
+.popover-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.popover-dm-btn {
+  flex: 1;
+  padding: 8px;
+  background: #5865f2;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.popover-dm-btn:hover {
+  background: #4752c4;
+}
