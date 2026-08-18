@@ -103,17 +103,25 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   const [showTunnelWarning, setShowTunnelWarning] = useState(false);
   const [currentSocketUrl, setCurrentSocketUrl] = useState(getActiveSocketUrl());
 
-  // Check if currentUser can manage roles on this server
+  // Check currentUser server permissions
   const isServerOwner = server.owner_id === currentUser.id;
   const isGlobalAdmin = currentUser.is_admin || currentUser.username === 'Nxghtmare3621';
-  const hasManageRolesPerm = Array.isArray(members) && members.some(m => {
-    if (m.id !== currentUser.id) return false;
-    return Array.isArray(m.roles) && m.roles.some(r => {
+
+  const currentUserMember = Array.isArray(members) ? members.find(m => m.id === currentUser.id) : null;
+  const currentUserRoles = currentUserMember?.roles || [];
+
+  const hasPerm = (permKey) => {
+    if (isServerOwner || isGlobalAdmin) return true;
+    return currentUserRoles.some(r => {
       const p = r.permissions || {};
-      return p.administrator === true || p.manage_roles === true;
+      return p.administrator === true || p[permKey] === true;
     });
-  });
-  const canManageRoles = (isServerOwner || isGlobalAdmin || hasManageRolesPerm) && server.id !== 1;
+  };
+
+  const canManageRoles = (isServerOwner || isGlobalAdmin || hasPerm('manage_roles')) && server.id !== 1;
+  const canManageMessages = hasPerm('manage_messages');
+  const canManageChannels = hasPerm('manage_channels');
+  const canKickMembers = hasPerm('kick_members') && server.id !== 1;
 
   useEffect(() => {
     const handleConnectError = (err) => {
@@ -590,14 +598,79 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       }
     };
 
+    const handleChatroomCreated = (data) => {
+      if (data && data.serverId === server.id) {
+        fetchChatrooms();
+      }
+    };
+
+    const handleChatroomDeleted = (data) => {
+      if (data && data.serverId === server.id) {
+        fetchChatrooms();
+      }
+    };
+
+    const handleMemberKicked = (data) => {
+      if (data && data.serverId === server.id) {
+        fetchMembers();
+        if (data.userId === currentUser.id) {
+          alert('You have been kicked from this server.');
+          if (onBack) onBack();
+        }
+      }
+    };
+
     socket.on('server-roles-updated', handleRolesUpdated);
     socket.on('member-roles-updated', handleMemberRolesUpdated);
+    socket.on('chatroom-created', handleChatroomCreated);
+    socket.on('chatroom-deleted', handleChatroomDeleted);
+    socket.on('member-kicked', handleMemberKicked);
 
     return () => {
       socket.off('server-roles-updated', handleRolesUpdated);
       socket.off('member-roles-updated', handleMemberRolesUpdated);
+      socket.off('chatroom-created', handleChatroomCreated);
+      socket.off('chatroom-deleted', handleChatroomDeleted);
+      socket.off('member-kicked', handleMemberKicked);
     };
-  }, [server.id]);
+  }, [server.id, currentUser.id]);
+
+  const handleCreateChannel = async () => {
+    const name = window.prompt('Enter new channel name (e.g. announcements, gaming):');
+    if (!name || !name.trim()) return;
+    try {
+      const res = await axios.post(`/api/servers/${server.id}/chatrooms`, {
+        name: name.trim()
+      });
+      if (res.data) {
+        await fetchChatrooms();
+        setSelectedChatroom(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to create channel:', err);
+      alert(err.response?.data?.error || 'Failed to create channel');
+    }
+  };
+
+  const handleDeleteChannel = async (channel, e) => {
+    e.stopPropagation();
+    if (channel.is_general) {
+      alert('Cannot delete the mandatory general channel');
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to delete #${channel.name}? All messages will be permanently deleted.`)) return;
+    try {
+      await axios.delete(`/api/servers/${server.id}/chatrooms/${channel.id}`);
+      await fetchChatrooms();
+      if (selectedChatroom?.id === channel.id) {
+        const general = chatrooms.find(c => c.is_general) || chatrooms[0];
+        if (general) setSelectedChatroom(general);
+      }
+    } catch (err) {
+      console.error('Failed to delete channel:', err);
+      alert(err.response?.data?.error || 'Failed to delete channel');
+    }
+  };
 
   // Helper to get top role of a member
   const getMemberTopRole = (member) => {
@@ -933,16 +1006,56 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       <div className="chat-container">
         <div className="chatroom-selector">
           <div className="chatroom-list-wrapper">
-            <h4>Chatrooms</h4>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: '8px' }}>
+              <h4 style={{ margin: 0, fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: '#949ba4', letterSpacing: '0.5px' }}>Chatrooms</h4>
+              {canManageChannels && (
+                <button
+                  onClick={handleCreateChannel}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#949ba4',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    lineHeight: '1',
+                    padding: '2px 4px'
+                  }}
+                  title="Create Channel"
+                >
+                  ➕
+                </button>
+              )}
+            </div>
             {chatrooms.map(room => (
-              <button
+              <div
                 key={room.id}
-                className={`chatroom-btn ${selectedChatroom?.id === room.id ? 'active' : ''}`}
-                onClick={() => { setSelectedChatroom(room); setViewingChat(true); }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
               >
-                # {room.name}
-                {room.is_general && ' (general)'}
-              </button>
+                <button
+                  className={`chatroom-btn ${selectedChatroom?.id === room.id ? 'active' : ''}`}
+                  onClick={() => { setSelectedChatroom(room); setViewingChat(true); }}
+                  style={{ flex: 1, textAlign: 'left' }}
+                >
+                  # {room.name}
+                  {room.is_general && ' (general)'}
+                </button>
+                {!room.is_general && canManageChannels && (
+                  <button
+                    onClick={(e) => handleDeleteChannel(room, e)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#949ba4',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      padding: '4px 6px'
+                    }}
+                    title="Delete Channel"
+                  >
+                    🗑️
+                  </button>
+                )}
+              </div>
             ))}
           </div>
 
@@ -1191,7 +1304,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                         <span className="message-timestamp">
                           {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
-                        {(msg.sender_id === currentUser.id || currentUser.is_admin) && (
+                        {(msg.sender_id === currentUser.id || canManageMessages) && (
                           <button
                             className="delete-msg-btn"
                             onClick={() => handleDeleteMessage(msg.id)}
@@ -1378,6 +1491,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
           currentUser={currentUser}
           serverRoles={serverRoles}
           canManageRoles={canManageRoles}
+          canKickMembers={canKickMembers}
           position={activeMemberPopover.position}
           onStartDM={onStartDM}
           onRolesUpdated={() => {

@@ -8,6 +8,7 @@ function MemberProfileCard({
   currentUser,
   serverRoles,
   canManageRoles,
+  canKickMembers,
   onStartDM,
   onRolesUpdated,
   onClose,
@@ -18,6 +19,7 @@ function MemberProfileCard({
 
   const assignedRoleIds = Array.isArray(member.roles) ? member.roles.map(r => r.id) : [];
   const availableRolesToAssign = (serverRoles || []).filter(r => !assignedRoleIds.includes(r.id));
+  const isOwner = member.id === server.owner_id;
 
   const handleAssignRole = async (roleId) => {
     try {
@@ -41,6 +43,21 @@ function MemberProfileCard({
     } catch (err) {
       console.error('Failed to remove role:', err);
       alert(err.response?.data?.error || 'Failed to remove role');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKick = async () => {
+    if (!window.confirm(`Are you sure you want to kick @${member.username} from this server?`)) return;
+    try {
+      setLoading(true);
+      await axios.delete(`/api/servers/${server.id}/members/${member.id}`);
+      onClose();
+      if (onRolesUpdated) onRolesUpdated();
+    } catch (err) {
+      console.error('Failed to kick member:', err);
+      alert(err.response?.data?.error || 'Failed to kick member');
     } finally {
       setLoading(false);
     }
@@ -78,7 +95,7 @@ function MemberProfileCard({
         <div className="member-popover-body">
           <div className="member-popover-username">
             {member.username}
-            {member.id === server.owner_id && (
+            {isOwner && (
               <span title="Server Owner" style={{ fontSize: '14px' }}>👑</span>
             )}
           </div>
@@ -155,7 +172,18 @@ function MemberProfileCard({
                   if (onStartDM) onStartDM(member);
                 }}
               >
-                💬 Send Message
+                💬 Message
+              </button>
+            )}
+
+            {!isOwner && member.id !== currentUser.id && (canKickMembers || canManageRoles) && server.id !== 1 && (
+              <button
+                className="popover-dm-btn"
+                style={{ background: 'transparent', border: '1px solid #da373c', color: '#da373c' }}
+                onClick={handleKick}
+                disabled={loading}
+              >
+                🔨 Kick
               </button>
             )}
           </div>

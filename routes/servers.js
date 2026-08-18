@@ -182,9 +182,9 @@ router.post('/:serverId/join', authMiddleware, async (req, res) => {
   }
 });
 
-// Helper to check if user can manage roles on a server
-async function canManageServerRoles(userId, serverId) {
-  if (parseInt(serverId, 10) === 1) return false; // General server is excluded from custom role modification
+// Helper to check any server permission (administrator or server owner bypasses all)
+async function hasServerPermission(userId, serverId, permissionKey) {
+  if (parseInt(serverId, 10) === 1 && permissionKey === 'manage_roles') return false; // General server excluded from role customization
   
   // 1. Check if server owner
   const srvRes = await query('SELECT owner_id FROM servers WHERE id = $1', [serverId]);
@@ -197,7 +197,7 @@ async function canManageServerRoles(userId, serverId) {
     return true;
   }
 
-  // 3. Check if user has a role with manage_roles or administrator permission in this server
+  // 3. Check if user has a role with administrator or specific permission in this server
   const roleRes = await query(`
     SELECT sr.permissions
     FROM server_member_roles smr
@@ -207,9 +207,12 @@ async function canManageServerRoles(userId, serverId) {
 
   return roleRes.rows.some(r => {
     const p = r.permissions || {};
-    return p.administrator === true || p.manage_roles === true;
+    return p.administrator === true || (permissionKey && p[permissionKey] === true);
   });
 }
+
+// Alias for backward compatibility
+const canManageServerRoles = (userId, serverId) => hasServerPermission(userId, serverId, 'manage_roles');
 
 // Get server members with assigned roles
 router.get('/:serverId/members', authMiddleware, async (req, res) => {
@@ -472,6 +475,113 @@ router.delete('/:serverId/members/:targetUserId/roles/:roleId', authMiddleware, 
   }
 });
 
+// Kick a member from the server
+router.delete('/:serverId/members/:targetUserId', authMiddleware, async (req, res) => {
+  try {
+    const { serverId, targetUserId } = req.params;
+    const userId = req.userId;
+
+    if (parseInt(serverId, 10) === 1) {
+      return res.status(403).json({ error: 'Cannot kick members from the General server' });
+    }
+
+    const authorized = await hasServerPermission(userId, serverId, 'kick_members');
+    if (!authorized) {
+      return res.status(403).json({ error: 'You do not have permission to kick members' });
+    }
+
+    // Server owner cannot be kicked
+    const srv = await query('SELECT owner_id FROM servers WHERE id = $1', [serverId]);
+    if (srv.rows.length > 0 && srv.rows[0].owner_id === targetUserId) {
+      return res.status(400).json({ error: 'Server owner cannot be kicked' });
+    }
+
+    // Remove member and all their server member roles
+    await query('DELETE FROM server_member_roles WHERE server_id = $1 AND user_id = $2', [serverId, targetUserId]);
+    await query('DELETE FROM server_members WHERE server_id = $1 AND user_id = $2', [serverId, targetUserId]);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('server-' + serverId).emit('member-kicked', { serverId, userId: targetUserId });
+      io.to('server-' + serverId).emit('member-roles-updated', { serverId, userId: targetUserId });
+    }
+
+    res.json({ message: 'Member kicked successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to kick member' });
+  }
+});
+
+// Create chatroom in server
+router.post('/:serverId/chatrooms', authMiddleware, async (req, res) => {
+  try {
+    const { serverId } = req.params;
+    const { name, description } = req.body;
+    const userId = req.userId;
+
+    const authorized = await hasServerPermission(userId, serverId, 'manage_channels');
+    if (!authorized) {
+      return res.status(403).json({ error: 'You do not have permission to create channels' });
+    }
+
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({ error: 'Channel name is required' });
+    }
+
+    const cleanName = name.trim().toLowerCase().replace(/\s+/g, '-');
+    const result = await query(
+      'INSERT INTO chatrooms (server_id, name, is_general, description) VALUES ($1, $2, false, $3) RETURNING *',
+      [serverId, cleanName, description || null]
+    );
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('server-' + serverId).emit('chatroom-created', { serverId, chatroom: result.rows[0] });
+    }
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create chatroom' });
+  }
+});
+
+// Delete chatroom in server
+router.delete('/:serverId/chatrooms/:chatroomId', authMiddleware, async (req, res) => {
+  try {
+    const { serverId, chatroomId } = req.params;
+    const userId = req.userId;
+
+    const authorized = await hasServerPermission(userId, serverId, 'manage_channels');
+    if (!authorized) {
+      return res.status(403).json({ error: 'You do not have permission to delete channels' });
+    }
+
+    const roomCheck = await query('SELECT is_general FROM chatrooms WHERE id = $1 AND server_id = $2', [chatroomId, serverId]);
+    if (roomCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    if (roomCheck.rows[0].is_general) {
+      return res.status(400).json({ error: 'Cannot delete the mandatory general channel' });
+    }
+
+    await query('DELETE FROM server_messages WHERE chatroom_id = $1', [chatroomId]);
+    await query('DELETE FROM chatrooms WHERE id = $1 AND server_id = $2', [chatroomId, serverId]);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('server-' + serverId).emit('chatroom-deleted', { serverId, chatroomId: parseInt(chatroomId, 10) });
+    }
+
+    res.json({ message: 'Channel deleted successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete channel' });
+  }
+});
+
 // Get chatrooms in server
 router.get('/:serverId/chatrooms', authMiddleware, async (req, res) => {
   try {
@@ -489,4 +599,5 @@ router.get('/:serverId/chatrooms', authMiddleware, async (req, res) => {
   }
 });
 
+router.hasServerPermission = hasServerPermission;
 module.exports = router;

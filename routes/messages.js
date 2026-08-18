@@ -231,12 +231,45 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
     const msg = msgResult.rows[0];
 
-    // Check if user is the sender or an admin
-    const userResult = await query(`SELECT is_admin FROM users WHERE id = $1`, [userId]);
-    const isAdmin = userResult.rows[0]?.is_admin === true;
+    // Check if user is the sender or a global admin
+    const userResult = await query(`SELECT is_admin, username FROM users WHERE id = $1`, [userId]);
+    const isGlobalAdmin = userResult.rows[0]?.is_admin === true || userResult.rows[0]?.username === 'Nxghtmare3621';
 
-    if (msg.sender_id !== userId && !isAdmin) {
-      return res.status(403).json({ error: 'You can only delete your own messages' });
+    let canDelete = (msg.sender_id === userId) || isGlobalAdmin;
+
+    if (!canDelete && msg.chatroom_id) {
+      // Check server ownership or manage_messages role
+      const srvRes = await query(
+        `SELECT s.id as server_id, s.owner_id 
+         FROM chatrooms c
+         JOIN servers s ON c.server_id = s.id
+         WHERE c.id = $1`,
+        [msg.chatroom_id]
+      );
+
+      if (srvRes.rows.length > 0) {
+        const srv = srvRes.rows[0];
+        if (srv.owner_id === userId) {
+          canDelete = true;
+        } else {
+          const roleRes = await query(
+            `SELECT sr.permissions
+             FROM server_member_roles smr
+             JOIN server_roles sr ON smr.role_id = sr.id
+             WHERE smr.server_id = $1 AND smr.user_id = $2`,
+            [srv.server_id, userId]
+          );
+
+          canDelete = roleRes.rows.some(r => {
+            const p = r.permissions || {};
+            return p.administrator === true || p.manage_messages === true;
+          });
+        }
+      }
+    }
+
+    if (!canDelete) {
+      return res.status(403).json({ error: 'You do not have permission to delete this message' });
     }
 
     await query(`DELETE FROM server_messages WHERE id = $1`, [id]);

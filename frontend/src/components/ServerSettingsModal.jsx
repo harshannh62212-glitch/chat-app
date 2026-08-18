@@ -22,11 +22,14 @@ const DISCORD_COLOR_PALETTE = [
 function ServerSettingsModal({ server, currentUser, onClose }) {
   const [activeTab, setActiveTab] = useState('roles');
   const [roles, setRoles] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [memberSearch, setMemberSearch] = useState('');
   const [selectedRole, setSelectedRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState('');
+  const [assignDropdownUserId, setAssignDropdownUserId] = useState(null);
 
   // Editable fields for the selected role
   const [roleName, setRoleName] = useState('');
@@ -65,8 +68,20 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
     }
   };
 
+  const fetchMembers = async () => {
+    try {
+      const res = await axios.get(`/api/servers/${server.id}/members`);
+      if (res.data) {
+        setMembers(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch server members:', err);
+    }
+  };
+
   useEffect(() => {
     fetchRoles();
+    fetchMembers();
   }, [server.id]);
 
   const loadRoleToEditor = (role) => {
@@ -109,16 +124,15 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
     try {
       setSaving(true);
       setError(null);
-      const res = await axios.put(`/api/servers/${server.id}/roles/${selectedRole.id}`, {
+      await axios.put(`/api/servers/${server.id}/roles/${selectedRole.id}`, {
         name: roleName,
         color: roleColor,
         hoist: roleHoist,
         permissions: rolePerms
       });
-      if (res.data) {
-        setSuccessMsg('Changes saved!');
-        await fetchRoles();
-      }
+      setSuccessMsg('Changes saved!');
+      await fetchRoles();
+      await fetchMembers();
     } catch (err) {
       console.error('Failed to save role:', err);
       setError(err.response?.data?.error || 'Failed to save changes');
@@ -135,10 +149,49 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
       await axios.delete(`/api/servers/${server.id}/roles/${selectedRole.id}`);
       setSelectedRole(null);
       await fetchRoles();
+      await fetchMembers();
       setSuccessMsg('Role deleted!');
     } catch (err) {
       console.error('Failed to delete role:', err);
       setError(err.response?.data?.error || 'Failed to delete role');
+    }
+  };
+
+  const handleAssignRoleToMember = async (userId, roleId) => {
+    try {
+      setError(null);
+      await axios.post(`/api/servers/${server.id}/members/${userId}/roles/${roleId}`);
+      setAssignDropdownUserId(null);
+      await fetchMembers();
+      await fetchRoles();
+    } catch (err) {
+      console.error('Failed to assign role:', err);
+      setError(err.response?.data?.error || 'Failed to assign role');
+    }
+  };
+
+  const handleRemoveRoleFromMember = async (userId, roleId) => {
+    try {
+      setError(null);
+      await axios.delete(`/api/servers/${server.id}/members/${userId}/roles/${roleId}`);
+      await fetchMembers();
+      await fetchRoles();
+    } catch (err) {
+      console.error('Failed to remove role:', err);
+      setError(err.response?.data?.error || 'Failed to remove role');
+    }
+  };
+
+  const handleKickMember = async (targetUser) => {
+    if (!window.confirm(`Are you sure you want to kick @${targetUser.username} from this server?`)) return;
+    try {
+      setError(null);
+      await axios.delete(`/api/servers/${server.id}/members/${targetUser.id}`);
+      setSuccessMsg(`Kicked @${targetUser.username}`);
+      await fetchMembers();
+    } catch (err) {
+      console.error('Failed to kick member:', err);
+      setError(err.response?.data?.error || 'Failed to kick member');
     }
   };
 
@@ -148,6 +201,11 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
       [permKey]: !prev[permKey]
     }));
   };
+
+  const filteredMembers = members.filter(m => 
+    m.id !== 'bot-id' &&
+    (m.username || '').toLowerCase().includes(memberSearch.toLowerCase())
+  );
 
   return (
     <div className="server-settings-backdrop" onClick={onClose}>
@@ -167,6 +225,12 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
           >
             🛡️ Roles
           </button>
+          <button
+            className={`server-settings-nav-btn ${activeTab === 'members' ? 'active' : ''}`}
+            onClick={() => setActiveTab('members')}
+          >
+            👥 Members ({members.filter(m => m.id !== 'bot-id').length})
+          </button>
         </div>
 
         {/* Right Settings Content */}
@@ -174,6 +238,7 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
           <div className="server-settings-header">
             <div className="server-settings-title">
               {activeTab === 'roles' && '🛡️ Server Roles'}
+              {activeTab === 'members' && '👥 Server Members & Role Assignment'}
               {activeTab === 'overview' && '📋 Server Overview'}
             </div>
             <button className="server-settings-close-btn" onClick={onClose} title="ESC">
@@ -195,6 +260,171 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
               <div className="form-group">
                 <label className="form-label">Server ID</label>
                 <div style={{ fontFamily: 'monospace', color: '#949ba4' }}>#{server.id}</div>
+              </div>
+            </div>
+          )}
+
+          {/* MEMBERS TAB */}
+          {activeTab === 'members' && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <input
+                  type="text"
+                  placeholder="Search members..."
+                  value={memberSearch}
+                  onChange={e => setMemberSearch(e.target.value)}
+                  style={{
+                    background: '#1e1f22',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                    color: '#fff',
+                    fontSize: '13px',
+                    width: '260px'
+                  }}
+                />
+                <span style={{ fontSize: '12px', color: '#949ba4' }}>
+                  {filteredMembers.length} member{filteredMembers.length === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              {error && (
+                <div style={{ padding: '8px 12px', background: 'rgba(237, 66, 69, 0.15)', border: '1px solid #ed4245', borderRadius: '6px', color: '#ed4245', fontSize: '13px' }}>
+                  {error}
+                </div>
+              )}
+              {successMsg && (
+                <div style={{ padding: '8px 12px', background: 'rgba(35, 165, 90, 0.15)', border: '1px solid #23a55a', borderRadius: '6px', color: '#23a55a', fontSize: '13px' }}>
+                  {successMsg}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {filteredMembers.map(member => {
+                  const assignedRoleIds = Array.isArray(member.roles) ? member.roles.map(r => r.id) : [];
+                  const unassignedRoles = roles.filter(r => !assignedRoleIds.includes(r.id));
+                  const isOwner = member.id === server.owner_id;
+
+                  return (
+                    <div 
+                      key={member.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: '#2b2d31',
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255,255,255,0.04)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '180px' }}>
+                        {member.avatar_url ? (
+                          <img src={member.avatar_url} alt={member.username} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                        ) : (
+                          <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#5865F2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#fff', fontSize: '14px' }}>
+                            {member.username ? member.username[0].toUpperCase() : '?'}
+                          </div>
+                        )}
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#f2f3f5', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {member.username}
+                            {isOwner && <span title="Server Owner" style={{ fontSize: '12px' }}>👑</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Assigned Roles List */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', flex: 1, margin: '0 16px' }}>
+                        {Array.isArray(member.roles) && member.roles.map(role => (
+                          <span
+                            key={role.id}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              background: 'rgba(255,255,255,0.06)',
+                              border: `1px solid ${role.color || '#99aab5'}55`,
+                              fontSize: '12px',
+                              color: role.color || '#dbdee1'
+                            }}
+                          >
+                            <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: role.color || '#99aab5' }} />
+                            {role.name}
+                            <button
+                              onClick={() => handleRemoveRoleFromMember(member.id, role.id)}
+                              style={{ background: 'none', border: 'none', color: '#949ba4', cursor: 'pointer', fontSize: '10px', padding: 0 }}
+                              title="Revoke Role"
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))}
+
+                        {/* Grant Role Action */}
+                        {unassignedRoles.length > 0 && (
+                          <div style={{ position: 'relative' }}>
+                            <button
+                              onClick={() => setAssignDropdownUserId(assignDropdownUserId === member.id ? null : member.id)}
+                              style={{
+                                background: 'rgba(88, 101, 242, 0.1)',
+                                border: '1px solid rgba(88, 101, 242, 0.4)',
+                                color: '#5865f2',
+                                borderRadius: '4px',
+                                padding: '2px 8px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ➕ Role
+                            </button>
+
+                            {assignDropdownUserId === member.id && (
+                              <div className="roles-dropdown-menu" style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, minWidth: '130px' }}>
+                                {unassignedRoles.map(role => (
+                                  <button
+                                    key={role.id}
+                                    className="role-dropdown-item"
+                                    onClick={() => handleAssignRoleToMember(member.id, role.id)}
+                                  >
+                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: role.color || '#99aab5' }} />
+                                    <span>{role.name}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Member Actions */}
+                      <div>
+                        {!isOwner && member.id !== currentUser.id && (
+                          <button
+                            onClick={() => handleKickMember(member)}
+                            style={{
+                              background: 'transparent',
+                              border: '1px solid #da373c',
+                              color: '#da373c',
+                              padding: '4px 10px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              transition: 'background 0.15s'
+                            }}
+                            title="Kick Member"
+                          >
+                            🔨 Kick
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -319,7 +549,7 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
                       <div className="permission-row">
                         <div className="perm-text">
                           <span className="perm-name">👑 Administrator</span>
-                          <span className="perm-desc">Grants all server permissions and bypasses channel restrictions.</span>
+                          <span className="perm-desc">Grants all server permissions and bypasses all channel restrictions.</span>
                         </div>
                         <label className="switch-toggle">
                           <input
@@ -334,13 +564,28 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
                       <div className="permission-row">
                         <div className="perm-text">
                           <span className="perm-name">🛡️ Manage Roles</span>
-                          <span className="perm-desc">Allows creating, editing, and assigning roles lower than this role.</span>
+                          <span className="perm-desc">Allows creating, editing, and assigning roles in this server.</span>
                         </div>
                         <label className="switch-toggle">
                           <input
                             type="checkbox"
                             checked={Boolean(rolePerms.manage_roles)}
                             onChange={() => togglePermission('manage_roles')}
+                          />
+                          <span className="switch-slider"></span>
+                        </label>
+                      </div>
+
+                      <div className="permission-row">
+                        <div className="perm-text">
+                          <span className="perm-name">📁 Manage Channels</span>
+                          <span className="perm-desc">Allows creating and deleting chat channels in this server.</span>
+                        </div>
+                        <label className="switch-toggle">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(rolePerms.manage_channels)}
+                            onChange={() => togglePermission('manage_channels')}
                           />
                           <span className="switch-slider"></span>
                         </label>
@@ -364,7 +609,7 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
                       <div className="permission-row">
                         <div className="perm-text">
                           <span className="perm-name">🔨 Kick Members</span>
-                          <span className="perm-desc">Allows kicking rule-breaking members from the server.</span>
+                          <span className="perm-desc">Allows kicking rule-breaking members from this server.</span>
                         </div>
                         <label className="switch-toggle">
                           <input
