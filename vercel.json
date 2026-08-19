@@ -3,6 +3,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/ping",
+      "destination": "/api/ping.js"
+    },
+    {
       "source": "/((?!assets/|favicon.png).*)",
       "destination": "/index.html"
     }
