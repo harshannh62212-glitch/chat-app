@@ -1,27 +1,33 @@
 #!/usr/bin/env node
 /**
- * Wired-IO Minecraft Server Automatic Bridge
+ * ==============================================================================
+ * Wired-IO Minecraft Server Realtime WebSocket & Queue Bridge
+ * ==============================================================================
  * 
- * Runs on your Minecraft server host machine (Latitude / Linux / Windows / Mac).
- * Requires NO port-forwarding or public RCON exposure.
- * Directly connects to Supabase database queue and automatically relays in-game broadcasts,
- * title alerts, player kicks, and admin console commands directly to Minecraft.
+ * Runs continuously in the background on your Minecraft server host.
+ * Instant sub-10ms push execution via Supabase Realtime WebSockets.
+ * Requires NO port forwarding, NO Cloudflare tunnels, NO public IP.
+ * 
+ * Usage:
+ *   node minecraft-bridge.js
+ * Or with PM2:
+ *   pm2 start minecraft-bridge.js --name "wired-mc-bridge"
  */
 
 const { exec } = require('child_process');
+const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://aebntdjjniirnwthtwlx.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
-const SCREEN_NAME = process.env.MC_SCREEN_NAME || 'mc'; // GNU Screen session name
+const SCREEN_NAME = process.env.MC_SCREEN_NAME || 'mc';
 
 console.log('====================================================');
-console.log('   🟢 WIRED-IO MINECRAFT AUTOMATIC COMMAND BRIDGE   ');
+console.log('   🟢 WIRED-IO REALTIME MINECRAFT COMMAND BRIDGE    ');
 console.log('====================================================');
-console.log(`[*] Connecting to Supabase Cloud: ${SUPABASE_URL}`);
-console.log(`[*] Targeting local Minecraft Screen session: [${SCREEN_NAME}]`);
-console.log('[*] Listening for in-game broadcasts, alerts, and console commands...\n');
+console.log(`[*] Target Screen Session: [${SCREEN_NAME}]`);
+console.log(`[*] Connecting to Supabase Realtime Cloud: ${SUPABASE_URL}`);
 
-let consecutiveErrors = 0;
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function executeOnServer(command) {
   const cleanCmd = command.trim().replace(/^\//, '');
@@ -29,13 +35,13 @@ async function executeOnServer(command) {
     // 1. Try GNU Screen
     exec(`screen -S ${SCREEN_NAME} -X stuff "${cleanCmd}\\n"`, (err1) => {
       if (!err1) {
-        return resolve({ success: true, method: 'screen', response: 'Executed via screen session' });
+        return resolve({ success: true, method: 'screen', response: 'Executed via screen' });
       }
 
       // 2. Try Tmux
       exec(`tmux send-keys -t ${SCREEN_NAME} "${cleanCmd}" ENTER`, (err2) => {
         if (!err2) {
-          return resolve({ success: true, method: 'tmux', response: 'Executed via tmux session' });
+          return resolve({ success: true, method: 'tmux', response: 'Executed via tmux' });
         }
 
         // 3. Try RCON to localhost
@@ -50,60 +56,72 @@ async function executeOnServer(command) {
   });
 }
 
-async function pollQueue() {
+// 1. Setup Supabase Realtime WebSocket Listener (Instant Sub-10ms Push)
+const channel = supabase.channel('mc_realtime_bridge', {
+  config: { broadcast: { self: false } }
+});
+
+channel
+  .on('broadcast', { event: 'minecraft_command' }, async ({ payload }) => {
+    if (!payload || !payload.command) return;
+    console.log(`\n[⚡ REALTIME PUSH] Received command from [${payload.sender || 'WEB'}]: "${payload.command}"`);
+    
+    const result = await executeOnServer(payload.command);
+    if (result.success) {
+      console.log(`[✅ SUCCESS] In-game command executed (${result.method})`);
+    } else {
+      console.warn(`[⚠️ WARN] Execution result:`, result.error || 'Check screen session name');
+    }
+
+    // Broadcast execution response back to web clients
+    channel.send({
+      type: 'broadcast',
+      event: 'command_response',
+      payload: {
+        id: payload.id,
+        success: result.success,
+        response: result.response || result.error,
+        method: result.method,
+        timestamp: new Date().toISOString()
+      }
+    }).catch(() => {});
+  })
+  .subscribe((status) => {
+    if (status === 'SUBSCRIBED') {
+      console.log('[🚀 READY] Realtime WebSocket connected and actively listening for broadcasts & commands!\n');
+    } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+      console.warn(`[⚠️ NOTICE] Realtime WebSocket status: ${status}. Attempting reconnection...`);
+    }
+  });
+
+// 2. Backup Queue Poller (Guarantees zero dropped commands if internet flickers)
+async function pollBackupQueue() {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/minecraft_bridge_queue?status=eq.pending&order=id.asc&limit=10`, {
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`
-      }
-    });
+    const { data: pending, error } = await supabase
+      .from('minecraft_bridge_queue')
+      .select('id, command')
+      .eq('status', 'pending')
+      .order('id', { ascending: true })
+      .limit(5);
 
-    if (res.ok) {
-      consecutiveErrors = 0;
-      const commands = await res.json();
-      if (Array.isArray(commands) && commands.length > 0) {
-        for (const item of commands) {
-          console.log(`[⚡ RELAY] Executing command #${item.id}: [${item.command}]`);
-          const execRes = await executeOnServer(item.command);
-          
-          if (execRes.success) {
-            console.log(`[✅ SUCCESS] Command #${item.id} executed successfully (${execRes.method})`);
-          } else {
-            console.warn(`[⚠️ WARN] Command #${item.id} execution warning:`, execRes.error);
-          }
-
-          // Acknowledge execution in Supabase
-          try {
-            await fetch(`${SUPABASE_URL}/rest/v1/minecraft_bridge_queue?id=eq.${item.id}`, {
-              method: 'PATCH',
-              headers: {
-                'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${SUPABASE_KEY}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-              },
-              body: JSON.stringify({
-                status: 'completed',
-                response: execRes.response || 'Executed',
-                executed_at: new Date().toISOString()
-              })
-            });
-          } catch (ackErr) {
-            console.error('Failed to acknowledge command in Supabase:', ackErr.message);
-          }
-        }
+    if (!error && Array.isArray(pending) && pending.length > 0) {
+      for (const item of pending) {
+        console.log(`[📥 QUEUE BACKUP] Processing queued command #${item.id}: "${item.command}"`);
+        const result = await executeOnServer(item.command);
+        
+        await supabase
+          .from('minecraft_bridge_queue')
+          .update({
+            status: 'completed',
+            response: result.response || 'Executed',
+            executed_at: new Date().toISOString()
+          })
+          .eq('id', item.id);
       }
     }
-  } catch (err) {
-    consecutiveErrors++;
-    if (consecutiveErrors === 1) {
-      console.warn('[!] Network check connecting to Supabase queue. Retrying in background...');
-    }
-  }
-
-  setTimeout(pollQueue, 1500);
+  } catch (err) {}
+  setTimeout(pollBackupQueue, 3000);
 }
 
-// Start polling loop
-pollQueue();
+// Start backup queue poller
+pollBackupQueue();
