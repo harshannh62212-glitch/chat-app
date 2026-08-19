@@ -1,5 +1,5 @@
 let supabaseUrl = process.env.VITE_SUPABASE_URL;
-if (!supabaseUrl || supabaseUrl.includes('trycloudflare.com')) {
+if (!supabaseUrl || !supabaseUrl.includes('supabase.co')) {
   supabaseUrl = 'https://aebntdjjniirnwthtwlx.supabase.co';
 }
 
