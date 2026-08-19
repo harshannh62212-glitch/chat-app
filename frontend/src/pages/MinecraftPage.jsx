@@ -103,26 +103,34 @@ function MinecraftPage({ user, onBack }) {
         if (res.data.host) {
           setServerIp(res.data.host);
         }
-      } else {
+        // Direct browser fallback to minetools
         try {
-          const fallbackRes = await axios.get('/api/minecraft-status?host=atoms-fools.tun.ply.gg', { timeout: 3500 });
-          if (fallbackRes && fallbackRes.data && fallbackRes.data.online) {
-            setStatus({
-              online: true,
-              players: {
-                online: fallbackRes.data.players?.online || 0,
-                max: fallbackRes.data.players?.max || 20,
-                sample: Array.isArray(fallbackRes.data.players?.sample) ? fallbackRes.data.players.sample : []
-              },
-              version: fallbackRes.data.version || '1.21.11',
-              motd: fallbackRes.data.motd || 'Wired-IO Private Minecraft Server',
-              latency: fallbackRes.data.latency || 175,
-              loading: false,
-              source: 'native_slp'
-            });
-            return;
+          const directRes = await fetch('https://api.minetools.eu/ping/atoms-fools.tun.ply.gg/60364');
+          if (directRes.ok) {
+            const d = await directRes.json();
+            if (!d.error && d.version) {
+              let motd = '';
+              if (typeof d.description === 'string') motd = d.description;
+              else if (d.description?.text) motd = d.description.text;
+
+              setStatus({
+                online: true,
+                players: {
+                  online: d.players?.online || 0,
+                  max: d.players?.max || 20,
+                  sample: Array.isArray(d.players?.sample) ? d.players.sample : []
+                },
+                version: d.version?.name || '1.21.11',
+                motd: motd || 'Wired-IO Private Minecraft Server',
+                latency: Math.round(d.latency || 175),
+                loading: false,
+                source: 'minetools_direct'
+              });
+              setServerIp('atoms-fools.tun.ply.gg');
+              return;
+            }
           }
-        } catch (e3) {}
+        } catch (e4) {}
 
         setStatus({
           online: false,

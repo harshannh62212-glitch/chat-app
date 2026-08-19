@@ -47,20 +47,53 @@ export default async function handler(req, res) {
   }
 
   // 3. Perform SLP Ping
-  const pingSLP = () => new Promise((resolve) => {
+  const pingSLP = () => new Promise(async (resolve) => {
     const startTime = Date.now();
     const socket = new net.Socket();
     let isFinished = false;
     let buf = Buffer.alloc(0);
 
-    const finish = (result) => {
+    const finish = async (result) => {
       if (isFinished) return;
       isFinished = true;
       socket.destroy();
-      resolve(result);
+
+      if (result && result.online) {
+        return resolve(result);
+      }
+
+      // HTTP fallback via minetools.eu for serverless
+      try {
+        const httpRes = await fetch(`https://api.minetools.eu/ping/${encodeURIComponent(host)}/${port}`);
+        if (httpRes.ok) {
+          const data = await httpRes.json();
+          if (!data.error && data.version) {
+            let motd = '';
+            if (typeof data.description === 'string') motd = data.description;
+            else if (data.description?.text) motd = data.description.text;
+
+            return resolve({
+              online: true,
+              version: data.version?.name || '1.21.11',
+              motd: motd || 'Wired-IO Private Minecraft Server',
+              players: {
+                online: data.players?.online || 0,
+                max: data.players?.max || 20,
+                sample: Array.isArray(data.players?.sample) ? data.players.sample : []
+              },
+              latency: Math.round(data.latency || 120),
+              host: targetHost,
+              port,
+              source: 'minetools_api'
+            });
+          }
+        }
+      } catch (httpErr) {}
+
+      resolve(result || { online: false, host: targetHost, port });
     };
 
-    socket.setTimeout(3500);
+    socket.setTimeout(2500);
 
     const writeVarInt = (val) => {
       const bytes = [];
@@ -127,7 +160,7 @@ export default async function handler(req, res) {
 
           finish({
             online: true,
-            version: parsed.version?.name || '1.21.x',
+            version: parsed.version?.name || '1.21.11',
             motd: motd || 'Wired-IO Private Minecraft Server',
             players: {
               online: parsed.players?.online || 0,
