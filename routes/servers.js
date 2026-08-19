@@ -75,6 +75,8 @@ async function ensureGeneralServerAndMembership(userId) {
       );
     } else {
       generalServerId = generalServer.rows[0].id;
+      await query("UPDATE servers SET is_public = true WHERE id = $1", [generalServerId]);
+      
       // Ensure 'general' chatroom exists inside General server
       const roomCheck = await query("SELECT id FROM chatrooms WHERE server_id = $1 AND (is_general = true OR name = 'general') LIMIT 1", [generalServerId]);
       if (roomCheck.rows.length === 0) {
@@ -102,10 +104,6 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     await ensureGeneralServerAndMembership(req.userId);
 
-    const cacheKey = `user_servers_${req.userId}`;
-    const cached = ramCache.get(cacheKey);
-    if (cached) return res.json(cached);
-
     const result = await query(
       `SELECT s.id, s.name, s.description, s.owner_id, s.is_public, s.avatar_url, s.created_at
        FROM servers s
@@ -114,8 +112,16 @@ router.get('/', authMiddleware, async (req, res) => {
        ORDER BY (CASE WHEN s.name = 'General' OR s.id = 1 THEN 0 ELSE 1 END), s.created_at DESC`,
       [req.userId]
     );
-    ramCache.set(cacheKey, result.rows, 60000);
-    res.json(result.rows);
+    
+    let serversList = result.rows;
+    if (!serversList.some(s => s.name === 'General' || s.id === 1)) {
+      const genServerRes = await query("SELECT id, name, description, owner_id, is_public, avatar_url, created_at FROM servers WHERE name = 'General' OR id = 1 LIMIT 1");
+      if (genServerRes.rows.length > 0) {
+        serversList.unshift(genServerRes.rows[0]);
+      }
+    }
+
+    res.json(serversList);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch servers' });
@@ -127,16 +133,12 @@ router.get('/discovery', async (req, res) => {
   try {
     await ensureGeneralServerAndMembership(null);
 
-    const cached = ramCache.get('public_discovery_servers');
-    if (cached) return res.json(cached);
-
     const result = await query(
       `SELECT id, name, description, owner_id, is_public, avatar_url, created_at 
        FROM servers 
        WHERE is_public = true 
        ORDER BY (CASE WHEN name = 'General' OR id = 1 THEN 0 ELSE 1 END), created_at DESC`
     );
-    ramCache.set('public_discovery_servers', result.rows, 120000);
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -157,7 +159,16 @@ router.get('/my-servers', authMiddleware, async (req, res) => {
        ORDER BY (CASE WHEN s.name = 'General' OR s.id = 1 THEN 0 ELSE 1 END), s.created_at DESC`,
       [req.userId]
     );
-    res.json(result.rows);
+
+    let serversList = result.rows;
+    if (!serversList.some(s => s.name === 'General' || s.id === 1)) {
+      const genServerRes = await query("SELECT id, name, description, owner_id, is_public, avatar_url, created_at FROM servers WHERE name = 'General' OR id = 1 LIMIT 1");
+      if (genServerRes.rows.length > 0) {
+        serversList.unshift(genServerRes.rows[0]);
+      }
+    }
+
+    res.json(serversList);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch servers' });

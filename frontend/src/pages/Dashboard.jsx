@@ -112,8 +112,14 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
 
         <div 
           className="brand-logo-container" 
-          onClick={() => { setActiveTab('servers'); setSelectedServer(null); setSelectedDM(null); setViewingFriends(false); }}
-          title="Main Lobby"
+          onClick={() => { 
+            setActiveTab('servers'); 
+            const gen = servers.find(s => s.name === 'General' || s.id === 1) || servers[0] || null;
+            setSelectedServer(gen); 
+            setSelectedDM(null); 
+            setViewingFriends(false); 
+          }}
+          title="General Community Server (Mandatory)"
           style={{ cursor: 'pointer' }}
         >
           <Logo width={36} height={36} />
@@ -141,9 +147,12 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
                 onClick={() => { setSelectedServer(srv); setSelectedDM(null); setActiveTab('servers'); setViewingFriends(false); }}
                 title={isGeneral ? `${srv.name} (Mandatory Community Hub - Locked 🔒)` : srv.name}
                 style={isGeneral ? {
-                  border: selectedServer?.id === srv.id ? '2px solid #00ffff' : '1px solid rgba(0, 255, 255, 0.35)',
-                  background: selectedServer?.id === srv.id ? 'rgba(0, 255, 255, 0.25)' : 'rgba(0, 255, 255, 0.08)',
-                  color: '#00ffff'
+                  border: selectedServer?.id === srv.id ? '2px solid #00ffff' : '1px solid rgba(0, 255, 255, 0.4)',
+                  background: selectedServer?.id === srv.id ? 'rgba(0, 255, 255, 0.3)' : 'rgba(0, 255, 255, 0.12)',
+                  color: '#00ffff',
+                  fontWeight: '900',
+                  fontSize: '18px',
+                  boxShadow: selectedServer?.id === srv.id ? '0 0 15px rgba(0, 255, 255, 0.4)' : 'none'
                 } : {}}
               >
                 {isGeneral ? '🌐' : srv.name.substring(0, 2).toUpperCase()}
