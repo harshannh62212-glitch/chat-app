@@ -85,6 +85,8 @@ async function pingMinecraftServer(targetHost, targetPort = 25565, timeout = 350
     } catch (srvErr) {
       // No SRV record, proceed with standard host & port
     }
+  }
+
   // 3. Resolve IPv4 address for direct TCP connection
   let connectIp = host;
   try {
