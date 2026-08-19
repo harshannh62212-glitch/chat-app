@@ -3,18 +3,6 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/resolve-tunnel",
-      "destination": "/api/resolve-tunnel.js"
-    },
-    {
-      "source": "/api/minecraft-status",
-      "destination": "/api/minecraft-status.js"
-    },
-    {
-      "source": "/api/minecraft/status",
-      "destination": "/api/minecraft-status.js"
-    },
-    {
       "source": "/api/(.*)",
       "destination": "/api/index.js"
     },
@@ -23,7 +11,7 @@
       "destination": "/api/ping.js"
     },
     {
-      "source": "/((?!assets/|favicon.png|api/|.*\\..*).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
