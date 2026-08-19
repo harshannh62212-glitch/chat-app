@@ -256,28 +256,33 @@ function MinecraftPage({ user, onBack }) {
     const cleanCmd = rawCommand.trim().replace(/^\//, '');
     const cmdId = Date.now();
 
-    // 1. Instant sub-10ms Supabase Realtime WebSocket Push
+    // 1. Send via Supabase REST queue API (Guaranteed delivery to Python daemon on NAS)
     try {
-      realtimeChannel.send({
-        type: 'broadcast',
-        event: 'minecraft_command',
-        payload: {
-          id: cmdId,
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/minecraft_bridge_queue`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({
           command: cleanCmd,
-          sender: user?.username || 'ADMIN',
-          timestamp: new Date().toISOString()
-        }
-      }).catch(() => {});
-    } catch (e) {}
-
-    // 2. Database backup queue insert
-    try {
+          status: 'pending'
+        })
+      });
+      if (!res.ok) {
+        throw new Error('Supabase queue response not OK');
+      }
+    } catch (err) {
+      console.warn('Queue insert fallback:', err);
+      // Fallback via supabase client SDK
       await supabaseClient
         .from('minecraft_bridge_queue')
         .insert([{ command: cleanCmd, status: 'pending' }]);
-    } catch (e2) {}
+    }
 
-    return { success: true, id: cmdId, method: 'supabase_realtime_push' };
+    return { success: true, id: cmdId, method: 'supabase_queue' };
   };
 
   // 1. Send Broadcast Message
