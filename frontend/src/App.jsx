@@ -12,69 +12,15 @@ import './styles/App.css';
 const fallbackURL = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
 
 // Clear failover target on load so we always try the primary server first upon new session
-if (localStorage.getItem('custom_proxy_target') === fallbackURL) {
-  localStorage.removeItem('custom_proxy_target');
-}
+// Clear stale proxy / backend targets
+localStorage.removeItem('custom_proxy_target');
+localStorage.removeItem('active_backend_target');
+localStorage.removeItem('active_home_target');
 
-// In production (Vercel), use native same-origin API routes backed by Supabase
-const savedProxyTarget = localStorage.getItem('custom_proxy_target');
-axios.defaults.baseURL = savedProxyTarget || (import.meta.env.PROD ? '' : 'http://localhost:8000');
+// In production (Vercel), use native same-origin API routes
+axios.defaults.baseURL = import.meta.env.PROD ? '' : (import.meta.env.VITE_PROXY_TARGET || 'http://localhost:8000');
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
-axios.defaults.timeout = 8000;
-
-// Specialized Task-Based Multi-Tier Router
-const renderCloudBase = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
-axios.interceptors.request.use((config) => {
-  const url = config.url || '';
-  const homeTarget = localStorage.getItem('active_home_target');
-
-  // 1. Heavy Scrapers & Media Proxies -> Dedicated to Render Cloud
-  if (url.includes('/api/spotify/search-yt') || url.includes('/api/youtube/') || url.includes('/api/games/')) {
-    if (renderCloudBase && !config.baseURL?.includes('localhost')) {
-      config.baseURL = renderCloudBase;
-    }
-  } 
-  // 2. Ultra-Fast Real-Time Messaging & Cache -> Dedicated to Latitude 5290 Home Node
-  else if (url.includes('/api/messages/') || url.includes('/api/servers') || url.includes('/api/channels')) {
-    if (homeTarget) {
-      config.baseURL = homeTarget;
-    }
-  }
-  return config;
-});
-
-// Active Dynamic Load Balancer & Failover Interceptor
-let consecutiveSluggishCount = 0;
-axios.interceptors.response.use(
-  (response) => {
-    consecutiveSluggishCount = 0;
-    return response;
-  },
-  async (error) => {
-    const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
-    const isNetworkOrServerDown = !error.response || error.response?.status >= 502;
-
-    if (isTimeout || isNetworkOrServerDown) {
-      consecutiveSluggishCount++;
-      if (consecutiveSluggishCount >= 2) {
-        const renderCloudUrl = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
-        const currentTarget = axios.defaults.baseURL;
-
-        if (currentTarget && currentTarget.includes('trycloudflare.com')) {
-          console.warn('[LOAD BALANCER DYNAMIC FAILOVER] Home Server saturated/sluggish. Auto-failing over to Render 24/7 Cloud:', renderCloudUrl);
-          axios.defaults.baseURL = renderCloudUrl;
-          localStorage.setItem('active_backend_target', renderCloudUrl);
-        } else if (currentTarget === renderCloudUrl) {
-          console.warn('[LOAD BALANCER DYNAMIC FAILOVER] Render Cloud saturated. Auto-failing over to Vercel Serverless Edge Cloud.');
-          axios.defaults.baseURL = '';
-          localStorage.setItem('active_backend_target', window.location.origin);
-        }
-        consecutiveSluggishCount = 0;
-      }
-    }
-    return Promise.reject(error);
-  }
-);
+axios.defaults.timeout = 10000;
 
 import ThermalsPage from './pages/ThermalsPage';
 import AdminPanel from './components/AdminPanel';
@@ -152,91 +98,6 @@ function App() {
 
 
   useEffect(() => {
-    // Smart Load Balancer: Home Server Primary -> Render Cloud Failover -> Vercel Edge
-    const resolveBestBackend = async () => {
-      const saved = localStorage.getItem('custom_proxy_target');
-      if (saved) {
-        axios.defaults.baseURL = saved;
-        return;
-      }
-
-      const renderCloudUrl = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
-
-      // Fast health check helper
-      const checkNodeHealth = async (url) => {
-        if (!url || !url.startsWith('http')) return false;
-        try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 2000);
-          try {
-            const res = await fetch(`${url}/ping`, {
-              signal: controller.signal,
-              headers: { 'bypass-tunnel-reminder': 'true' }
-            });
-            clearTimeout(timeout);
-            return res.ok;
-          } catch {
-            // Fallback check
-            const resNoCors = await fetch(`${url}/ping`, {
-              signal: controller.signal,
-              mode: 'no-cors'
-            });
-            clearTimeout(timeout);
-            return resNoCors && resNoCors.type === 'opaque';
-          }
-        } catch {
-          return false;
-        }
-      };
-
-      // 1. Check Home Server first (Active Cloudflare Tunnel from Supabase)
-      let homeTunnel = '';
-      try {
-        let supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aebntdjjniirnwthtwlx.supabase.co';
-        if (!supabaseUrl || !supabaseUrl.includes('supabase.co')) {
-          supabaseUrl = 'https://aebntdjjniirnwthtwlx.supabase.co';
-        }
-        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
-        const res = await fetch(`${supabaseUrl}/rest/v1/system_config?key=eq.active_tunnel_url`, {
-          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data[0]?.value) {
-            homeTunnel = data[0].value;
-          }
-        }
-      } catch (e) {
-        console.warn('[LOAD BALANCER] Supabase tunnel lookup error:', e);
-      }
-
-      if (homeTunnel && await checkNodeHealth(homeTunnel)) {
-        console.log('[LOAD BALANCER] Primary Node Active: Connected to Home Server:', homeTunnel);
-        axios.defaults.baseURL = homeTunnel;
-        localStorage.setItem('active_backend_target', homeTunnel);
-        localStorage.setItem('active_home_target', homeTunnel);
-        return;
-      }
-
-      // 2. Home Server is offline -> Failover to Render Cloud Backend
-      console.log('[LOAD BALANCER] Home Server unreachable. Checking Render 24/7 Cloud backend...');
-      if (await checkNodeHealth(renderCloudUrl)) {
-        console.log('[LOAD BALANCER] Failover Active: Connected to Render Cloud:', renderCloudUrl);
-        axios.defaults.baseURL = renderCloudUrl;
-        localStorage.setItem('active_backend_target', renderCloudUrl);
-        return;
-      }
-
-      // 3. Fallback to Vercel Serverless Edge
-      console.log('[LOAD BALANCER] Operating on Vercel Serverless Edge Cloud.');
-      axios.defaults.baseURL = '';
-      localStorage.setItem('active_backend_target', window.location.origin);
-    };
-
-    resolveBestBackend().finally(() => {
-      setTunnelResolved(true);
-    });
-
     loadCustomBannedWords();
     
     // Request notification permission
