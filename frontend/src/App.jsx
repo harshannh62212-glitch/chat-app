@@ -81,17 +81,24 @@ import AdminPanel from './components/AdminPanel';
 import MinecraftPage from './pages/MinecraftPage';
 
 function App() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('chat_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [showAuth, setShowAuth] = useState(false);
   const [showThermals, setShowThermals] = useState(window.location.pathname === '/thermals');
   const [showModeration, setShowModeration] = useState(window.location.pathname === '/moderation');
   const [showMinecraft, setShowMinecraft] = useState(window.location.pathname === '/mc');
-  const [loadingApp, setLoadingApp] = useState(true);
+  const [loadingApp, setLoadingApp] = useState(false);
   const [moderationPassword, setModerationPassword] = useState('');
   const [moderationUnlocked, setModerationUnlocked] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [currentPortal, setCurrentPortal] = useState('chat');
-  const [tunnelResolved, setTunnelResolved] = useState(!import.meta.env.PROD || !!localStorage.getItem('custom_proxy_target'));
+  const [tunnelResolved, setTunnelResolved] = useState(true);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -239,8 +246,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!tunnelResolved) return;
-
     // Load custom theme, typography, and letter spacing variables on mount
     const savedTheme = localStorage.getItem('theme') || 'cosmic-dark';
     const savedFont = localStorage.getItem('font') || 'Outfit';
@@ -258,8 +263,10 @@ function App() {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       axios.get('/api/auth/me')
         .then((res) => {
-          setCurrentUser(res.data);
-          localStorage.setItem('chat_user', JSON.stringify(res.data));
+          if (res.data) {
+            setCurrentUser(res.data);
+            localStorage.setItem('chat_user', JSON.stringify(res.data));
+          }
         })
         .catch((err) => {
           if (err.response && err.response.status === 401) {
@@ -276,14 +283,9 @@ function App() {
               } catch(e) {}
             }
           }
-        })
-        .finally(() => {
-          setLoadingApp(false);
         });
-    } else {
-      setLoadingApp(false);
     }
-  }, [tunnelResolved]);
+  }, []);
 
   const handleLogin = (token, user) => {
     localStorage.setItem('chat_token', token);
