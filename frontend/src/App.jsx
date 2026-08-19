@@ -309,7 +309,7 @@ function App() {
   }
 
   return (
-    <div className={`app ${showThermals ? 'thermals-view' : showModeration ? 'moderation-view' : currentUser ? 'dashboard-view' : 'public-view'}`}>
+    <div className={`app ${showMinecraft ? 'minecraft-view' : showThermals ? 'thermals-view' : showModeration ? 'moderation-view' : currentUser ? 'dashboard-view' : 'public-view'}`}>
       {serverSleeping && (
         <div style={{ background: '#ff9f43', color: '#000', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '0.95em', fontFamily: "'Outfit', sans-serif", display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', zIndex: 9999, position: 'relative' }}>
           <span>💤</span>

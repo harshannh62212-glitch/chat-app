@@ -1,4 +1,5 @@
 const net = require('net');
+const dns = require('dns');
 const { exec } = require('child_process');
 const { query } = require('../db/database');
 
@@ -60,9 +61,32 @@ async function saveMinecraftConfig(newConfig) {
 }
 
 /**
- * Native Minecraft Server List Ping (SLP) implementation
+ * Native Minecraft Server List Ping (SLP) implementation with SRV lookup
  */
-function pingMinecraftServer(host, port = 25565, timeout = 3500) {
+async function pingMinecraftServer(targetHost, targetPort = 25565, timeout = 3500) {
+  let host = targetHost;
+  let port = targetPort;
+
+  // 1. Check if targetHost contains explicit port (e.g. host:12345)
+  if (host.includes(':')) {
+    const parts = host.split(':');
+    host = parts[0];
+    port = parseInt(parts[1], 10) || port;
+  }
+
+  // 2. Perform DNS SRV lookup for Minecraft service (_minecraft._tcp.<host>)
+  if (port === 25565 && !net.isIP(host)) {
+    try {
+      const srvAddresses = await dns.promises.resolveSrv(`_minecraft._tcp.${host}`);
+      if (srvAddresses && srvAddresses.length > 0) {
+        host = srvAddresses[0].name;
+        port = srvAddresses[0].port;
+      }
+    } catch (srvErr) {
+      // No SRV record, proceed with standard host & port
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
     const socket = new net.Socket();
@@ -204,6 +228,8 @@ function pingMinecraftServer(host, port = 25565, timeout = 3500) {
     socket.on('error', (err) => {
       finish(err);
     });
+
+    socket.connect(port, host);
   });
 }
 

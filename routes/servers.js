@@ -54,19 +54,53 @@ router.post('/', authMiddleware, async (req, res) => {
 async function isGeneralServer(serverId) {
   if (parseInt(serverId, 10) === 1) return true;
   const srv = await query('SELECT name FROM servers WHERE id = $1', [serverId]);
-  return srv.rows.length > 0 && srv.rows[0].name === 'General';
+  return srv.rows.length > 0 && (srv.rows[0].name === 'General' || srv.rows[0].id === 1);
+}
+
+// Helper to ensure General server and default general chatroom exist, and enroll user
+async function ensureGeneralServerAndMembership(userId) {
+  try {
+    let generalServer = await query("SELECT id FROM servers WHERE name = 'General' OR id = 1 LIMIT 1");
+    let generalServerId;
+    if (generalServer.rows.length === 0) {
+      const systemUserId = '00000000-0000-0000-0000-000000000000';
+      const createRes = await query(
+        "INSERT INTO servers (name, description, owner_id, is_public) VALUES ('General', 'Mandatory community hub for all members', $1, true) RETURNING id",
+        [systemUserId]
+      );
+      generalServerId = createRes.rows[0].id;
+      await query(
+        "INSERT INTO chatrooms (server_id, name, is_general, description) VALUES ($1, 'general', true, 'Mandatory main discussion channel') ON CONFLICT DO NOTHING",
+        [generalServerId]
+      );
+    } else {
+      generalServerId = generalServer.rows[0].id;
+      // Ensure 'general' chatroom exists inside General server
+      const roomCheck = await query("SELECT id FROM chatrooms WHERE server_id = $1 AND (is_general = true OR name = 'general') LIMIT 1", [generalServerId]);
+      if (roomCheck.rows.length === 0) {
+        await query(
+          "INSERT INTO chatrooms (server_id, name, is_general, description) VALUES ($1, 'general', true, 'Mandatory main discussion channel')",
+          [generalServerId]
+        );
+      }
+    }
+
+    if (userId) {
+      await query(
+        "INSERT INTO server_members (user_id, server_id) VALUES ($1, $2) ON CONFLICT (user_id, server_id) DO NOTHING",
+        [userId, generalServerId]
+      );
+    }
+    return generalServerId;
+  } catch (err) {
+    console.error('Error ensuring general server & membership:', err);
+  }
 }
 
 // Get user's servers (default root GET /api/servers)
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    // Auto-enroll user in General server if missing
-    await query(`
-      INSERT INTO server_members (user_id, server_id)
-      SELECT $1::varchar, s.id FROM servers s
-      WHERE (s.name = 'General' OR s.id = 1)
-      ON CONFLICT (user_id, server_id) DO NOTHING
-    `, [req.userId]);
+    await ensureGeneralServerAndMembership(req.userId);
 
     const cacheKey = `user_servers_${req.userId}`;
     const cached = ramCache.get(cacheKey);
@@ -77,7 +111,7 @@ router.get('/', authMiddleware, async (req, res) => {
        FROM servers s
        INNER JOIN server_members sm ON s.id = sm.server_id
        WHERE sm.user_id = $1
-       ORDER BY s.created_at DESC`,
+       ORDER BY (CASE WHEN s.name = 'General' OR s.id = 1 THEN 0 ELSE 1 END), s.created_at DESC`,
       [req.userId]
     );
     ramCache.set(cacheKey, result.rows, 60000);
@@ -91,11 +125,16 @@ router.get('/', authMiddleware, async (req, res) => {
 // Get all public servers (discovery page)
 router.get('/discovery', async (req, res) => {
   try {
+    await ensureGeneralServerAndMembership(null);
+
     const cached = ramCache.get('public_discovery_servers');
     if (cached) return res.json(cached);
 
     const result = await query(
-      'SELECT id, name, description, owner_id, is_public, avatar_url, created_at FROM servers WHERE is_public = true ORDER BY created_at DESC'
+      `SELECT id, name, description, owner_id, is_public, avatar_url, created_at 
+       FROM servers 
+       WHERE is_public = true 
+       ORDER BY (CASE WHEN name = 'General' OR id = 1 THEN 0 ELSE 1 END), created_at DESC`
     );
     ramCache.set('public_discovery_servers', result.rows, 120000);
     res.json(result.rows);
@@ -108,20 +147,14 @@ router.get('/discovery', async (req, res) => {
 // Get user's servers
 router.get('/my-servers', authMiddleware, async (req, res) => {
   try {
-    // Auto-enroll user in General server if missing
-    await query(`
-      INSERT INTO server_members (user_id, server_id)
-      SELECT $1::varchar, s.id FROM servers s
-      WHERE (s.name = 'General' OR s.id = 1)
-      ON CONFLICT (user_id, server_id) DO NOTHING
-    `, [req.userId]);
+    await ensureGeneralServerAndMembership(req.userId);
 
     const result = await query(
       `SELECT s.id, s.name, s.description, s.owner_id, s.is_public, s.avatar_url, s.created_at
        FROM servers s
        INNER JOIN server_members sm ON s.id = sm.server_id
        WHERE sm.user_id = $1
-       ORDER BY s.created_at DESC`,
+       ORDER BY (CASE WHEN s.name = 'General' OR s.id = 1 THEN 0 ELSE 1 END), s.created_at DESC`,
       [req.userId]
     );
     res.json(result.rows);

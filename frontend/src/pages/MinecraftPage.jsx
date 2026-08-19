@@ -374,15 +374,17 @@ function MinecraftPage({ user, onBack }) {
   return (
     <div style={{
       minHeight: '100vh',
+      width: '100%',
       background: 'radial-gradient(ellipse at top, #141a24 0%, #0a0c10 100%)',
       color: '#f0f3f8',
       fontFamily: "'Outfit', sans-serif",
-      padding: '30px 20px 60px 20px',
+      padding: '30px 20px 120px 20px',
       boxSizing: 'border-box',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       position: 'relative',
+      overflowY: 'auto',
       overflowX: 'hidden'
     }}>
       {/* Background Ambient Glows */}

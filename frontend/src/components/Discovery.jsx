@@ -110,8 +110,8 @@ function Discovery({ currentUser }) {
                 <p>{server.description || 'No description'}</p>
                 
                 {isGeneral ? (
-                  <span className="joined-badge" style={{ color: '#5865F2', background: 'rgba(88, 101, 242, 0.15)', padding: '5px 10px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.85em' }}>
-                    Default Server
+                  <span className="joined-badge" style={{ color: '#00ffff', background: 'rgba(0, 255, 255, 0.15)', border: '1px solid rgba(0, 255, 255, 0.3)', padding: '5px 10px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.85em' }}>
+                    🔒 Mandatory Community Hub (Locked)
                   </span>
                 ) : isJoined ? (
                   <button

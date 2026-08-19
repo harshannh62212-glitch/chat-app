@@ -974,6 +974,23 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
             </button>
           )}
           {server.name} 
+          {isGeneralServer && (
+            <span style={{
+              fontSize: '0.45em',
+              background: 'rgba(0, 255, 255, 0.15)',
+              border: '1px solid rgba(0, 255, 255, 0.3)',
+              color: '#00ffff',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              marginLeft: '8px',
+              fontWeight: 'bold',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              verticalAlign: 'middle'
+            }}>
+              🔒 Mandatory
+            </span>
+          )}
           {selectedChatroom && viewingChat && <span className="channel-hash"># {selectedChatroom.name}</span>}
           {batteryInfo && (
             <span 

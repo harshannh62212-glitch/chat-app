@@ -32,7 +32,12 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
     try {
       const res = await axios.get('/api/servers/my-servers');
       if (Array.isArray(res.data)) {
-        setServers(res.data);
+        const sorted = [...res.data].sort((a, b) => ((a.name === 'General' || a.id === 1) ? -1 : (b.name === 'General' || b.id === 1) ? 1 : 0));
+        setServers(sorted);
+        if (!selectedServer && sorted.length > 0) {
+          const gen = sorted.find(s => s.name === 'General' || s.id === 1) || sorted[0];
+          setSelectedServer(gen);
+        }
       } else {
         setServers([]);
       }
@@ -127,16 +132,24 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
         <div className="rail-separator"></div>
 
         <div className="rail-servers">
-          {(Array.isArray(servers) ? servers : []).map(srv => (
-            <div 
-              key={srv.id}
-              className={`rail-icon server-icon ${selectedServer?.id === srv.id ? 'active' : ''}`}
-              onClick={() => { setSelectedServer(srv); setSelectedDM(null); setActiveTab('servers'); setViewingFriends(false); }}
-              title={srv.name}
-            >
-              {srv.name.substring(0, 2).toUpperCase()}
-            </div>
-          ))}
+          {(Array.isArray(servers) ? [...servers].sort((a, b) => ((a.name === 'General' || a.id === 1) ? -1 : (b.name === 'General' || b.id === 1) ? 1 : 0)) : []).map(srv => {
+            const isGeneral = srv.id === 1 || srv.name === 'General';
+            return (
+              <div 
+                key={srv.id}
+                className={`rail-icon server-icon ${selectedServer?.id === srv.id ? 'active' : ''} ${isGeneral ? 'general-server-rail-icon' : ''}`}
+                onClick={() => { setSelectedServer(srv); setSelectedDM(null); setActiveTab('servers'); setViewingFriends(false); }}
+                title={isGeneral ? `${srv.name} (Mandatory Community Hub - Locked 🔒)` : srv.name}
+                style={isGeneral ? {
+                  border: selectedServer?.id === srv.id ? '2px solid #00ffff' : '1px solid rgba(0, 255, 255, 0.35)',
+                  background: selectedServer?.id === srv.id ? 'rgba(0, 255, 255, 0.25)' : 'rgba(0, 255, 255, 0.08)',
+                  color: '#00ffff'
+                } : {}}
+              >
+                {isGeneral ? '🌐' : srv.name.substring(0, 2).toUpperCase()}
+              </div>
+            );
+          })}
         </div>
 
         <div 

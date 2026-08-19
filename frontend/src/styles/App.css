@@ -77,6 +77,14 @@ body {
   overflow-y: auto !important;
 }
 
+.app.minecraft-view {
+  width: 100%;
+  height: 100vh;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  background-color: #0a0c10;
+}
+
 .app.public-view {
   width: 100%;
   min-height: 100vh;
