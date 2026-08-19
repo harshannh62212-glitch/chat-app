@@ -336,13 +336,21 @@ async function createTables() {
         archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
-      CREATE TABLE IF NOT EXISTS public.archived_server_members (
+      CREATE TABLE IF NOT EXISTS user_blocks (
         id SERIAL PRIMARY KEY,
-        user_id VARCHAR(255) NOT NULL,
-        server_id INTEGER NOT NULL,
-        joined_at TIMESTAMP,
-        archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, server_id)
+        blocker_id INTEGER NOT NULL,
+        blocked_id INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(blocker_id, blocked_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS minecraft_bridge_queue (
+        id SERIAL PRIMARY KEY,
+        command TEXT NOT NULL,
+        status VARCHAR(32) DEFAULT 'pending',
+        response TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        executed_at TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS public.archived_friendships (

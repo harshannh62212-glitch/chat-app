@@ -163,4 +163,41 @@ router.post('/kick', authMiddleware, adminCheck, async (req, res) => {
   }
 });
 
+// 8. Bridge Worker: Long-poll or fetch pending commands for automatic Minecraft execution
+router.get('/bridge/poll', async (req, res) => {
+  try {
+    const { query } = require('../db/database');
+    const pending = await query(
+      "SELECT id, command FROM minecraft_bridge_queue WHERE status = 'pending' ORDER BY id ASC LIMIT 10"
+    );
+    if (pending.rows.length > 0) {
+      const ids = pending.rows.map(r => r.id);
+      await query(
+        "UPDATE minecraft_bridge_queue SET status = 'processing' WHERE id = ANY($1::int[])",
+        [ids]
+      );
+    }
+    res.json({ success: true, commands: pending.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 9. Bridge Worker: Acknowledge command execution
+router.post('/bridge/ack', async (req, res) => {
+  try {
+    const { query } = require('../db/database');
+    const { id, response } = req.body;
+    if (id) {
+      await query(
+        "UPDATE minecraft_bridge_queue SET status = 'completed', response = $1, executed_at = NOW() WHERE id = $2",
+        [response || 'OK', id]
+      );
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

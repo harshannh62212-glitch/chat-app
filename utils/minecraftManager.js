@@ -467,7 +467,8 @@ function sendScreenCommand(sessionName, command) {
 }
 
 /**
- * Unified Command Executor: Attempts RCON first; if unconfigured/failed, attempts local screen session
+ * Unified Command Executor: Attempts RCON first; if unconfigured/failed, attempts local screen session;
+ * otherwise dispatches to the live Minecraft Bridge Queue.
  */
 async function executeCommand(command) {
   if (!command || !command.trim()) {
@@ -478,7 +479,7 @@ async function executeCommand(command) {
   const config = await getMinecraftConfig();
 
   // 1. If RCON password is provided or host is reachable, try RCON
-  if (config.rconPassword || config.rconHost) {
+  if (config.rconPassword && config.rconHost) {
     try {
       const rconRes = await sendRconCommand(
         config.rconHost || '127.0.0.1',
@@ -493,12 +494,26 @@ async function executeCommand(command) {
     }
   }
 
-  // 2. Try Screen fallback
+  // 2. Try Screen fallback (if running locally on same host)
   try {
     const screenRes = await sendScreenCommand(config.screenSession || 'mc', cleanCmd);
     return screenRes;
-  } catch (screenErr) {
-    throw new Error(`Failed to execute command: RCON unavailable and screen session [${config.screenSession}] not found.`);
+  } catch (screenErr) {}
+
+  // 3. Fallback: Enqueue command in database for automatic Minecraft Bridge worker
+  try {
+    const queueRes = await query(
+      "INSERT INTO minecraft_bridge_queue (command, status) VALUES ($1, 'pending') RETURNING id, command, created_at",
+      [cleanCmd]
+    );
+    return {
+      success: true,
+      method: 'bridge_queue',
+      id: queueRes.rows[0]?.id,
+      response: `Dispatched [${cleanCmd}] to Minecraft Bridge Queue.`
+    };
+  } catch (queueErr) {
+    throw new Error(`Failed to execute command: ${queueErr.message}`);
   }
 }
 
