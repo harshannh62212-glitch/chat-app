@@ -522,6 +522,8 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       window.removeEventListener('api-failover-activated', handleFailover);
     };
   }, []);
+
+  const [viewingChat, setViewingChat] = useState(true);
   const DEFAULT_GEN_ROOM = { id: 1, name: 'general', is_general: true, server_id: server.id };
 
   // Reset selected chatroom and messages immediately when the server changes

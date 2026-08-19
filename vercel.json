@@ -14,15 +14,15 @@
     },
     {
       "source": "/api/(.*)",
-      "destination": "https://garlic-survey-closed-volunteer.trycloudflare.com/api/$1"
+      "destination": "https://chat-app-backend-render.onrender.com/api/$1"
     },
     {
       "source": "/socket.io/(.*)",
-      "destination": "https://garlic-survey-closed-volunteer.trycloudflare.com/socket.io/$1"
+      "destination": "https://chat-app-backend-render.onrender.com/socket.io/$1"
     },
     {
       "source": "/ping",
-      "destination": "https://garlic-survey-closed-volunteer.trycloudflare.com/ping"
+      "destination": "https://chat-app-backend-render.onrender.com/ping"
     },
     {
       "source": "/(.*)",
