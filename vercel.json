@@ -3,7 +3,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/((?!api/|ping).*)",
+      "source": "/((?!assets/|favicon.png).*)",
       "destination": "/index.html"
     }
   ]
