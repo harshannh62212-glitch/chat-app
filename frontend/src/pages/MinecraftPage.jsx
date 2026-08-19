@@ -243,19 +243,48 @@ function MinecraftPage({ user, onBack }) {
     }
   };
 
+  // Direct Supabase Queue Dispatch Helper
+  const dispatchBridgeCommand = async (rawCommand) => {
+    const cleanCmd = rawCommand.trim().replace(/^\//, '');
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aebntdjjniirnwthtwlx.supabase.co';
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
+
+    const res = await fetch(`${supabaseUrl}/rest/v1/minecraft_bridge_queue`, {
+      method: 'POST',
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({
+        command: cleanCmd,
+        status: 'pending'
+      })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.message || 'Failed to dispatch command to Supabase queue');
+    }
+
+    const data = await res.json();
+    return { success: true, id: data[0]?.id, method: 'supabase_direct_queue' };
+  };
+
   // 1. Send Broadcast Message
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
     if (!msgText.trim()) return;
     setMsgSending(true);
     try {
-      const res = await axios.post('/api/minecraft/message', {
-        message: msgText.trim(),
-        sender: msgSender.trim() || 'SERVER',
-        color: msgColor
-      }, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
-      });
+      const rawJson = JSON.stringify([
+        { text: `[${msgSender.trim() || 'SERVER'}] `, color: msgColor, bold: true },
+        { text: msgText.trim(), color: 'white', bold: false }
+      ]);
+      const cmd = `tellraw @a ${rawJson}`;
+      await dispatchBridgeCommand(cmd);
+
       showToast('In-game message broadcasted to all players!', 'success');
       setConsoleLogs(prev => [
         ...prev,
@@ -263,10 +292,10 @@ function MinecraftPage({ user, onBack }) {
       ]);
       setMsgText('');
     } catch (err) {
-      showToast(err.response?.data?.error || 'Failed to send broadcast message', 'error');
+      showToast(err.message || 'Failed to send broadcast message', 'error');
       setConsoleLogs(prev => [
         ...prev,
-        { text: `[BROADCAST ERROR] ${err.response?.data?.error || err.message}`, type: 'error', time: new Date().toLocaleTimeString() }
+        { text: `[BROADCAST ERROR] ${err.message}`, type: 'error', time: new Date().toLocaleTimeString() }
       ]);
     } finally {
       setMsgSending(false);
@@ -279,14 +308,21 @@ function MinecraftPage({ user, onBack }) {
     if (!alertTitle.trim()) return;
     setAlertSending(true);
     try {
-      const res = await axios.post('/api/minecraft/alert', {
-        title: alertTitle.trim(),
-        subtitle: alertSubtitle.trim(),
-        level: alertLevel,
-        playSound: alertSound
-      }, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
-      });
+      let titleColor = 'yellow';
+      if (alertLevel === 'error') titleColor = 'red';
+      else if (alertLevel === 'info') titleColor = 'aqua';
+      else if (alertLevel === 'event') titleColor = 'light_purple';
+
+      const titleJson = JSON.stringify({ text: alertTitle.trim(), color: titleColor, bold: true });
+      await dispatchBridgeCommand(`title @a title ${titleJson}`);
+      if (alertSubtitle.trim()) {
+        const subJson = JSON.stringify({ text: alertSubtitle.trim(), color: 'white', italic: true });
+        await dispatchBridgeCommand(`title @a subtitle ${subJson}`);
+      }
+      if (alertSound) {
+        await dispatchBridgeCommand('playsound minecraft:block.bell.use master @a ~ ~ ~ 1 1');
+      }
+
       showToast('🚨 On-Screen Alert displayed to all players!', 'success');
       setConsoleLogs(prev => [
         ...prev,
@@ -295,10 +331,10 @@ function MinecraftPage({ user, onBack }) {
       setAlertTitle('');
       setAlertSubtitle('');
     } catch (err) {
-      showToast(err.response?.data?.error || 'Failed to dispatch alert', 'error');
+      showToast(err.message || 'Failed to dispatch alert', 'error');
       setConsoleLogs(prev => [
         ...prev,
-        { text: `[ALERT ERROR] ${err.response?.data?.error || err.message}`, type: 'error', time: new Date().toLocaleTimeString() }
+        { text: `[ALERT ERROR] ${err.message}`, type: 'error', time: new Date().toLocaleTimeString() }
       ]);
     } finally {
       setAlertSending(false);
@@ -309,30 +345,25 @@ function MinecraftPage({ user, onBack }) {
   const handlePresetDispatch = async (preset) => {
     try {
       if (preset.type === 'alert') {
-        await axios.post('/api/minecraft/alert', {
-          title: preset.title,
-          subtitle: preset.subtitle,
-          level: preset.level,
-          playSound: true
-        }, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
-        });
+        const titleJson = JSON.stringify({ text: preset.title, color: 'yellow', bold: true });
+        await dispatchBridgeCommand(`title @a title ${titleJson}`);
+        if (preset.subtitle) {
+          const subJson = JSON.stringify({ text: preset.subtitle, color: 'white', italic: true });
+          await dispatchBridgeCommand(`title @a subtitle ${subJson}`);
+        }
+        await dispatchBridgeCommand('playsound minecraft:block.bell.use master @a ~ ~ ~ 1 1');
         showToast(`Dispatched preset: "${preset.name}"`, 'success');
       } else if (preset.type === 'command') {
-        const res = await axios.post('/api/minecraft/command', {
-          command: preset.command
-        }, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
-        });
+        await dispatchBridgeCommand(preset.command);
         showToast(`Executed preset: "${preset.name}"`, 'success');
         setConsoleLogs(prev => [
           ...prev,
           { text: `> /${preset.command}`, type: 'input', time: new Date().toLocaleTimeString() },
-          { text: res.data.response || 'Executed', type: 'success', time: new Date().toLocaleTimeString() }
+          { text: 'Dispatched to live server.', type: 'success', time: new Date().toLocaleTimeString() }
         ]);
       }
     } catch (err) {
-      showToast(err.response?.data?.error || 'Preset execution failed', 'error');
+      showToast(err.message || 'Preset execution failed', 'error');
     }
   };
 
@@ -349,19 +380,15 @@ function MinecraftPage({ user, onBack }) {
     setConsoleCmd('');
 
     try {
-      const res = await axios.post('/api/minecraft/command', {
-        command: cmd
-      }, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
-      });
+      await dispatchBridgeCommand(cmd);
       setConsoleLogs(prev => [
         ...prev,
-        { text: res.data.response || 'Command executed successfully.', type: 'output', time: new Date().toLocaleTimeString() }
+        { text: `Dispatched [/${cmd.replace(/^\//, '')}] to live server.`, type: 'output', time: new Date().toLocaleTimeString() }
       ]);
     } catch (err) {
       setConsoleLogs(prev => [
         ...prev,
-        { text: `Error: ${err.response?.data?.error || err.message}`, type: 'error', time: new Date().toLocaleTimeString() }
+        { text: `Error: ${err.message}`, type: 'error', time: new Date().toLocaleTimeString() }
       ]);
     } finally {
       setCmdExecuting(false);
@@ -373,16 +400,11 @@ function MinecraftPage({ user, onBack }) {
     const reason = window.prompt(`Enter kick reason for ${username}:`, 'Kicked by Server Administrator');
     if (reason === null) return;
     try {
-      await axios.post('/api/minecraft/kick', {
-        username,
-        reason
-      }, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
-      });
+      await dispatchBridgeCommand(`kick ${username} ${reason || 'Kicked by admin'}`);
       showToast(`Player ${username} has been kicked from the server.`, 'success');
       fetchStatus();
     } catch (err) {
-      showToast(err.response?.data?.error || `Failed to kick ${username}`, 'error');
+      showToast(err.message || `Failed to kick ${username}`, 'error');
     }
   };
 

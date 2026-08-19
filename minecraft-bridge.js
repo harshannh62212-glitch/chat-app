@@ -4,19 +4,20 @@
  * 
  * Runs on your Minecraft server host machine (Latitude / Linux / Windows / Mac).
  * Requires NO port-forwarding or public RCON exposure.
- * Outbound connects to the Wired-IO backend and automatically relays in-game broadcasts,
+ * Directly connects to Supabase database queue and automatically relays in-game broadcasts,
  * title alerts, player kicks, and admin console commands directly to Minecraft.
  */
 
 const { exec } = require('child_process');
 
-const BACKEND_URL = process.env.WIRED_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://aebntdjjniirnwthtwlx.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
 const SCREEN_NAME = process.env.MC_SCREEN_NAME || 'mc'; // GNU Screen session name
 
 console.log('====================================================');
 console.log('   🟢 WIRED-IO MINECRAFT AUTOMATIC COMMAND BRIDGE   ');
 console.log('====================================================');
-console.log(`[*] Connecting to Wired-IO Backend: ${BACKEND_URL}`);
+console.log(`[*] Connecting to Supabase Cloud: ${SUPABASE_URL}`);
 console.log(`[*] Targeting local Minecraft Screen session: [${SCREEN_NAME}]`);
 console.log('[*] Listening for in-game broadcasts, alerts, and console commands...\n');
 
@@ -51,12 +52,18 @@ async function executeOnServer(command) {
 
 async function pollQueue() {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/minecraft/bridge/poll`);
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/minecraft_bridge_queue?status=eq.pending&order=id.asc&limit=10`, {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`
+      }
+    });
+
     if (res.ok) {
       consecutiveErrors = 0;
-      const data = await res.json();
-      if (data && Array.isArray(data.commands) && data.commands.length > 0) {
-        for (const item of data.commands) {
+      const commands = await res.json();
+      if (Array.isArray(commands) && commands.length > 0) {
+        for (const item of commands) {
           console.log(`[⚡ RELAY] Executing command #${item.id}: [${item.command}]`);
           const execRes = await executeOnServer(item.command);
           
@@ -66,21 +73,32 @@ async function pollQueue() {
             console.warn(`[⚠️ WARN] Command #${item.id} execution warning:`, execRes.error);
           }
 
-          // Acknowledge execution
+          // Acknowledge execution in Supabase
           try {
-            await fetch(`${BACKEND_URL}/api/minecraft/bridge/ack`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: item.id, response: execRes.response || 'Executed' })
+            await fetch(`${SUPABASE_URL}/rest/v1/minecraft_bridge_queue?id=eq.${item.id}`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+              },
+              body: JSON.stringify({
+                status: 'completed',
+                response: execRes.response || 'Executed',
+                executed_at: new Date().toISOString()
+              })
             });
-          } catch (ackErr) {}
+          } catch (ackErr) {
+            console.error('Failed to acknowledge command in Supabase:', ackErr.message);
+          }
         }
       }
     }
   } catch (err) {
     consecutiveErrors++;
     if (consecutiveErrors === 1) {
-      console.warn('[!] Temporary network hiccup connecting to cloud backend. Retrying in background...');
+      console.warn('[!] Network check connecting to Supabase queue. Retrying in background...');
     }
   }
 
