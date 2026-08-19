@@ -496,6 +496,29 @@ async function createTables() {
         SELECT 1 FROM server_members sm 
         WHERE sm.user_id = u.id AND sm.server_id = $1
       )
+      ON CONFLICT (user_id, server_id) DO NOTHING;
+
+      -- Database trigger to force ALL newly created users to automatically join General server
+      CREATE OR REPLACE FUNCTION public.auto_enroll_user_general_server_trigger()
+      RETURNS TRIGGER AS $$
+      DECLARE
+        target_general_server_id INT;
+      BEGIN
+        SELECT id INTO target_general_server_id FROM public.servers WHERE name = 'General' OR id = 1 LIMIT 1;
+        IF target_general_server_id IS NOT NULL THEN
+          INSERT INTO public.server_members (user_id, server_id, joined_at)
+          VALUES (NEW.id, target_general_server_id, NOW())
+          ON CONFLICT (user_id, server_id) DO NOTHING;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+      DROP TRIGGER IF EXISTS tr_auto_enroll_user_general ON public.users;
+      CREATE TRIGGER tr_auto_enroll_user_general
+        AFTER INSERT ON public.users
+        FOR EACH ROW
+        EXECUTE FUNCTION public.auto_enroll_user_general_server_trigger();
     `, [generalServerId]);
 
     // Auto-Moderation Trigger
