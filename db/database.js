@@ -504,9 +504,11 @@ async function createTables() {
         SELECT 1 FROM server_members sm 
         WHERE sm.user_id = u.id AND sm.server_id = $1
       )
-      ON CONFLICT (user_id, server_id) DO NOTHING;
+      ON CONFLICT (user_id, server_id) DO NOTHING
+    `, [generalServerId]);
 
-      -- Database trigger to force ALL newly created users to automatically join General server
+    // Database trigger to force ALL newly created users to automatically join General server
+    await client.query(`
       CREATE OR REPLACE FUNCTION public.auto_enroll_user_general_server_trigger()
       RETURNS TRIGGER AS $$
       DECLARE
@@ -521,13 +523,15 @@ async function createTables() {
         RETURN NEW;
       END;
       $$ LANGUAGE plpgsql SECURITY DEFINER;
+    `);
 
-      DROP TRIGGER IF EXISTS tr_auto_enroll_user_general ON public.users;
+    await client.query(`DROP TRIGGER IF EXISTS tr_auto_enroll_user_general ON public.users;`);
+    await client.query(`
       CREATE TRIGGER tr_auto_enroll_user_general
         AFTER INSERT ON public.users
         FOR EACH ROW
         EXECUTE FUNCTION public.auto_enroll_user_general_server_trigger();
-    `, [generalServerId]);
+    `);
 
     // Auto-Moderation Trigger
     await client.query(`

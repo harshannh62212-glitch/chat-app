@@ -9,12 +9,7 @@ import '../styles/DirectMessage.css';
 
 const getActiveSocketUrl = () => {
   const saved = localStorage.getItem('custom_proxy_target');
-  if (saved) return saved;
-  const activeHome = localStorage.getItem('active_home_target');
-  if (activeHome) return activeHome;
-  const activeNode = localStorage.getItem('active_backend_target');
-  if (activeNode && !activeNode.includes('vercel.app')) return activeNode;
-  return import.meta.env.PROD ? 'https://garlic-survey-closed-volunteer.trycloudflare.com' : 'http://localhost:8000';
+  return import.meta.env.PROD ? window.location.origin : 'http://localhost:8000';
 };
 
 const socket = io(getActiveSocketUrl(), {

@@ -11,10 +11,6 @@ import '../styles/ServerSettings.css';
 
 
 const getActiveSocketUrl = () => {
-  const saved = localStorage.getItem('custom_proxy_target');
-  if (saved) return saved;
-  const activeNode = localStorage.getItem('active_backend_target');
-  if (activeNode) return activeNode;
   return import.meta.env.PROD ? window.location.origin : 'http://localhost:8000';
 };
 

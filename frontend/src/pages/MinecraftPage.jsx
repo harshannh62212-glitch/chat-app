@@ -67,7 +67,13 @@ function MinecraftPage({ user, onBack }) {
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   const showToast = (message, type = 'success') => {
-    setToast({ show: true, message, type });
+    let cleanMsg = 'An event occurred';
+    if (typeof message === 'string') {
+      cleanMsg = message;
+    } else if (message && typeof message === 'object') {
+      cleanMsg = message.message || message.error || JSON.stringify(message);
+    }
+    setToast({ show: true, message: cleanMsg, type });
     setTimeout(() => {
       setToast({ show: false, message: '', type: 'success' });
     }, 4000);
@@ -1385,7 +1391,7 @@ function MinecraftPage({ user, onBack }) {
                       wordBreak: 'break-all'
                     }}>
                       <span style={{ color: '#7f8c8d', marginRight: '8px' }}>[{log.time}]</span>
-                      {log.text}
+                      {typeof log.text === 'string' ? log.text : (log.text?.message || JSON.stringify(log.text))}
                     </div>
                   ))}
                   <div ref={consoleEndRef} />
