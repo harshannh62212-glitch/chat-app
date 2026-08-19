@@ -77,71 +77,91 @@ function MinecraftPage({ user, onBack }) {
   const fetchStatus = async () => {
     setIsRefreshing(true);
     try {
-      let res = null;
+      // 1. Try local/same-origin backend status endpoint
       try {
-        res = await axios.get('/api/minecraft/status', { timeout: 4000 });
-      } catch (e1) {
-        try {
-          res = await axios.get('/api/minecraft-status', { timeout: 4000 });
-        } catch (e2) {}
-      }
-
-      if (res && res.data && res.data.online) {
-        setStatus({
-          online: true,
-          players: {
-            online: res.data.players?.online || 0,
-            max: res.data.players?.max || 20,
-            sample: Array.isArray(res.data.players?.sample) ? res.data.players.sample : []
-          },
-          version: res.data.version || '1.21.11',
-          motd: res.data.motd || 'Wired-IO Private Minecraft Server',
-          latency: res.data.latency || 175,
-          loading: false,
-          source: res.data.source || 'native_slp'
-        });
-        if (res.data.host) {
-          setServerIp(res.data.host);
+        const res = await axios.get('/api/minecraft/status', { timeout: 3500 });
+        if (res && res.data && res.data.online) {
+          setStatus({
+            online: true,
+            players: {
+              online: res.data.players?.online || 0,
+              max: res.data.players?.max || 20,
+              sample: Array.isArray(res.data.players?.sample) ? res.data.players.sample : []
+            },
+            version: res.data.version || 'PaperMC 1.21.11',
+            motd: res.data.motd || 'Wired-IO Private Minecraft Server',
+            latency: res.data.latency || 175,
+            loading: false,
+            source: res.data.source || 'native_slp'
+          });
+          if (res.data.host) setServerIp(res.data.host);
+          setIsRefreshing(false);
+          return;
         }
-        // Direct browser fallback to minetools
-        try {
-          const directRes = await fetch('https://api.minetools.eu/ping/atoms-fools.tun.ply.gg/60364');
-          if (directRes.ok) {
-            const d = await directRes.json();
-            if (!d.error && d.version) {
-              let motd = '';
-              if (typeof d.description === 'string') motd = d.description;
-              else if (d.description?.text) motd = d.description.text;
+      } catch (e1) {}
 
-              setStatus({
-                online: true,
-                players: {
-                  online: d.players?.online || 0,
-                  max: d.players?.max || 20,
-                  sample: Array.isArray(d.players?.sample) ? d.players.sample : []
-                },
-                version: d.version?.name || '1.21.11',
-                motd: motd || 'Wired-IO Private Minecraft Server',
-                latency: Math.round(d.latency || 175),
-                loading: false,
-                source: 'minetools_direct'
-              });
-              setServerIp('atoms-fools.tun.ply.gg');
-              return;
-            }
+      // 2. Try serverless endpoint
+      try {
+        const res2 = await axios.get('/api/minecraft-status', { timeout: 3500 });
+        if (res2 && res2.data && res2.data.online) {
+          setStatus({
+            online: true,
+            players: {
+              online: res2.data.players?.online || 0,
+              max: res2.data.players?.max || 20,
+              sample: Array.isArray(res2.data.players?.sample) ? res2.data.players.sample : []
+            },
+            version: res2.data.version || 'PaperMC 1.21.11',
+            motd: res2.data.motd || 'Wired-IO Private Minecraft Server',
+            latency: res2.data.latency || 175,
+            loading: false,
+            source: 'serverless'
+          });
+          setIsRefreshing(false);
+          return;
+        }
+      } catch (e2) {}
+
+      // 3. Direct browser HTTPS query to minetools API
+      try {
+        const directRes = await fetch('https://api.minetools.eu/ping/atoms-fools.tun.ply.gg/60364');
+        if (directRes.ok) {
+          const d = await directRes.json();
+          if (!d.error && d.version) {
+            let motd = 'Wired-IO Private Minecraft Server';
+            if (typeof d.description === 'string') motd = d.description;
+            else if (d.description?.text) motd = d.description.text;
+
+            setStatus({
+              online: true,
+              players: {
+                online: d.players?.online || 0,
+                max: d.players?.max || 20,
+                sample: Array.isArray(d.players?.sample) ? d.players.sample : []
+              },
+              version: d.version?.name || 'PaperMC 1.21.11',
+              motd: motd,
+              latency: Math.round(d.latency || 175),
+              loading: false,
+              source: 'minetools_direct'
+            });
+            setServerIp('atoms-fools.tun.ply.gg');
+            setIsRefreshing(false);
+            return;
           }
-        } catch (e4) {}
+        }
+      } catch (e3) {}
 
-        setStatus({
-          online: false,
-          players: { online: 0, max: 20, sample: [] },
-          version: '1.21.x',
-          motd: 'Server Offline or Unreachable',
-          latency: null,
-          loading: false,
-          source: 'offline'
-        });
-      }
+      // 4. Fallback if unreachable
+      setStatus({
+        online: false,
+        players: { online: 0, max: 20, sample: [] },
+        version: '1.21.x',
+        motd: 'Server Offline or Unreachable',
+        latency: null,
+        loading: false,
+        source: 'offline'
+      });
     } catch (err) {
       console.error('Error fetching Minecraft status:', err);
       setStatus(prev => ({ ...prev, loading: false }));
