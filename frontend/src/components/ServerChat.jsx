@@ -118,10 +118,11 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     });
   };
 
-  const canManageRoles = (isServerOwner || isGlobalAdmin || hasPerm('manage_roles')) && server.id !== 1;
+  const isGeneralServer = server.id === 1 || server.name === 'General';
+  const canManageRoles = (isServerOwner || isGlobalAdmin || hasPerm('manage_roles')) && !isGeneralServer;
   const canManageMessages = hasPerm('manage_messages');
   const canManageChannels = hasPerm('manage_channels');
-  const canKickMembers = hasPerm('kick_members') && server.id !== 1;
+  const canKickMembers = hasPerm('kick_members') && !isGeneralServer;
 
   useEffect(() => {
     const handleConnectError = (err) => {
@@ -564,7 +565,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   };
 
   const fetchServerRoles = async () => {
-    if (server.id === 1) {
+    if (isGeneralServer) {
       setServerRoles([]);
       return;
     }

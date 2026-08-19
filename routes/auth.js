@@ -44,11 +44,11 @@ router.post('/register', async (req, res) => {
 
     // Auto-join General server on registration
     try {
-      const generalServerResult = await query("SELECT id FROM servers WHERE name = 'General' LIMIT 1");
+      const generalServerResult = await query("SELECT id FROM servers WHERE name = 'General' OR id = 1 LIMIT 1");
       if (generalServerResult.rows.length > 0) {
         const generalServerId = generalServerResult.rows[0].id;
         await query(
-          "INSERT INTO server_members (user_id, server_id) VALUES ($1, $2)",
+          "INSERT INTO server_members (user_id, server_id) VALUES ($1, $2) ON CONFLICT (user_id, server_id) DO NOTHING",
           [user.id, generalServerId]
         );
       }
@@ -100,6 +100,20 @@ router.post('/login', async (req, res) => {
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Auto-join General server on login if missing
+    try {
+      const generalServerResult = await query("SELECT id FROM servers WHERE name = 'General' OR id = 1 LIMIT 1");
+      if (generalServerResult.rows.length > 0) {
+        const generalServerId = generalServerResult.rows[0].id;
+        await query(
+          "INSERT INTO server_members (user_id, server_id) VALUES ($1, $2) ON CONFLICT (user_id, server_id) DO NOTHING",
+          [user.id, generalServerId]
+        );
+      }
+    } catch (err) {
+      console.error('Failed to auto-join General server on login:', err);
     }
 
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);

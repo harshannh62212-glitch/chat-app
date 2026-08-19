@@ -220,6 +220,30 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
           🎮
         </div>
 
+        {/* Minecraft Server Portal Button */}
+        <div 
+          className="rail-icon minecraft-rail-btn"
+          onClick={() => {
+            window.history.pushState({}, '', '/mc');
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          }}
+          title="Wired Minecraft Server & Live Player Tracker"
+          style={{
+            background: 'rgba(56, 176, 0, 0.15)',
+            border: '1px solid rgba(56, 176, 0, 0.4)',
+            color: '#70e000',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '20px',
+            marginBottom: '10px',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          ⛏️
+        </div>
+
         {user && user.is_admin && (
           <div 
             className="rail-icon admin-rail-btn"

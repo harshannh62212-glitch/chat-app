@@ -1,10 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 
 function MinecraftPage({ user, onBack }) {
-  const serverIp = 'atoms-fools.tun.ply.gg';
+  const [serverIp, setServerIp] = useState('atoms-fools.tun.ply.gg');
   const [copied, setCopied] = useState(false);
-  const [status, setStatus] = useState({ online: false, players: { online: 0, max: 20 }, version: '1.21.11', loading: true });
+  const [status, setStatus] = useState({
+    online: false,
+    players: { online: 0, max: 20, sample: [] },
+    version: '1.21.x',
+    motd: 'Wired-IO Private Minecraft Server',
+    latency: null,
+    loading: true,
+    source: 'initial'
+  });
 
+  const [refreshIntervalSec, setRefreshIntervalSec] = useState(15);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [playerSearchQuery, setPlayerSearchQuery] = useState('');
+
+  // Balance & Account Linking State
   const [balanceInfo, setBalanceInfo] = useState({ balance: null, loading: false, found: false, username: '' });
   const [searchUsername, setSearchUsername] = useState('');
   const [searching, setSearching] = useState(false);
@@ -12,33 +26,128 @@ function MinecraftPage({ user, onBack }) {
   const [isLinking, setIsLinking] = useState(false);
   const [showLinkInput, setShowLinkInput] = useState(false);
 
+  // Admin Broadcast & Control States
+  const isAdmin = user && (user.is_admin || user.username === 'Nxghtmare3621' || user.username === 'ADMIN');
+  const [adminTab, setAdminTab] = useState('message'); // 'message', 'alert', 'presets', 'console', 'config'
+
+  // Server Message state
+  const [msgText, setMsgText] = useState('');
+  const [msgSender, setMsgSender] = useState('SERVER');
+  const [msgColor, setMsgColor] = useState('gold');
+  const [msgSending, setMsgSending] = useState(false);
+
+  // Server Alert state
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertSubtitle, setAlertSubtitle] = useState('');
+  const [alertLevel, setAlertLevel] = useState('warning'); // 'info', 'warning', 'critical', 'success'
+  const [alertSound, setAlertSound] = useState(true);
+  const [alertSending, setAlertSending] = useState(false);
+
+  // Console Command state
+  const [consoleCmd, setConsoleCmd] = useState('');
+  const [consoleLogs, setConsoleLogs] = useState([
+    { text: 'Wired Minecraft Command Console initialized. Type any command to execute.', type: 'info', time: new Date().toLocaleTimeString() }
+  ]);
+  const [cmdExecuting, setCmdExecuting] = useState(false);
+  const consoleEndRef = useRef(null);
+
+  // Config settings state
+  const [serverConfig, setServerConfig] = useState({
+    host: 'atoms-fools.tun.ply.gg',
+    port: 25565,
+    rconHost: '127.0.0.1',
+    rconPort: 25575,
+    rconPassword: '',
+    screenSession: 'mc'
+  });
+  const [configLoading, setConfigLoading] = useState(false);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+
+  // Feedback Toasts
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' });
+    }, 4000);
+  };
+
+  // Fetch Server Status
+  const fetchStatus = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await axios.get('/api/minecraft/status');
+      if (res.data) {
+        setStatus({
+          online: !!res.data.online,
+          players: {
+            online: res.data.players?.online || 0,
+            max: res.data.players?.max || 20,
+            sample: Array.isArray(res.data.players?.sample) ? res.data.players.sample : []
+          },
+          version: res.data.version || '1.21.x',
+          motd: res.data.motd || 'Wired-IO Private Minecraft Server',
+          latency: res.data.latency || null,
+          loading: false,
+          source: res.data.source || 'api'
+        });
+        if (res.data.host) {
+          setServerIp(res.data.host);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching Minecraft status:', err);
+      setStatus(prev => ({ ...prev, loading: false }));
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Fetch Admin Server Config
+  const fetchConfig = async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await axios.get('/api/minecraft/config', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
+      });
+      if (res.data) {
+        setServerConfig(prev => ({
+          ...prev,
+          host: res.data.host || prev.host,
+          port: res.data.port || prev.port,
+          rconHost: res.data.rconHost || prev.rconHost,
+          rconPort: res.data.rconPort || prev.rconPort,
+          screenSession: res.data.screenSession || prev.screenSession
+        }));
+      }
+    } catch (err) {
+      // Ignore or log
+    }
+  };
+
+  // Economy Balance
   const fetchBalance = async (usernameToFetch = '') => {
     setSearching(true);
     try {
       const url = usernameToFetch 
         ? `/api/users/minecraft/balance?username=${encodeURIComponent(usernameToFetch)}`
         : `/api/users/minecraft/balance`;
-      const res = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('chat_token')}`
-        }
+      const res = await axios.get(url, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (res.data) {
         setBalanceInfo({
-          balance: data.balance,
+          balance: res.data.balance,
           loading: false,
-          found: data.found,
-          username: data.username
+          found: res.data.found,
+          username: res.data.username
         });
         if (!usernameToFetch) {
-          setBoundUsernameInput(data.username);
+          setBoundUsernameInput(res.data.username);
         }
-      } else {
-        setBalanceInfo(prev => ({ ...prev, loading: false, found: false }));
       }
     } catch (err) {
-      console.error('Failed to fetch Minecraft balance:', err);
       setBalanceInfo(prev => ({ ...prev, loading: false, found: false }));
     } finally {
       setSearching(false);
@@ -48,116 +157,292 @@ function MinecraftPage({ user, onBack }) {
   const handleLinkUsername = async () => {
     setIsLinking(true);
     try {
-      const res = await fetch('/api/users/minecraft/username', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('chat_token')}`
-        },
-        body: JSON.stringify({ minecraftUsername: boundUsernameInput })
-      });
-      if (res.ok) {
-        setShowLinkInput(false);
-        fetchBalance();
-      }
+      await axios.put('/api/users/minecraft/username', 
+        { minecraftUsername: boundUsernameInput },
+        { headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` } }
+      );
+      setShowLinkInput(false);
+      showToast('Minecraft account successfully linked!', 'success');
+      fetchBalance();
     } catch (err) {
-      console.error('Failed to link Minecraft username:', err);
+      showToast(err.response?.data?.error || 'Failed to link account', 'error');
     } finally {
       setIsLinking(false);
     }
   };
 
-  useEffect(() => {
-    if (user) {
-      fetchBalance();
+  // 1. Send Broadcast Message
+  const handleSendMessage = async (e) => {
+    if (e) e.preventDefault();
+    if (!msgText.trim()) return;
+    setMsgSending(true);
+    try {
+      const res = await axios.post('/api/minecraft/message', {
+        message: msgText.trim(),
+        sender: msgSender.trim() || 'SERVER',
+        color: msgColor
+      }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
+      });
+      showToast('In-game message broadcasted to all players!', 'success');
+      setConsoleLogs(prev => [
+        ...prev,
+        { text: `[BROADCAST CHAT] [${msgSender}] ${msgText}`, type: 'success', time: new Date().toLocaleTimeString() }
+      ]);
+      setMsgText('');
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to send broadcast message', 'error');
+      setConsoleLogs(prev => [
+        ...prev,
+        { text: `[BROADCAST ERROR] ${err.response?.data?.error || err.message}`, type: 'error', time: new Date().toLocaleTimeString() }
+      ]);
+    } finally {
+      setMsgSending(false);
     }
-  }, [user]);
+  };
 
+  // 2. Send Screen Alert
+  const handleSendAlert = async (e) => {
+    if (e) e.preventDefault();
+    if (!alertTitle.trim()) return;
+    setAlertSending(true);
+    try {
+      const res = await axios.post('/api/minecraft/alert', {
+        title: alertTitle.trim(),
+        subtitle: alertSubtitle.trim(),
+        level: alertLevel,
+        playSound: alertSound
+      }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
+      });
+      showToast('🚨 On-Screen Alert displayed to all players!', 'success');
+      setConsoleLogs(prev => [
+        ...prev,
+        { text: `[SCREEN ALERT] ${alertTitle.toUpperCase()}${alertSubtitle ? ' - ' + alertSubtitle : ''} (${alertLevel.toUpperCase()})`, type: 'warning', time: new Date().toLocaleTimeString() }
+      ]);
+      setAlertTitle('');
+      setAlertSubtitle('');
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to dispatch alert', 'error');
+      setConsoleLogs(prev => [
+        ...prev,
+        { text: `[ALERT ERROR] ${err.response?.data?.error || err.message}`, type: 'error', time: new Date().toLocaleTimeString() }
+      ]);
+    } finally {
+      setAlertSending(false);
+    }
+  };
 
-  useEffect(() => {
-    const fetchServerStatus = async () => {
-      try {
-        const res = await fetch(`https://api.mcsrvstat.us/3/${serverIp}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.online) {
-            setStatus({
-              online: true,
-              players: {
-                online: data.players?.online || 0,
-                max: data.players?.max || 20
-              },
-              version: data.version || '1.21.11',
-              loading: false
-            });
-          } else {
-            setStatus(prev => ({ ...prev, online: false, loading: false }));
-          }
-        } else {
-          setStatus(prev => ({ ...prev, loading: false }));
-        }
-      } catch (err) {
-        console.error('Failed to fetch Minecraft server status:', err);
-        setStatus(prev => ({ ...prev, loading: false }));
+  // 3. Quick Action Preset Dispatches
+  const handlePresetDispatch = async (preset) => {
+    try {
+      if (preset.type === 'alert') {
+        await axios.post('/api/minecraft/alert', {
+          title: preset.title,
+          subtitle: preset.subtitle,
+          level: preset.level,
+          playSound: true
+        }, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
+        });
+        showToast(`Dispatched preset: "${preset.name}"`, 'success');
+      } else if (preset.type === 'command') {
+        const res = await axios.post('/api/minecraft/command', {
+          command: preset.command
+        }, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
+        });
+        showToast(`Executed preset: "${preset.name}"`, 'success');
+        setConsoleLogs(prev => [
+          ...prev,
+          { text: `> /${preset.command}`, type: 'input', time: new Date().toLocaleTimeString() },
+          { text: res.data.response || 'Executed', type: 'success', time: new Date().toLocaleTimeString() }
+        ]);
       }
-    };
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Preset execution failed', 'error');
+    }
+  };
 
-    fetchServerStatus();
-    const interval = setInterval(fetchServerStatus, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  // 4. Execute Console Command
+  const handleRunCommand = async (e) => {
+    if (e) e.preventDefault();
+    if (!consoleCmd.trim()) return;
+    const cmd = consoleCmd.trim();
+    setCmdExecuting(true);
+    setConsoleLogs(prev => [
+      ...prev,
+      { text: `> /${cmd.replace(/^\//, '')}`, type: 'input', time: new Date().toLocaleTimeString() }
+    ]);
+    setConsoleCmd('');
+
+    try {
+      const res = await axios.post('/api/minecraft/command', {
+        command: cmd
+      }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
+      });
+      setConsoleLogs(prev => [
+        ...prev,
+        { text: res.data.response || 'Command executed successfully.', type: 'output', time: new Date().toLocaleTimeString() }
+      ]);
+    } catch (err) {
+      setConsoleLogs(prev => [
+        ...prev,
+        { text: `Error: ${err.response?.data?.error || err.message}`, type: 'error', time: new Date().toLocaleTimeString() }
+      ]);
+    } finally {
+      setCmdExecuting(false);
+    }
+  };
+
+  // 5. Kick Player
+  const handleKickPlayer = async (username) => {
+    const reason = window.prompt(`Enter kick reason for ${username}:`, 'Kicked by Server Administrator');
+    if (reason === null) return;
+    try {
+      await axios.post('/api/minecraft/kick', {
+        username,
+        reason
+      }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
+      });
+      showToast(`Player ${username} has been kicked from the server.`, 'success');
+      fetchStatus();
+    } catch (err) {
+      showToast(err.response?.data?.error || `Failed to kick ${username}`, 'error');
+    }
+  };
+
+  // 6. Save Config
+  const handleSaveConfig = async (e) => {
+    if (e) e.preventDefault();
+    setConfigLoading(true);
+    try {
+      await axios.put('/api/minecraft/config', serverConfig, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('chat_token')}` }
+      });
+      showToast('Server configuration saved successfully!', 'success');
+      setShowConfigModal(false);
+      fetchStatus();
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to save configuration', 'error');
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  // Auto-scroll console
+  useEffect(() => {
+    if (consoleEndRef.current) {
+      consoleEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [consoleLogs]);
+
+  // Periodic poll
+  useEffect(() => {
+    fetchStatus();
+    if (isAdmin) fetchConfig();
+    if (user) fetchBalance();
+
+    if (refreshIntervalSec > 0) {
+      const interval = setInterval(fetchStatus, refreshIntervalSec * 1000);
+      return () => clearInterval(interval);
+    }
+  }, [refreshIntervalSec, isAdmin, user]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(serverIp);
     setCopied(true);
+    showToast('Server IP copied to clipboard! ✓', 'success');
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const filteredPlayers = (status.players?.sample || []).filter(p => 
+    p.name.toLowerCase().includes(playerSearchQuery.toLowerCase())
+  );
+
+  const presets = [
+    { name: '🛑 Restart in 5m', type: 'alert', title: 'SERVER RESTART', subtitle: 'Server will restart in 5 minutes for updates.', level: 'critical' },
+    { name: '⚠️ Maintenance 15m', type: 'alert', title: 'SCHEDULED MAINTENANCE', subtitle: 'Server maintenance starting in 15 minutes.', level: 'warning' },
+    { name: '🧹 Clear Lag Entities', type: 'command', command: 'kill @e[type=item]' },
+    { name: '☀️ Set Day & Clear Sky', type: 'command', command: 'time set day; weather clear' },
+    { name: '🎁 Welcome Announcement', type: 'alert', title: 'WELCOME TO WIRED', subtitle: 'Check /rules and join our discord chat!', level: 'info' },
+    { name: '💾 Force Save All', type: 'command', command: 'save-all' }
+  ];
 
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #14161d 0%, #0b0c10 100%)',
-      color: '#fff',
+      background: 'radial-gradient(ellipse at top, #141a24 0%, #0a0c10 100%)',
+      color: '#f0f3f8',
       fontFamily: "'Outfit', sans-serif",
-      padding: '40px 20px',
+      padding: '30px 20px 60px 20px',
       boxSizing: 'border-box',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       position: 'relative',
-      overflow: 'hidden'
+      overflowX: 'hidden'
     }}>
-      {/* Background ambient light */}
+      {/* Background Ambient Glows */}
       <div style={{
         position: 'absolute',
-        width: '600px',
-        height: '600px',
-        background: 'radial-gradient(circle, rgba(56, 176, 0, 0.08) 0%, rgba(0,0,0,0) 70%)',
-        top: '-150px',
-        left: '-150px',
+        width: '650px',
+        height: '650px',
+        background: 'radial-gradient(circle, rgba(56, 176, 0, 0.12) 0%, rgba(0,0,0,0) 70%)',
+        top: '-120px',
+        left: '-120px',
         zIndex: 0,
         pointerEvents: 'none'
       }} />
       <div style={{
         position: 'absolute',
-        width: '600px',
-        height: '600px',
-        background: 'radial-gradient(circle, rgba(56, 176, 0, 0.05) 0%, rgba(0,0,0,0) 70%)',
-        bottom: '-150px',
-        right: '-150px',
+        width: '550px',
+        height: '550px',
+        background: 'radial-gradient(circle, rgba(0, 255, 255, 0.07) 0%, rgba(0,0,0,0) 70%)',
+        bottom: '0',
+        right: '-100px',
         zIndex: 0,
         pointerEvents: 'none'
       }} />
 
-      {/* Header Navigation */}
+      {/* Floating Toast Notification */}
+      {toast.show && (
+        <div style={{
+          position: 'fixed',
+          top: '25px',
+          right: '25px',
+          zIndex: 9999,
+          background: toast.type === 'error' ? 'rgba(231, 76, 60, 0.95)' : 'rgba(56, 176, 0, 0.95)',
+          color: '#fff',
+          padding: '12px 24px',
+          borderRadius: '12px',
+          fontWeight: '700',
+          fontSize: '0.95em',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.4)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          animation: 'slideIn 0.3s ease'
+        }}>
+          <span>{toast.type === 'error' ? '❌' : '✨'}</span>
+          <span>{toast.message}</span>
+        </div>
+      )}
+
+      {/* Header Bar */}
       <div style={{
         width: '100%',
-        maxWidth: '800px',
+        maxWidth: '1080px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '40px',
-        zIndex: 10
+        marginBottom: '30px',
+        zIndex: 10,
+        flexWrap: 'wrap',
+        gap: '15px'
       }}>
         <button
           onClick={onBack}
@@ -165,8 +450,8 @@ function MinecraftPage({ user, onBack }) {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            background: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
             padding: '10px 20px',
             borderRadius: '12px',
             color: '#fff',
@@ -176,132 +461,930 @@ function MinecraftPage({ user, onBack }) {
             transition: 'all 0.2s ease',
             fontFamily: "'Outfit', sans-serif"
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-            e.currentTarget.style.transform = 'translateX(-2px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-            e.currentTarget.style.transform = 'none';
-          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; }}
         >
           ← Back to Wired
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Live Controls & Refresh */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{
-            width: '10px',
-            height: '10px',
-            borderRadius: '50%',
-            backgroundColor: status.loading ? '#f1c40f' : (status.online ? '#2ecc71' : '#e74c3c'),
-            boxShadow: status.loading ? '0 0 10px #f1c40f' : (status.online ? '0 0 12px #2ecc71' : '0 0 10px #e74c3c'),
-            transition: 'all 0.3s ease'
-          }} />
-          <span style={{ fontSize: '0.9em', fontWeight: '600', color: '#a4b0be', textTransform: 'uppercase', letterSpacing: '1px' }}>
-            {status.loading ? 'Checking status...' : (status.online ? 'Server Online' : 'Server Offline')}
-          </span>
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'rgba(0,0,0,0.4)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            padding: '8px 14px',
+            borderRadius: '12px'
+          }}>
+            <div style={{
+              width: '10px',
+              height: '10px',
+              borderRadius: '50%',
+              backgroundColor: status.loading ? '#f1c40f' : (status.online ? '#2ecc71' : '#e74c3c'),
+              boxShadow: status.online ? '0 0 12px #2ecc71' : '0 0 8px #e74c3c'
+            }} />
+            <span style={{ fontSize: '0.85em', fontWeight: '700', color: status.online ? '#2ecc71' : '#e74c3c', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {status.loading ? 'Checking...' : (status.online ? 'Server Live' : 'Server Offline')}
+            </span>
+          </div>
+
+          {status.latency !== null && (
+            <span style={{
+              fontSize: '0.85em',
+              fontWeight: '700',
+              color: '#00ffff',
+              background: 'rgba(0, 255, 255, 0.1)',
+              border: '1px solid rgba(0, 255, 255, 0.25)',
+              padding: '8px 12px',
+              borderRadius: '12px'
+            }}>
+              ⚡ {status.latency} ms
+            </span>
+          )}
+
+          {/* Refresh Interval Selector */}
+          <select
+            value={refreshIntervalSec}
+            onChange={(e) => setRefreshIntervalSec(Number(e.target.value))}
+            style={{
+              background: 'rgba(0,0,0,0.4)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              color: '#a4b0be',
+              padding: '8px 10px',
+              borderRadius: '12px',
+              fontSize: '0.85em',
+              fontFamily: "'Outfit', sans-serif",
+              outline: 'none',
+              cursor: 'pointer'
+            }}
+            title="Auto-refresh frequency"
+          >
+            <option value="5">Auto-refresh (5s)</option>
+            <option value="15">Auto-refresh (15s)</option>
+            <option value="30">Auto-refresh (30s)</option>
+            <option value="0">Manual only</option>
+          </select>
+
+          {/* Instant Manual Refresh */}
+          <button
+            onClick={fetchStatus}
+            disabled={isRefreshing}
+            style={{
+              background: 'rgba(56, 176, 0, 0.15)',
+              border: '1px solid rgba(56, 176, 0, 0.4)',
+              color: '#70e000',
+              padding: '8px 14px',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              fontWeight: '700',
+              fontSize: '0.85em',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontFamily: "'Outfit', sans-serif",
+              transition: 'all 0.2s ease'
+            }}
+            title="Refresh Server Status"
+          >
+            <span style={{ display: 'inline-block', transform: isRefreshing ? 'rotate(180deg)' : 'none', transition: 'transform 0.4s' }}>🔄</span>
+            {isRefreshing ? 'Pinging...' : 'Refresh'}
+          </button>
+
+          {isAdmin && (
+            <button
+              onClick={() => { fetchConfig(); setShowConfigModal(true); }}
+              style={{
+                background: 'rgba(0, 255, 255, 0.15)',
+                border: '1px solid rgba(0, 255, 255, 0.35)',
+                color: '#00ffff',
+                padding: '8px 14px',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                fontWeight: '700',
+                fontSize: '0.85em',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontFamily: "'Outfit', sans-serif"
+              }}
+              title="Minecraft Server & RCON Connection Settings"
+            >
+              ⚙️ Server Setup
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Main Container */}
-      <div className="mc-card" style={{
+      {/* Main Grid Layout */}
+      <div style={{
         width: '100%',
-        maxWidth: '700px',
-        background: 'rgba(255, 255, 255, 0.01)',
-        backdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255, 255, 255, 0.04)',
-        borderRadius: '32px',
-        padding: '50px 40px',
-        boxSizing: 'border-box',
-        textAlign: 'center',
-        zIndex: 10,
-        boxShadow: '0 30px 60px rgba(0, 0, 0, 0.4)'
+        maxWidth: '1080px',
+        display: 'grid',
+        gridTemplateColumns: '1fr',
+        gap: '25px',
+        zIndex: 10
       }}>
-        {/* Minecraft themed graphic / Title */}
-        <div style={{ marginBottom: '30px' }}>
+
+        {/* 1. HERO SERVER STATUS CARD */}
+        <div style={{
+          background: 'rgba(20, 25, 35, 0.7)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(56, 176, 0, 0.25)',
+          borderRadius: '24px',
+          padding: '35px 30px',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textAlign: 'center',
+          position: 'relative'
+        }}>
           <div style={{
-            fontSize: '4.5em',
-            marginBottom: '15px',
-            filter: 'drop-shadow(0 10px 15px rgba(56, 176, 0, 0.3))'
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            marginBottom: '10px'
           }}>
-            🌳
+            <span style={{ fontSize: '3em' }}>⛏️</span>
+            <div>
+              <h1 style={{
+                fontSize: '2.4em',
+                margin: 0,
+                fontWeight: '900',
+                background: 'linear-gradient(90deg, #38b000 0%, #70e000 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                letterSpacing: '-0.5px'
+              }}>
+                WIRED MINECRAFT NETWORK
+              </h1>
+              <p style={{ margin: '4px 0 0 0', color: '#95a5a6', fontSize: '1em' }}>
+                {status.motd}
+              </p>
+            </div>
           </div>
-          <h1 style={{
-            fontSize: '2.5em',
-            margin: '0 0 10px 0',
-            fontWeight: '900',
-            background: 'linear-gradient(90deg, #38b000 0%, #70e000 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            letterSpacing: '-0.5px'
+
+          {/* Quick Metrics Bar */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '20px',
+            margin: '20px 0',
+            flexWrap: 'wrap'
           }}>
-            WIRED MINECRAFT
-          </h1>
-          <p style={{
-            color: '#7f8c8d',
-            margin: '0 auto',
-            maxWidth: '450px',
-            lineHeight: '1.6',
-            fontSize: '1.05em'
-          }}>
-            Welcome to the official Wired community server. Join us in building and exploring together.
-          </p>
+            {/* Online Count Metric */}
+            <div style={{
+              background: 'rgba(56, 176, 0, 0.1)',
+              border: '1px solid rgba(56, 176, 0, 0.3)',
+              borderRadius: '16px',
+              padding: '12px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <span style={{ fontSize: '1.6em' }}>👥</span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: '1.4em', fontWeight: '900', color: '#70e000' }}>
+                  {status.players.online} <span style={{ fontSize: '0.7em', color: '#a4b0be', fontWeight: '500' }}>/ {status.players.max}</span>
+                </div>
+                <div style={{ fontSize: '0.75em', color: '#a4b0be', fontWeight: '700', textTransform: 'uppercase' }}>
+                  Players Online
+                </div>
+              </div>
+            </div>
+
+            {/* Version Metric */}
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '16px',
+              padding: '12px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <span style={{ fontSize: '1.6em' }}>🧱</span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: '1.2em', fontWeight: '800', color: '#fff' }}>
+                  {status.version}
+                </div>
+                <div style={{ fontSize: '0.75em', color: '#a4b0be', fontWeight: '700', textTransform: 'uppercase' }}>
+                  PaperMC Engine
+                </div>
+              </div>
+            </div>
+
+            {/* Connect Box */}
+            <div style={{
+              background: 'rgba(0, 0, 0, 0.3)',
+              border: '1px solid rgba(56, 176, 0, 0.25)',
+              borderRadius: '16px',
+              padding: '8px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <span style={{ fontFamily: 'monospace', fontSize: '1.1em', fontWeight: 'bold', color: '#38b000' }}>
+                {serverIp}
+              </span>
+              <button
+                onClick={handleCopy}
+                style={{
+                  background: copied ? '#38b000' : 'rgba(255,255,255,0.08)',
+                  border: 'none',
+                  color: '#fff',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '700',
+                  fontSize: '0.85em',
+                  fontFamily: "'Outfit', sans-serif"
+                }}
+              >
+                {copied ? 'Copied ✓' : '📋 Copy'}
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Dynamic Server Info Pill */}
-        {status.online && !status.loading && (
+        {/* 2. ONLINE PLAYERS LIVE ROSTER */}
+        <div style={{
+          background: 'rgba(20, 25, 35, 0.65)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
+          borderRadius: '24px',
+          padding: '30px',
+          boxShadow: '0 15px 35px rgba(0,0,0,0.3)'
+        }}>
           <div style={{
-            background: 'rgba(56, 176, 0, 0.08)',
-            border: '1px solid rgba(56, 176, 0, 0.15)',
-            borderRadius: '20px',
-            padding: '12px 24px',
-            display: 'inline-flex',
+            display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            gap: '15px',
-            marginBottom: '35px',
-            transition: 'transform 0.2s ease'
+            marginBottom: '20px',
+            flexWrap: 'wrap',
+            gap: '12px'
           }}>
-            <span style={{ fontSize: '0.9em', color: '#70e000', fontWeight: '700' }}>
-              👥 {status.players.online} / {status.players.max} Online
-            </span>
-            <div style={{ width: '1px', height: '15px', background: 'rgba(56, 176, 0, 0.3)' }} />
-            <span style={{ fontSize: '0.9em', color: '#70e000', fontWeight: '700' }}>
-              💻 Version {status.version}
-            </span>
+            <div>
+              <h2 style={{ fontSize: '1.4em', margin: 0, fontWeight: '800', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>🎮</span> Online Players ({status.players.online})
+              </h2>
+              <span style={{ fontSize: '0.85em', color: '#7f8c8d' }}>
+                Real-time active player list currently exploring the server
+              </span>
+            </div>
+
+            {status.players.sample?.length > 3 && (
+              <input
+                type="text"
+                placeholder="Filter online players..."
+                value={playerSearchQuery}
+                onChange={(e) => setPlayerSearchQuery(e.target.value)}
+                style={{
+                  background: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '10px',
+                  padding: '8px 14px',
+                  color: '#fff',
+                  fontSize: '0.85em',
+                  outline: 'none',
+                  fontFamily: "'Outfit', sans-serif",
+                  width: '200px'
+                }}
+              />
+            )}
+          </div>
+
+          {/* Players Grid */}
+          {status.players.sample && status.players.sample.length > 0 ? (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+              gap: '16px'
+            }}>
+              {filteredPlayers.map((player, idx) => (
+                <div
+                  key={player.id || player.name || idx}
+                  style={{
+                    background: 'rgba(0, 0, 0, 0.35)',
+                    border: '1px solid rgba(56, 176, 0, 0.2)',
+                    borderRadius: '16px',
+                    padding: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    transition: 'transform 0.2s ease, border-color 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.borderColor = 'rgba(56, 176, 0, 0.5)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'none';
+                    e.currentTarget.style.borderColor = 'rgba(56, 176, 0, 0.2)';
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <img
+                      src={player.avatar || `https://mc-heads.net/avatar/${encodeURIComponent(player.name)}/64`}
+                      alt={player.name}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '8px',
+                        background: '#111',
+                        imageRendering: 'pixelated',
+                        border: '1px solid rgba(255,255,255,0.1)'
+                      }}
+                      onError={(e) => {
+                        e.currentTarget.src = `https://minotar.net/avatar/${encodeURIComponent(player.name)}/64`;
+                      }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: '800', color: '#fff', fontSize: '1em' }}>
+                        {player.name}
+                      </div>
+                      <div style={{ fontSize: '0.75em', color: '#2ecc71', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#2ecc71' }}></span> In Game
+                      </div>
+                    </div>
+                  </div>
+
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleKickPlayer(player.name)}
+                      style={{
+                        background: 'rgba(231, 76, 60, 0.15)',
+                        border: '1px solid rgba(231, 76, 60, 0.3)',
+                        color: '#e74c3c',
+                        padding: '6px 10px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: '700',
+                        fontSize: '0.75em',
+                        fontFamily: "'Outfit', sans-serif"
+                      }}
+                      title={`Kick ${player.name}`}
+                    >
+                      Kick
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{
+              background: 'rgba(0, 0, 0, 0.25)',
+              border: '1px dashed rgba(255, 255, 255, 0.08)',
+              borderRadius: '16px',
+              padding: '40px 20px',
+              textAlign: 'center',
+              color: '#7f8c8d'
+            }}>
+              <div style={{ fontSize: '2.5em', marginBottom: '10px' }}>🏕️</div>
+              <div style={{ fontSize: '1.1em', fontWeight: '700', color: '#a4b0be', marginBottom: '5px' }}>
+                {status.online ? 'No players currently on the server' : 'Server is currently offline'}
+              </div>
+              <div style={{ fontSize: '0.9em' }}>
+                {status.online ? 'Launch Minecraft Java Edition and be the first to join!' : 'Check if your server is running or review connection settings.'}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 3. ADMIN POWER CENTER: SERVER MESSAGES & ALERTS */}
+        {isAdmin && (
+          <div style={{
+            background: 'rgba(20, 25, 35, 0.75)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(0, 255, 255, 0.25)',
+            borderRadius: '24px',
+            padding: '30px',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.4)',
+            position: 'relative'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div>
+                <h2 style={{ fontSize: '1.4em', margin: 0, fontWeight: '800', color: '#00ffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>🛡️</span> Server Broadcast & Alert Command Hub
+                </h2>
+                <span style={{ fontSize: '0.85em', color: '#a4b0be' }}>
+                  Send instant chat announcements, on-screen title alerts, or run console commands.
+                </span>
+              </div>
+
+              {/* Subtabs */}
+              <div style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.4)', padding: '4px', borderRadius: '12px' }}>
+                <button
+                  onClick={() => setAdminTab('message')}
+                  style={{
+                    background: adminTab === 'message' ? '#00ffff' : 'transparent',
+                    color: adminTab === 'message' ? '#000' : '#a4b0be',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 14px',
+                    fontWeight: '700',
+                    fontSize: '0.85em',
+                    cursor: 'pointer',
+                    fontFamily: "'Outfit', sans-serif"
+                  }}
+                >
+                  💬 Chat Message
+                </button>
+                <button
+                  onClick={() => setAdminTab('alert')}
+                  style={{
+                    background: adminTab === 'alert' ? '#00ffff' : 'transparent',
+                    color: adminTab === 'alert' ? '#000' : '#a4b0be',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 14px',
+                    fontWeight: '700',
+                    fontSize: '0.85em',
+                    cursor: 'pointer',
+                    fontFamily: "'Outfit', sans-serif"
+                  }}
+                >
+                  🚨 Screen Alert
+                </button>
+                <button
+                  onClick={() => setAdminTab('presets')}
+                  style={{
+                    background: adminTab === 'presets' ? '#00ffff' : 'transparent',
+                    color: adminTab === 'presets' ? '#000' : '#a4b0be',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 14px',
+                    fontWeight: '700',
+                    fontSize: '0.85em',
+                    cursor: 'pointer',
+                    fontFamily: "'Outfit', sans-serif"
+                  }}
+                >
+                  ⚡ Quick Presets
+                </button>
+                <button
+                  onClick={() => setAdminTab('console')}
+                  style={{
+                    background: adminTab === 'console' ? '#00ffff' : 'transparent',
+                    color: adminTab === 'console' ? '#000' : '#a4b0be',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 14px',
+                    fontWeight: '700',
+                    fontSize: '0.85em',
+                    cursor: 'pointer',
+                    fontFamily: "'Outfit', sans-serif"
+                  }}
+                >
+                  💻 Console
+                </button>
+              </div>
+            </div>
+
+            {/* TAB 1: SERVER CHAT MESSAGE */}
+            {adminTab === 'message' && (
+              <form onSubmit={handleSendMessage} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr 150px', gap: '12px', alignItems: 'center' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8em', color: '#a4b0be', fontWeight: '700', marginBottom: '6px', textTransform: 'uppercase' }}>
+                      Prefix / Sender
+                    </label>
+                    <input
+                      type="text"
+                      value={msgSender}
+                      onChange={(e) => setMsgSender(e.target.value)}
+                      placeholder="SERVER"
+                      style={{
+                        width: '100%',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '10px',
+                        padding: '10px 14px',
+                        color: '#fff',
+                        fontSize: '0.9em',
+                        outline: 'none',
+                        fontFamily: "'Outfit', sans-serif",
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8em', color: '#a4b0be', fontWeight: '700', marginBottom: '6px', textTransform: 'uppercase' }}>
+                      Broadcast Message Text
+                    </label>
+                    <input
+                      type="text"
+                      value={msgText}
+                      onChange={(e) => setMsgText(e.target.value)}
+                      placeholder="e.g. Welcome everyone! Nether reset scheduled for tonight."
+                      style={{
+                        width: '100%',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px solid rgba(0, 255, 255, 0.3)',
+                        borderRadius: '10px',
+                        padding: '10px 14px',
+                        color: '#fff',
+                        fontSize: '0.9em',
+                        outline: 'none',
+                        fontFamily: "'Outfit', sans-serif",
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8em', color: '#a4b0be', fontWeight: '700', marginBottom: '6px', textTransform: 'uppercase' }}>
+                      Prefix Color
+                    </label>
+                    <select
+                      value={msgColor}
+                      onChange={(e) => setMsgColor(e.target.value)}
+                      style={{
+                        width: '100%',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '10px',
+                        padding: '10px 14px',
+                        color: '#fff',
+                        fontSize: '0.9em',
+                        outline: 'none',
+                        fontFamily: "'Outfit', sans-serif",
+                        boxSizing: 'border-box',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="gold">Gold / Amber</option>
+                      <option value="aqua">Cyan / Aqua</option>
+                      <option value="green">Emerald Green</option>
+                      <option value="light_purple">Purple / Pink</option>
+                      <option value="red">Red / Urgent</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* In-Game Preview Box */}
+                <div style={{
+                  background: '#0c0e12',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: '12px',
+                  padding: '12px 16px',
+                  fontFamily: 'monospace',
+                  fontSize: '0.95em',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <span style={{ color: '#7f8c8d', fontSize: '0.8em', textTransform: 'uppercase', fontFamily: "'Outfit', sans-serif" }}>Chat Preview:</span>
+                  <span style={{
+                    color: msgColor === 'gold' ? '#f39c12' : (msgColor === 'aqua' ? '#00ffff' : (msgColor === 'green' ? '#2ecc71' : (msgColor === 'light_purple' ? '#a55eea' : '#e74c3c'))),
+                    fontWeight: 'bold'
+                  }}>
+                    [{msgSender || 'SERVER'}]
+                  </span>
+                  <span style={{ color: '#fff' }}>
+                    {msgText || 'Your message will appear here in the in-game chat for all players.'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="submit"
+                    disabled={msgSending || !msgText.trim()}
+                    style={{
+                      background: 'linear-gradient(90deg, #00ffff 0%, #00b4d8 100%)',
+                      color: '#000',
+                      border: 'none',
+                      borderRadius: '12px',
+                      padding: '12px 24px',
+                      fontWeight: '800',
+                      fontSize: '0.95em',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontFamily: "'Outfit', sans-serif",
+                      opacity: msgSending || !msgText.trim() ? 0.6 : 1
+                    }}
+                  >
+                    <span>📢</span> {msgSending ? 'Broadcasting...' : 'Broadcast to In-Game Chat'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* TAB 2: ON-SCREEN SERVER ALERT */}
+            {adminTab === 'alert' && (
+              <form onSubmit={handleSendAlert} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8em', color: '#a4b0be', fontWeight: '700', marginBottom: '6px', textTransform: 'uppercase' }}>
+                      Main Alert Title (Big Center Text)
+                    </label>
+                    <input
+                      type="text"
+                      value={alertTitle}
+                      onChange={(e) => setAlertTitle(e.target.value)}
+                      placeholder="e.g. SERVER RESTART, BOSS EVENT, DROP PARTY"
+                      style={{
+                        width: '100%',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px solid rgba(0, 255, 255, 0.3)',
+                        borderRadius: '10px',
+                        padding: '10px 14px',
+                        color: '#fff',
+                        fontSize: '0.9em',
+                        outline: 'none',
+                        fontFamily: "'Outfit', sans-serif",
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8em', color: '#a4b0be', fontWeight: '700', marginBottom: '6px', textTransform: 'uppercase' }}>
+                      Subtitle / Instructions
+                    </label>
+                    <input
+                      type="text"
+                      value={alertSubtitle}
+                      onChange={(e) => setAlertSubtitle(e.target.value)}
+                      placeholder="e.g. In 2 minutes! Please finish your trades."
+                      style={{
+                        width: '100%',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '10px',
+                        padding: '10px 14px',
+                        color: '#fff',
+                        fontSize: '0.9em',
+                        outline: 'none',
+                        fontFamily: "'Outfit', sans-serif",
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8em', color: '#a4b0be', fontWeight: '700', marginBottom: '6px', textTransform: 'uppercase' }}>
+                      Urgency Level
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {[
+                        { id: 'info', label: 'Notice / Aqua', color: '#00ffff' },
+                        { id: 'warning', label: 'Warning / Gold', color: '#f39c12' },
+                        { id: 'critical', label: 'Critical / Red', color: '#e74c3c' },
+                        { id: 'success', label: 'Success / Green', color: '#2ecc71' }
+                      ].map((lvl) => (
+                        <button
+                          key={lvl.id}
+                          type="button"
+                          onClick={() => setAlertLevel(lvl.id)}
+                          style={{
+                            background: alertLevel === lvl.id ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.3)',
+                            border: `1px solid ${alertLevel === lvl.id ? lvl.color : 'rgba(255,255,255,0.08)'}`,
+                            color: lvl.color,
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            fontSize: '0.8em',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            fontFamily: "'Outfit', sans-serif"
+                          }}
+                        >
+                          {lvl.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '20px' }}>
+                    <input
+                      type="checkbox"
+                      id="soundToggle"
+                      checked={alertSound}
+                      onChange={(e) => setAlertSound(e.target.checked)}
+                      style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                    />
+                    <label htmlFor="soundToggle" style={{ fontSize: '0.9em', color: '#fff', cursor: 'pointer', fontWeight: '600' }}>
+                      🔔 Play in-game sound effect to all players
+                    </label>
+                  </div>
+                </div>
+
+                {/* Simulated Screen Banner Preview */}
+                <div style={{
+                  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.95) 100%)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '16px',
+                  padding: '30px 20px',
+                  textAlign: 'center',
+                  boxShadow: 'inset 0 0 30px rgba(0,0,0,0.8)'
+                }}>
+                  <div style={{
+                    fontSize: '2em',
+                    fontWeight: '900',
+                    letterSpacing: '2px',
+                    color: alertLevel === 'critical' ? '#e74c3c' : (alertLevel === 'warning' ? '#f39c12' : (alertLevel === 'success' ? '#2ecc71' : '#00ffff')),
+                    textShadow: '0 4px 15px rgba(0,0,0,0.8)'
+                  }}>
+                    {alertTitle.toUpperCase() || 'YOUR ALERT TITLE'}
+                  </div>
+                  <div style={{
+                    fontSize: '1.1em',
+                    color: '#fff',
+                    fontStyle: 'italic',
+                    marginTop: '6px',
+                    textShadow: '0 2px 8px rgba(0,0,0,0.8)'
+                  }}>
+                    {alertSubtitle || 'Your subtitle announcement text appears below'}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="submit"
+                    disabled={alertSending || !alertTitle.trim()}
+                    style={{
+                      background: 'linear-gradient(90deg, #e74c3c 0%, #ff4757 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '12px',
+                      padding: '12px 24px',
+                      fontWeight: '800',
+                      fontSize: '0.95em',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontFamily: "'Outfit', sans-serif",
+                      opacity: alertSending || !alertTitle.trim() ? 0.6 : 1
+                    }}
+                  >
+                    <span>🚨</span> {alertSending ? 'Dispatched...' : 'Broadcast On-Screen Alert'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* TAB 3: QUICK PRESETS */}
+            {adminTab === 'presets' && (
+              <div>
+                <p style={{ color: '#a4b0be', fontSize: '0.9em', marginBottom: '15px' }}>
+                  Click any preset button below to immediately broadcast the alert or execute the maintenance command.
+                </p>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                  gap: '14px'
+                }}>
+                  {presets.map((preset, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        background: 'rgba(0,0,0,0.3)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: '14px',
+                        padding: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '10px'
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: '800', color: '#fff', fontSize: '1.05em' }}>
+                          {preset.name}
+                        </div>
+                        <div style={{ fontSize: '0.8em', color: '#7f8c8d', marginTop: '4px' }}>
+                          {preset.type === 'alert' ? `Title: "${preset.title}"` : `Command: /${preset.command}`}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handlePresetDispatch(preset)}
+                        style={{
+                          background: preset.level === 'critical' ? 'rgba(231, 76, 60, 0.2)' : 'rgba(0, 255, 255, 0.15)',
+                          border: `1px solid ${preset.level === 'critical' ? 'rgba(231, 76, 60, 0.4)' : 'rgba(0, 255, 255, 0.3)'}`,
+                          color: preset.level === 'critical' ? '#e74c3c' : '#00ffff',
+                          borderRadius: '8px',
+                          padding: '8px',
+                          fontWeight: '700',
+                          fontSize: '0.85em',
+                          cursor: 'pointer',
+                          fontFamily: "'Outfit', sans-serif"
+                        }}
+                      >
+                        ⚡ Execute Preset
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: CONSOLE TERMINAL */}
+            {adminTab === 'console' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{
+                  background: '#090b10',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '14px',
+                  padding: '16px',
+                  height: '240px',
+                  overflowY: 'auto',
+                  fontFamily: "'Fira Code', monospace",
+                  fontSize: '0.85em',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  {consoleLogs.map((log, index) => (
+                    <div key={index} style={{
+                      color: log.type === 'error' ? '#e74c3c' : (log.type === 'input' ? '#00ffff' : (log.type === 'warning' ? '#f39c12' : '#2ecc71')),
+                      wordBreak: 'break-all'
+                    }}>
+                      <span style={{ color: '#7f8c8d', marginRight: '8px' }}>[{log.time}]</span>
+                      {log.text}
+                    </div>
+                  ))}
+                  <div ref={consoleEndRef} />
+                </div>
+
+                <form onSubmit={handleRunCommand} style={{ display: 'flex', gap: '10px' }}>
+                  <input
+                    type="text"
+                    value={consoleCmd}
+                    onChange={(e) => setConsoleCmd(e.target.value)}
+                    placeholder="Type server command (e.g. /time set day, /weather clear, /whitelist add steve)..."
+                    style={{
+                      flex: 1,
+                      background: 'rgba(0,0,0,0.4)',
+                      border: '1px solid rgba(0, 255, 255, 0.3)',
+                      borderRadius: '10px',
+                      padding: '10px 14px',
+                      color: '#fff',
+                      fontSize: '0.9em',
+                      outline: 'none',
+                      fontFamily: 'monospace'
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={cmdExecuting || !consoleCmd.trim()}
+                    style={{
+                      background: '#00ffff',
+                      color: '#000',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '10px 20px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      fontFamily: "'Outfit', sans-serif"
+                    }}
+                  >
+                    {cmdExecuting ? 'Running...' : 'Run /'}
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Balance Display & Search */}
+        {/* 4. IN-GAME ECONOMY CARD */}
         <div style={{
-          background: 'linear-gradient(135deg, rgba(56, 176, 0, 0.05) 0%, rgba(0, 0, 0, 0.4) 100%)',
+          background: 'rgba(20, 25, 35, 0.65)',
+          backdropFilter: 'blur(20px)',
           border: '1px solid rgba(56, 176, 0, 0.15)',
           borderRadius: '24px',
           padding: '24px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: '20px',
-          marginBottom: '30px',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.2)'
+          gap: '16px'
         }}>
-          <h3 style={{
-            fontSize: '1.2em',
-            fontWeight: '800',
-            color: '#70e000',
-            margin: 0,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            💰 IN-GAME ECONOMY
+          <h3 style={{ fontSize: '1.2em', fontWeight: '800', color: '#70e000', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            💰 In-Game Economy & Account Linking
           </h3>
-          
+
           {user ? (
-            <div style={{ width: '100%' }}>
+            <div style={{ width: '100%', textAlign: 'center' }}>
               {showLinkInput ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', margin: '15px 0' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', margin: '10px 0' }}>
                   <span style={{ fontSize: '0.85em', color: '#a4b0be', fontWeight: '600' }}>Link Minecraft Username</span>
-                  <div style={{ display: 'flex', gap: '10px', width: '100%', maxWidth: '320px' }}>
+                  <div style={{ display: 'flex', gap: '10px', width: '100%', maxWidth: '340px' }}>
                     <input
                       type="text"
                       placeholder="Minecraft Username"
@@ -330,8 +1413,7 @@ function MinecraftPage({ user, onBack }) {
                         padding: '8px 16px',
                         fontWeight: '700',
                         cursor: 'pointer',
-                        fontSize: '0.9em',
-                        fontFamily: "'Outfit', sans-serif"
+                        fontSize: '0.9em'
                       }}
                     >
                       {isLinking ? 'Saving...' : 'Link'}
@@ -345,8 +1427,7 @@ function MinecraftPage({ user, onBack }) {
                         borderRadius: '8px',
                         padding: '8px 12px',
                         cursor: 'pointer',
-                        fontSize: '0.9em',
-                        fontFamily: "'Outfit', sans-serif"
+                        fontSize: '0.9em'
                       }}
                     >
                       Cancel
@@ -360,22 +1441,20 @@ function MinecraftPage({ user, onBack }) {
                       fontSize: '1.8em',
                       fontWeight: 'bold',
                       color: '#fff',
-                      margin: '10px 0',
+                      margin: '6px 0',
                       textShadow: '0 2px 10px rgba(112, 224, 0, 0.3)'
                     }}>
-                      <span style={{ color: '#a4b0be', fontSize: '0.6em', display: 'block', fontWeight: 'normal', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '5px' }}>
+                      <span style={{ color: '#a4b0be', fontSize: '0.55em', display: 'block', fontWeight: 'normal', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>
                         Balance for {balanceInfo.username}
                         <button 
-                          onClick={() => { setShowLinkInput(true); }}
+                          onClick={() => setShowLinkInput(true)}
                           style={{
                             background: 'none',
                             border: 'none',
                             color: '#70e000',
                             cursor: 'pointer',
                             fontSize: '1em',
-                            marginLeft: '8px',
-                            padding: 0,
-                            verticalAlign: 'middle'
+                            marginLeft: '8px'
                           }}
                           title="Change linked account"
                         >
@@ -385,20 +1464,19 @@ function MinecraftPage({ user, onBack }) {
                       ${balanceInfo.balance?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                   ) : (
-                    <div style={{ color: '#7f8c8d', margin: '15px 0', fontSize: '0.95em' }}>
+                    <div style={{ color: '#7f8c8d', margin: '10px 0', fontSize: '0.9em' }}>
                       No Minecraft account found matching username: <strong>{balanceInfo.username || user.username}</strong>
                       <button 
                         onClick={() => setShowLinkInput(true)}
                         style={{
                           display: 'block',
-                          margin: '10px auto 0 auto',
+                          margin: '8px auto 0 auto',
                           background: 'rgba(56, 176, 0, 0.1)',
                           border: '1px solid rgba(56, 176, 0, 0.3)',
                           color: '#70e000',
                           padding: '6px 12px',
                           borderRadius: '8px',
                           cursor: 'pointer',
-                          fontFamily: "'Outfit', sans-serif",
                           fontWeight: '600',
                           fontSize: '0.85em'
                         }}
@@ -411,231 +1489,274 @@ function MinecraftPage({ user, onBack }) {
               )}
             </div>
           ) : (
-            <div style={{ color: '#7f8c8d', fontSize: '0.95em' }}>
+            <div style={{ color: '#7f8c8d', fontSize: '0.9em' }}>
               Log in to view your Minecraft balance automatically.
             </div>
           )}
 
-          {/* Search other players */}
+          {/* Search any player balance */}
           <div style={{
             width: '100%',
             borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-            paddingTop: '20px',
+            paddingTop: '16px',
             display: 'flex',
-            flexDirection: 'column',
+            alignItems: 'center',
             gap: '10px'
           }}>
-            <span style={{ fontSize: '0.8em', color: '#a4b0be', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', textAlign: 'left' }}>
-              🔍 Check Player Balance
-            </span>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <input
-                type="text"
-                placeholder="Minecraft Username"
-                value={searchUsername}
-                onChange={(e) => setSearchUsername(e.target.value)}
-                style={{
-                  flex: 1,
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '12px',
-                  padding: '12px 16px',
-                  color: '#fff',
-                  fontSize: '0.95em',
-                  outline: 'none',
-                  fontFamily: "'Outfit', sans-serif"
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') fetchBalance(searchUsername);
-                }}
-              />
-              <button
-                onClick={() => fetchBalance(searchUsername)}
-                disabled={searching}
-                style={{
-                  background: '#38b000',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: '12px',
-                  padding: '12px 24px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  transition: 'opacity 0.2s',
-                  fontFamily: "'Outfit', sans-serif"
-                }}
-              >
-                {searching ? 'Checking...' : 'Check'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Server Address Box */}
-        <div style={{
-          background: 'rgba(0, 0, 0, 0.2)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          borderRadius: '20px',
-          padding: '24px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '15px',
-          marginBottom: '40px'
-        }}>
-          <span style={{
-            fontSize: '0.8em',
-            textTransform: 'uppercase',
-            letterSpacing: '1.5px',
-            color: '#7f8c8d',
-            fontWeight: '700'
-          }}>
-            Server IP Address
-          </span>
-          <div style={{
-            fontSize: '1.5em',
-            fontFamily: "'Courier New', Courier, monospace",
-            fontWeight: 'bold',
-            color: '#38b000',
-            wordBreak: 'break-all',
-            background: 'rgba(0,0,0,0.3)',
-            padding: '12px 20px',
-            borderRadius: '12px',
-            border: '1px solid rgba(56,176,0,0.2)'
-          }}>
-            {serverIp}
-          </div>
-          <button
-            onClick={handleCopy}
-            style={{
-              background: copied ? '#38b000' : 'rgba(255, 255, 255, 0.05)',
-              border: copied ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
-              color: '#fff',
-              padding: '12px 30px',
-              borderRadius: '12px',
-              fontWeight: '700',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              fontFamily: "'Outfit', sans-serif",
-              fontSize: '0.95em',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-            onMouseEnter={(e) => {
-              if (!copied) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-            }}
-            onMouseLeave={(e) => {
-              if (!copied) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-            }}
-          >
-            {copied ? 'Copied to Clipboard! ✓' : '📋 Copy IP Address'}
-          </button>
-        </div>
-
-        {/* How to Join Instructions */}
-        <div style={{ textAlign: 'left' }}>
-          <h3 style={{
-            fontSize: '1.2em',
-            fontWeight: '800',
-            marginBottom: '20px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-            paddingBottom: '8px',
-            color: '#a4b0be'
-          }}>
-            How to Connect
-          </h3>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{ display: 'flex', gap: '15px' }}>
-              <div style={{
+            <input
+              type="text"
+              placeholder="Search any player's in-game balance..."
+              value={searchUsername}
+              onChange={(e) => setSearchUsername(e.target.value)}
+              style={{
+                flex: 1,
+                background: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                color: '#fff',
+                fontSize: '0.9em',
+                outline: 'none',
+                fontFamily: "'Outfit', sans-serif"
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') fetchBalance(searchUsername); }}
+            />
+            <button
+              onClick={() => fetchBalance(searchUsername)}
+              disabled={searching}
+              style={{
                 background: '#38b000',
                 color: '#000',
-                fontWeight: '900',
-                width: '30px',
-                height: '30px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}>
-                1
-              </div>
-              <div>
-                <strong style={{ display: 'block', marginBottom: '4px' }}>Launch Minecraft Java Edition</strong>
-                <span style={{ color: '#7f8c8d', fontSize: '0.95em' }}>
-                  Open the Minecraft launcher on your PC and run **Java Edition** (Version **1.21.11** is recommended).
-                </span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '15px' }}>
-              <div style={{
-                background: '#38b000',
-                color: '#000',
-                fontWeight: '900',
-                width: '30px',
-                height: '30px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}>
-                2
-              </div>
-              <div>
-                <strong style={{ display: 'block', marginBottom: '4px' }}>Navigate to Multiplayer</strong>
-                <span style={{ color: '#7f8c8d', fontSize: '0.95em' }}>
-                  Click on **Multiplayer** from the main menu, then select **Add Server**.
-                </span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '15px' }}>
-              <div style={{
-                background: '#38b000',
-                color: '#000',
-                fontWeight: '900',
-                width: '30px',
-                height: '30px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}>
-                3
-              </div>
-              <div>
-                <strong style={{ display: 'block', marginBottom: '4px' }}>Paste Address & Join</strong>
-                <span style={{ color: '#7f8c8d', fontSize: '0.95em' }}>
-                  Paste the copied address (`{serverIp}`) into the **Server Address** field and click **Done** to connect.
-                </span>
-              </div>
-            </div>
+                border: 'none',
+                borderRadius: '10px',
+                padding: '10px 20px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                fontFamily: "'Outfit', sans-serif"
+              }}
+            >
+              {searching ? 'Checking...' : 'Check'}
+            </button>
           </div>
-        </div>
-
-        {/* Edition Warning Banner */}
-        <div style={{
-          marginTop: '40px',
-          background: 'rgba(255, 71, 87, 0.06)',
-          border: '1px solid rgba(255, 71, 87, 0.15)',
-          borderRadius: '16px',
-          padding: '16px 20px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          textAlign: 'left'
-        }}>
-          <span style={{ fontSize: '1.4em' }}>⚠️</span>
-          <span style={{ color: '#ff6b81', fontSize: '0.9em', lineHeight: '1.5', fontWeight: '500' }}>
-            This server is **Java Edition only** and does not support Bedrock (Console/Mobile) players at this time. Please make sure you are connecting from a PC.
-          </span>
         </div>
 
       </div>
+
+      {/* ADMIN SERVER CONFIG MODAL */}
+      {showConfigModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.75)',
+          backdropFilter: 'blur(10px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#141820',
+            border: '1px solid rgba(0, 255, 255, 0.3)',
+            borderRadius: '20px',
+            width: '100%',
+            maxWidth: '520px',
+            padding: '30px',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.6)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.3em', color: '#00ffff', fontWeight: '800' }}>
+                ⚙️ Minecraft & RCON Settings
+              </h3>
+              <button
+                onClick={() => setShowConfigModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#a4b0be',
+                  fontSize: '1.4em',
+                  cursor: 'pointer'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveConfig} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8em', color: '#a4b0be', fontWeight: '700', marginBottom: '4px' }}>
+                  SERVER HOST / DOMAIN
+                </label>
+                <input
+                  type="text"
+                  value={serverConfig.host}
+                  onChange={(e) => setServerConfig({ ...serverConfig, host: e.target.value })}
+                  placeholder="e.g. atoms-fools.tun.ply.gg or 127.0.0.1"
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0,0,0,0.4)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    color: '#fff',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8em', color: '#a4b0be', fontWeight: '700', marginBottom: '4px' }}>
+                    MINECRAFT PORT
+                  </label>
+                  <input
+                    type="number"
+                    value={serverConfig.port}
+                    onChange={(e) => setServerConfig({ ...serverConfig, port: Number(e.target.value) })}
+                    placeholder="25565"
+                    style={{
+                      width: '100%',
+                      background: 'rgba(0,0,0,0.4)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      color: '#fff',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8em', color: '#a4b0be', fontWeight: '700', marginBottom: '4px' }}>
+                    RCON PORT
+                  </label>
+                  <input
+                    type="number"
+                    value={serverConfig.rconPort}
+                    onChange={(e) => setServerConfig({ ...serverConfig, rconPort: Number(e.target.value) })}
+                    placeholder="25575"
+                    style={{
+                      width: '100%',
+                      background: 'rgba(0,0,0,0.4)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      color: '#fff',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8em', color: '#a4b0be', fontWeight: '700', marginBottom: '4px' }}>
+                  RCON HOST IP
+                </label>
+                <input
+                  type="text"
+                  value={serverConfig.rconHost}
+                  onChange={(e) => setServerConfig({ ...serverConfig, rconHost: e.target.value })}
+                  placeholder="127.0.0.1"
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0,0,0,0.4)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    color: '#fff',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8em', color: '#a4b0be', fontWeight: '700', marginBottom: '4px' }}>
+                  RCON PASSWORD
+                </label>
+                <input
+                  type="password"
+                  value={serverConfig.rconPassword}
+                  onChange={(e) => setServerConfig({ ...serverConfig, rconPassword: e.target.value })}
+                  placeholder="Leave empty if using local screen session"
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0,0,0,0.4)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    color: '#fff',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8em', color: '#a4b0be', fontWeight: '700', marginBottom: '4px' }}>
+                  LOCAL SCREEN SESSION NAME (FALLBACK)
+                </label>
+                <input
+                  type="text"
+                  value={serverConfig.screenSession}
+                  onChange={(e) => setServerConfig({ ...serverConfig, screenSession: e.target.value })}
+                  placeholder="mc"
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0,0,0,0.4)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    color: '#fff',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowConfigModal(false)}
+                  style={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: 'none',
+                    color: '#fff',
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: '600'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={configLoading}
+                  style={{
+                    background: '#00ffff',
+                    color: '#000',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: '800'
+                  }}
+                >
+                  {configLoading ? 'Saving...' : 'Save Configuration'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

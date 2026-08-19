@@ -277,6 +277,12 @@ function AdminPanel({ currentUser, onSelectServer }) {
           >
             🗄️ Database Hub
           </button>
+          <button 
+            className={`admin-subtab ${activeSubTab === 'minecraft' ? 'active' : ''}`}
+            onClick={() => setActiveSubTab('minecraft')}
+          >
+            ⛏️ Minecraft Server
+          </button>
         </div>
       </div>
 
@@ -774,6 +780,55 @@ function AdminPanel({ currentUser, onSelectServer }) {
                     )}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {activeSubTab === 'minecraft' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(56, 176, 0, 0.12) 0%, rgba(20, 25, 35, 0.9) 100%)',
+                  border: '1px solid rgba(56, 176, 0, 0.3)',
+                  borderRadius: '16px',
+                  padding: '24px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '15px'
+                }}>
+                  <div>
+                    <h3 style={{ margin: '0 0 6px 0', fontSize: '1.4em', color: '#70e000', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>⛏️</span> Minecraft Network & Live Player Console
+                    </h3>
+                    <p style={{ margin: 0, color: '#a4b0be', fontSize: '0.95em' }}>
+                      Monitor online players, send live in-game server chat broadcasts, dispatch on-screen title alerts, and run console commands.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      window.history.pushState({}, '', '/mc');
+                      window.dispatchEvent(new PopStateEvent('popstate'));
+                    }}
+                    style={{
+                      background: '#38b000',
+                      color: '#000',
+                      border: 'none',
+                      padding: '12px 24px',
+                      borderRadius: '12px',
+                      fontWeight: '800',
+                      fontSize: '1em',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 15px rgba(56, 176, 0, 0.4)',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <span>🚀</span> Open Full Minecraft Command Hub
+                  </button>
+                </div>
               </div>
             )}
           </>

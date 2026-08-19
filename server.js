@@ -71,6 +71,7 @@ const reportRoutes = require('./routes/report');
 const spotifyRoutes = require('./routes/spotify');
 const youtubeRoutes = require('./routes/youtube');
 const gamesRoutes = require('./routes/games');
+const minecraftRoutes = require('./routes/minecraft');
 const { filterContent, containsBannedWords } = require('./utils/contentFilter');
 const { startHealthCheck } = require('./backend/scripts/healthCheck');
 
@@ -311,6 +312,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/spotify', spotifyRoutes);
 app.use('/api/youtube', youtubeRoutes);
 app.use('/api/games', gamesRoutes);
+app.use('/api/minecraft', minecraftRoutes);
 app.use('/api', reportRoutes);
 
 const os = require('os');

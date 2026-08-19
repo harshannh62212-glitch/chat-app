@@ -143,6 +143,12 @@ router.get('/servers', authMiddleware, adminCheck, async (req, res) => {
 router.delete('/servers/:id', authMiddleware, adminCheck, async (req, res) => {
   try {
     const { id } = req.params;
+
+    const srv = await query('SELECT name FROM servers WHERE id = $1', [id]);
+    if (parseInt(id, 10) === 1 || (srv.rows.length > 0 && srv.rows[0].name === 'General')) {
+      return res.status(403).json({ error: 'Cannot delete the General server' });
+    }
+
     await query('DELETE FROM servers WHERE id = $1', [id]);
     res.json({ message: 'Server deleted successfully' });
   } catch (err) {

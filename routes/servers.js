@@ -50,9 +50,24 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
+// Helper to check if a server is the General server
+async function isGeneralServer(serverId) {
+  if (parseInt(serverId, 10) === 1) return true;
+  const srv = await query('SELECT name FROM servers WHERE id = $1', [serverId]);
+  return srv.rows.length > 0 && srv.rows[0].name === 'General';
+}
+
 // Get user's servers (default root GET /api/servers)
 router.get('/', authMiddleware, async (req, res) => {
   try {
+    // Auto-enroll user in General server if missing
+    await query(`
+      INSERT INTO server_members (user_id, server_id)
+      SELECT $1::varchar, s.id FROM servers s
+      WHERE (s.name = 'General' OR s.id = 1)
+      ON CONFLICT (user_id, server_id) DO NOTHING
+    `, [req.userId]);
+
     const cacheKey = `user_servers_${req.userId}`;
     const cached = ramCache.get(cacheKey);
     if (cached) return res.json(cached);
@@ -93,6 +108,14 @@ router.get('/discovery', async (req, res) => {
 // Get user's servers
 router.get('/my-servers', authMiddleware, async (req, res) => {
   try {
+    // Auto-enroll user in General server if missing
+    await query(`
+      INSERT INTO server_members (user_id, server_id)
+      SELECT $1::varchar, s.id FROM servers s
+      WHERE (s.name = 'General' OR s.id = 1)
+      ON CONFLICT (user_id, server_id) DO NOTHING
+    `, [req.userId]);
+
     const result = await query(
       `SELECT s.id, s.name, s.description, s.owner_id, s.is_public, s.avatar_url, s.created_at
        FROM servers s
@@ -175,10 +198,49 @@ router.post('/:serverId/join', authMiddleware, async (req, res) => {
       [userId, serverId]
     );
 
+    ramCache.invalidate(`user_servers_${userId}`);
+
     res.json({ message: 'Successfully joined server' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to join server' });
+  }
+});
+
+// Leave a server
+router.delete('/:serverId/leave', authMiddleware, async (req, res) => {
+  try {
+    const { serverId } = req.params;
+    const userId = req.userId;
+
+    if (await isGeneralServer(serverId)) {
+      return res.status(403).json({ error: 'Cannot leave the General server.' });
+    }
+
+    const serverResult = await query('SELECT id, name, owner_id FROM servers WHERE id = $1', [serverId]);
+    if (serverResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Server not found' });
+    }
+
+    const server = serverResult.rows[0];
+    if (server.owner_id === userId) {
+      return res.status(400).json({ error: 'Server owners cannot leave their own server' });
+    }
+
+    await query('DELETE FROM server_member_roles WHERE server_id = $1 AND user_id = $2', [serverId, userId]);
+    await query('DELETE FROM server_members WHERE server_id = $1 AND user_id = $2', [serverId, userId]);
+
+    ramCache.invalidate(`user_servers_${userId}`);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('server-' + serverId).emit('member-left', { serverId, userId });
+    }
+
+    res.json({ message: 'Successfully left server' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to leave server' });
   }
 });
 
@@ -481,7 +543,7 @@ router.delete('/:serverId/members/:targetUserId', authMiddleware, async (req, re
     const { serverId, targetUserId } = req.params;
     const userId = req.userId;
 
-    if (parseInt(serverId, 10) === 1) {
+    if (await isGeneralServer(serverId)) {
       return res.status(403).json({ error: 'Cannot kick members from the General server' });
     }
 

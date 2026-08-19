@@ -66,6 +66,12 @@ function Discovery({ currentUser }) {
 
   const handleLeaveServer = async (serverId) => {
     const serverDoc = servers.find(s => s.id === serverId);
+    const isGeneral = serverDoc && (serverDoc.id === GENERAL_SERVER_ID || serverDoc.name === 'General');
+    if (isGeneral) {
+      alert('Cannot leave the General server.');
+      return;
+    }
+
     const serverName = serverDoc ? serverDoc.name : 'this server';
     
     const confirmLeave = window.confirm(`Are you sure you want to leave ${serverName}?`);
@@ -95,27 +101,25 @@ function Discovery({ currentUser }) {
       ) : (
         <div className="discovery-list">
           {servers.map(server => {
-            const isJoined = joinedServerIds.has(server.id);
-            const isGeneral = server.id === GENERAL_SERVER_ID;
+            const isGeneral = server.id === GENERAL_SERVER_ID || server.name === 'General';
+            const isJoined = isGeneral || joinedServerIds.has(server.id);
             
             return (
               <div key={server.id} className="discovery-card">
                 <h4>{server.name}</h4>
                 <p>{server.description || 'No description'}</p>
                 
-                {isJoined ? (
-                  isGeneral ? (
-                    <span className="joined-badge" style={{ color: '#72767d', fontWeight: 'bold', fontSize: '0.85em' }}>
-                      Default Server
-                    </span>
-                  ) : (
-                    <button
-                      className="leave-server-btn"
-                      onClick={() => handleLeaveServer(server.id)}
-                    >
-                      ❌ Leave Server
-                    </button>
-                  )
+                {isGeneral ? (
+                  <span className="joined-badge" style={{ color: '#5865F2', background: 'rgba(88, 101, 242, 0.15)', padding: '5px 10px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.85em' }}>
+                    Default Server
+                  </span>
+                ) : isJoined ? (
+                  <button
+                    className="leave-server-btn"
+                    onClick={() => handleLeaveServer(server.id)}
+                  >
+                    ❌ Leave Server
+                  </button>
                 ) : (
                   <button
                     onClick={() => handleJoinServer(server.id)}
