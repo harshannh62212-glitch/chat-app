@@ -4,27 +4,23 @@
   "rewrites": [
     {
       "source": "/api/resolve-tunnel",
-      "destination": "/api/resolve-tunnel"
+      "destination": "/api/resolve-tunnel.js"
     },
     {
       "source": "/api/minecraft-status",
-      "destination": "/api/minecraft-status"
+      "destination": "/api/minecraft-status.js"
     },
     {
       "source": "/api/minecraft/status",
-      "destination": "/api/minecraft-status"
+      "destination": "/api/minecraft-status.js"
     },
     {
       "source": "/api/(.*)",
-      "destination": "https://chat-app-backend-render.onrender.com/api/$1"
-    },
-    {
-      "source": "/socket.io/(.*)",
-      "destination": "https://chat-app-backend-render.onrender.com/socket.io/$1"
+      "destination": "/api/index.js"
     },
     {
       "source": "/ping",
-      "destination": "https://chat-app-backend-render.onrender.com/ping"
+      "destination": "/api/ping.js"
     },
     {
       "source": "/((?!assets/|favicon.png|api/|.*\\..*).*)",
