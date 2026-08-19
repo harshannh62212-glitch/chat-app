@@ -130,7 +130,7 @@ router.get('/servers', authMiddleware, adminCheck, async (req, res) => {
       `SELECT s.id, s.name, s.description, s.is_public, s.created_at, COALESCE(u.username, 'System') as owner_name 
        FROM servers s 
        LEFT JOIN users u ON s.owner_id = u.id 
-       ORDER BY s.created_at DESC`
+       ORDER BY (CASE WHEN s.name = 'General' OR s.id = 1 THEN 0 ELSE 1 END), s.created_at DESC`
     );
     res.json(result.rows);
   } catch (err) {

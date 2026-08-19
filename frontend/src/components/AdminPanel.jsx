@@ -633,20 +633,27 @@ function AdminPanel({ currentUser, onSelectServer }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {servers.map(s => (
-                      <tr key={s.id}>
-                        <td className="bold">{s.name}</td>
-                        <td>{s.owner_name}</td>
-                        <td>{s.is_public ? '🌐 Public' : '🔒 Private'}</td>
-                        <td>{new Date(s.created_at).toLocaleDateString()}</td>
-                        <td>
-                          <div className="action-buttons">
-                            <button className="btn-blue" onClick={() => handleJoinServer(s)}>Join Chat</button>
-                            <button className="btn-red" onClick={() => handleDeleteServer(s.id)}>Delete</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {servers.map(s => {
+                      const isGeneral = s.id === 1 || s.name === 'General';
+                      return (
+                        <tr key={s.id}>
+                          <td className="bold">
+                            {s.name} {isGeneral && <span style={{ color: '#00ffff', fontSize: '0.8em', marginLeft: '6px' }}>🔒 Mandatory</span>}
+                          </td>
+                          <td>{s.owner_name}</td>
+                          <td>{s.is_public ? '🌐 Public' : '🔒 Private'}</td>
+                          <td>{new Date(s.created_at).toLocaleDateString()}</td>
+                          <td>
+                            <div className="action-buttons">
+                              <button className="btn-blue" onClick={() => handleJoinServer(s)}>Open Chat</button>
+                              {!isGeneral && (
+                                <button className="btn-red" onClick={() => handleDeleteServer(s.id)}>Delete</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

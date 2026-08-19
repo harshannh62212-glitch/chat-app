@@ -12,11 +12,12 @@ import '../styles/Dashboard.css';
 
 function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, onToggleToYouTube, onToggleToGames }) {
   const [activeTab, setActiveTab] = useState('servers');
-  const [selectedServer, setSelectedServer] = useState(null);
+  const DEFAULT_GENERAL_SERVER = { id: 1, name: 'General', description: 'Mandatory community hub for all members', is_public: true };
+  const [selectedServer, setSelectedServer] = useState(DEFAULT_GENERAL_SERVER);
   const [selectedDM, setSelectedDM] = useState(null);
   const [showNewServerModal, setShowNewServerModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [servers, setServers] = useState([]);
+  const [servers, setServers] = useState([DEFAULT_GENERAL_SERVER]);
   const [notifications, setNotifications] = useState([]);
 
   const [showGlobalReportModal, setShowGlobalReportModal] = useState(false);
@@ -25,31 +26,35 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
   const [bugSuccess, setBugSuccess] = useState(false);
   const [bugError, setBugError] = useState('');
 
-
   const [viewingFriends, setViewingFriends] = useState(false);
 
   const fetchUserServers = async () => {
     try {
       const res = await axios.get('/api/servers/my-servers');
       if (Array.isArray(res.data)) {
-        const sorted = [...res.data].sort((a, b) => ((a.name === 'General' || a.id === 1) ? -1 : (b.name === 'General' || b.id === 1) ? 1 : 0));
-        setServers(sorted);
-        if (!selectedServer && sorted.length > 0) {
-          const gen = sorted.find(s => s.name === 'General' || s.id === 1) || sorted[0];
-          setSelectedServer(gen);
+        let sorted = [...res.data].sort((a, b) => ((a.name === 'General' || a.id === 1) ? -1 : (b.name === 'General' || b.id === 1) ? 1 : 0));
+        if (!sorted.some(s => s.name === 'General' || s.id === 1)) {
+          sorted.unshift(DEFAULT_GENERAL_SERVER);
         }
+        setServers(sorted);
+        setSelectedServer(prev => {
+          if (!prev || prev.name === 'General' || prev.id === 1) {
+            return sorted.find(s => s.name === 'General' || s.id === 1) || DEFAULT_GENERAL_SERVER;
+          }
+          return prev;
+        });
       } else {
-        setServers([]);
+        setServers([DEFAULT_GENERAL_SERVER]);
       }
     } catch (err) {
       console.error('Failed to fetch user servers:', err);
-      setServers([]);
+      setServers([DEFAULT_GENERAL_SERVER]);
     }
   };
 
   useEffect(() => {
     fetchUserServers();
-  }, [user.id]);
+  }, [user?.id]);
 
   const handleNotificationClick = (notif) => {
     setActiveTab('dms');
