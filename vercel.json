@@ -25,7 +25,7 @@
       "destination": "https://chat-app-backend-render.onrender.com/ping"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!assets/|favicon.png|api/|.*\\..*).*)",
       "destination": "/index.html"
     }
   ]
