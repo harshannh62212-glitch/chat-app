@@ -774,9 +774,13 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
         });
       }
 
-      if (msgData.serverId === server.id || msgData.chatroom_id === selectedChatroom.id) {
+      const isMatch = String(msgData.serverId) === String(server.id) || 
+                      String(msgData.chatroom_id) === String(selectedChatroom?.id) ||
+                      (isGeneralServer && String(msgData.chatroom_id) === '1');
+
+      if (isMatch) {
         setMessages(prev => {
-          if (prev.some(m => m.id === msgData.id)) return prev;
+          if (prev.some(m => String(m.id) === String(msgData.id))) return prev;
           if (isSelf && prev.some(m => m.isOptimistic && m.content === msgData.content)) {
             return prev.map(m => (m.isOptimistic && m.content === msgData.content) ? { ...m, id: msgData.id, isOptimistic: false } : m);
           }
@@ -807,7 +811,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
         socket.emit('user-left', currentUser.id, server.id);
       }
     };
-  }, [selectedChatroom, server.id, currentUser]);
+  }, [selectedChatroom, server.id, currentUser, isGeneralServer]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -824,39 +828,39 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     });
   };
 
-  const handleReplyTo = (username) => {
-    setMessageInput(prev => `@${username} ` + prev);
+  const handleOpenTagDropdown = (query, startPos) => {
+    setTagQuery(query.toLowerCase());
+    setTagCursorPos(startPos);
+    setShowTagDropdown(true);
   };
 
   const handleInputChange = (e) => {
     const val = e.target.value;
     setMessageInput(val);
 
-    const selectionStart = e.target.selectionStart;
-    const textBeforeCursor = val.slice(0, selectionStart);
-    const words = textBeforeCursor.split(/\s+/);
-    const lastWord = words[words.length - 1];
+    const cursorPos = e.target.selectionStart;
+    const textBefore = val.slice(0, cursorPos);
+    const lastAtIndex = textBefore.lastIndexOf('@');
 
-    if (lastWord.startsWith('@')) {
-      setShowTagDropdown(true);
-      setTagQuery(lastWord.slice(1).toLowerCase());
-    } else {
-      setShowTagDropdown(false);
+    if (lastAtIndex !== -1) {
+      const query = textBefore.slice(lastAtIndex + 1);
+      if (!query.includes(' ') && (lastAtIndex === 0 || textBefore[lastAtIndex - 1] === ' ')) {
+        handleOpenTagDropdown(query, lastAtIndex);
+        return;
+      }
     }
+    setShowTagDropdown(false);
   };
 
   const selectTagUser = (username) => {
     const textarea = document.getElementById('message-input-textarea');
     if (!textarea) return;
 
-    const selectionStart = textarea.selectionStart;
+    const selectionStart = tagCursorPos;
     const textBeforeCursor = messageInput.slice(0, selectionStart);
-    const textAfterCursor = messageInput.slice(selectionStart);
+    const textAfterCursor = messageInput.slice(textarea.selectionStart);
 
-    const words = textBeforeCursor.split(/\s+/);
-    words[words.length - 1] = `@${username}`;
-
-    const newTextBefore = words.join(' ');
+    const newTextBefore = textBeforeCursor + '@' + username;
     setMessageInput(newTextBefore + ' ' + textAfterCursor);
     setShowTagDropdown(false);
     setTimeout(() => textarea.focus(), 10);
@@ -872,7 +876,8 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!messageInput.trim() || !selectedChatroom) return;
+    const activeTargetRoom = selectedChatroom || (isGeneralServer ? DEFAULT_GEN_ROOM : (chatrooms && chatrooms[0]) || null);
+    if (!messageInput.trim() || !activeTargetRoom) return;
 
     if (messageInput.trim().length < 2) {
       alert('Message must be at least 2 characters long.');
@@ -886,11 +891,12 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
     const content = messageInput;
     setMessageInput('');
-    await sendMsg(content);
+    await sendMsg(content, activeTargetRoom);
   };
 
-  const sendMsg = async (contentStr) => {
-    if (!contentStr.trim() || !selectedChatroom) return;
+  const sendMsg = async (contentStr, activeRoom = null) => {
+    const targetRoom = activeRoom || selectedChatroom || (isGeneralServer ? DEFAULT_GEN_ROOM : (chatrooms && chatrooms[0]) || null);
+    if (!contentStr.trim() || !targetRoom) return;
     const filteredContent = filterContent(contentStr);
 
     const tempId = `opt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -902,7 +908,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       avatar_url: currentUser.avatar_url,
       content: filteredContent,
       serverId: server.id,
-      chatroom_id: selectedChatroom.id,
+      chatroom_id: targetRoom.id,
       created_at: new Date().toISOString(),
       timestamp: new Date().toISOString(),
       isOptimistic: true
@@ -917,7 +923,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     // 3. Asynchronous DB persistence in background
     try {
       const res = await axios.post('/api/messages/server', {
-        chatroomId: selectedChatroom.id,
+        chatroomId: targetRoom.id,
         content: filteredContent
       });
 
@@ -1425,7 +1431,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                 type="button" 
                 className="giphy-toggle-btn"
                 onClick={() => setShowGiphy(!showGiphy)}
-                disabled={!selectedChatroom}
+                disabled={!selectedChatroom && !isGeneralServer}
                 title="Send a GIF"
               >
                 GIF
@@ -1433,12 +1439,13 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
               <input
                 id="message-input-textarea"
                 type="text"
-                placeholder="Type a message..."
+                placeholder={selectedChatroom?.name ? `Message #${selectedChatroom.name}...` : isGeneralServer ? 'Message #general...' : 'Type a message...'}
                 value={messageInput}
                 onChange={handleInputChange}
-                disabled={!selectedChatroom}
+                disabled={!selectedChatroom && !isGeneralServer && chatrooms.length === 0}
+                autoFocus
               />
-              <button type="submit" disabled={!selectedChatroom}>Send</button>
+              <button type="submit" disabled={!selectedChatroom && !isGeneralServer && chatrooms.length === 0}>Send</button>
             </div>
           </form>
         </div>
