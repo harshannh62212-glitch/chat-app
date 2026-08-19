@@ -5,6 +5,14 @@
       "destination": "/api/resolve-tunnel"
     },
     {
+      "source": "/api/minecraft-status",
+      "destination": "/api/minecraft-status"
+    },
+    {
+      "source": "/api/minecraft/status",
+      "destination": "/api/minecraft-status"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://garlic-survey-closed-volunteer.trycloudflare.com/api/$1"
     },

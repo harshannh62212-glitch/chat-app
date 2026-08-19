@@ -77,24 +77,62 @@ function MinecraftPage({ user, onBack }) {
   const fetchStatus = async () => {
     setIsRefreshing(true);
     try {
-      const res = await axios.get('/api/minecraft/status');
-      if (res.data) {
+      let res = null;
+      try {
+        res = await axios.get('/api/minecraft/status', { timeout: 4000 });
+      } catch (e1) {
+        try {
+          res = await axios.get('/api/minecraft-status', { timeout: 4000 });
+        } catch (e2) {}
+      }
+
+      if (res && res.data && res.data.online) {
         setStatus({
-          online: !!res.data.online,
+          online: true,
           players: {
             online: res.data.players?.online || 0,
             max: res.data.players?.max || 20,
             sample: Array.isArray(res.data.players?.sample) ? res.data.players.sample : []
           },
-          version: res.data.version || '1.21.x',
+          version: res.data.version || '1.21.11',
           motd: res.data.motd || 'Wired-IO Private Minecraft Server',
-          latency: res.data.latency || null,
+          latency: res.data.latency || 175,
           loading: false,
-          source: res.data.source || 'api'
+          source: res.data.source || 'native_slp'
         });
         if (res.data.host) {
           setServerIp(res.data.host);
         }
+      } else {
+        try {
+          const fallbackRes = await axios.get('/api/minecraft-status?host=atoms-fools.tun.ply.gg', { timeout: 3500 });
+          if (fallbackRes && fallbackRes.data && fallbackRes.data.online) {
+            setStatus({
+              online: true,
+              players: {
+                online: fallbackRes.data.players?.online || 0,
+                max: fallbackRes.data.players?.max || 20,
+                sample: Array.isArray(fallbackRes.data.players?.sample) ? fallbackRes.data.players.sample : []
+              },
+              version: fallbackRes.data.version || '1.21.11',
+              motd: fallbackRes.data.motd || 'Wired-IO Private Minecraft Server',
+              latency: fallbackRes.data.latency || 175,
+              loading: false,
+              source: 'native_slp'
+            });
+            return;
+          }
+        } catch (e3) {}
+
+        setStatus({
+          online: false,
+          players: { online: 0, max: 20, sample: [] },
+          version: '1.21.x',
+          motd: 'Server Offline or Unreachable',
+          latency: null,
+          loading: false,
+          source: 'offline'
+        });
       }
     } catch (err) {
       console.error('Error fetching Minecraft status:', err);

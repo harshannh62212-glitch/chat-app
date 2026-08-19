@@ -522,35 +522,48 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       window.removeEventListener('api-failover-activated', handleFailover);
     };
   }, []);
-  const [viewingChat, setViewingChat] = useState(true);
-  const messagesEndRef = useRef(null);
+  const DEFAULT_GEN_ROOM = { id: 1, name: 'general', is_general: true, server_id: server.id };
 
   // Reset selected chatroom and messages immediately when the server changes
   useEffect(() => {
-    setSelectedChatroom(null);
+    if (isGeneralServer) {
+      setSelectedChatroom(DEFAULT_GEN_ROOM);
+      setChatrooms([DEFAULT_GEN_ROOM]);
+    } else {
+      setSelectedChatroom(null);
+      setChatrooms([]);
+    }
     setMessages([]);
-  }, [server.id]);
+  }, [server.id, isGeneralServer]);
 
   // Fetch chatrooms of the server
   useEffect(() => {
     const fetchChatrooms = async () => {
       try {
         const res = await axios.get(`/api/servers/${server.id}/chatrooms`);
-        if (res.data) {
+        if (Array.isArray(res.data) && res.data.length > 0) {
           setChatrooms(res.data);
-          if (res.data.length > 0) {
-            if (!selectedChatroom || !res.data.some(r => r.id === selectedChatroom.id)) {
-              setSelectedChatroom(res.data[0]);
+          setSelectedChatroom(prev => {
+            if (prev && res.data.some(r => r.id === prev.id)) {
+              return res.data.find(r => r.id === prev.id);
             }
-          }
+            return res.data.find(r => r.is_general) || res.data[0];
+          });
+        } else if (isGeneralServer) {
+          setChatrooms([DEFAULT_GEN_ROOM]);
+          setSelectedChatroom(DEFAULT_GEN_ROOM);
         }
       } catch (err) {
         console.error('Failed to fetch chatrooms:', err);
+        if (isGeneralServer) {
+          setChatrooms([DEFAULT_GEN_ROOM]);
+          setSelectedChatroom(DEFAULT_GEN_ROOM);
+        }
       }
     };
 
     fetchChatrooms();
-  }, [server.id]);
+  }, [server.id, isGeneralServer]);
 
   // Fetch members and roles of the server
   const fetchMembers = async () => {

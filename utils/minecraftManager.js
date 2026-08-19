@@ -85,6 +85,17 @@ async function pingMinecraftServer(targetHost, targetPort = 25565, timeout = 350
     } catch (srvErr) {
       // No SRV record, proceed with standard host & port
     }
+  // 3. Resolve IPv4 address for direct TCP connection
+  let connectIp = host;
+  try {
+    if (!net.isIP(host)) {
+      const ips = await dns.promises.resolve4(host);
+      if (ips && ips.length > 0) {
+        connectIp = ips[0];
+      }
+    }
+  } catch (ipErr) {
+    connectIp = host;
   }
 
   return new Promise((resolve, reject) => {
@@ -229,7 +240,7 @@ async function pingMinecraftServer(targetHost, targetPort = 25565, timeout = 350
       finish(err);
     });
 
-    socket.connect(port, host);
+    socket.connect(port, connectIp);
   });
 }
 

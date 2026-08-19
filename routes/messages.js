@@ -137,25 +137,30 @@ router.post('/server', authMiddleware, async (req, res) => {
     const message = await batchWriter.enqueue(senderId, chatroomId, content);
     const user = await getCachedUserProfile(senderId);
 
-    // Look up sender's top role in this server
-    const roleRes = await query(
-      `SELECT sr.name, sr.color
-       FROM server_member_roles smr
-       JOIN server_roles sr ON smr.role_id = sr.id
-       JOIN chatrooms c ON c.id = $1
-       WHERE smr.server_id = c.server_id AND smr.user_id = $2
+    // Look up sender's top role and server_id
+    const roomRes = await query(
+      `SELECT c.server_id, sr.name as role_name, sr.color as role_color
+       FROM chatrooms c
+       LEFT JOIN server_member_roles smr ON smr.server_id = c.server_id AND smr.user_id = $2
+       LEFT JOIN server_roles sr ON smr.role_id = sr.id
+       WHERE c.id = $1
        ORDER BY sr.position DESC, sr.id ASC
        LIMIT 1`,
       [chatroomId, senderId]
     );
-    const senderRole = roleRes.rows[0] || null;
+    const serverId = roomRes.rows.length > 0 ? roomRes.rows[0].server_id : 1;
+    const senderRole = roomRes.rows.length > 0 && roomRes.rows[0].role_name ? {
+      name: roomRes.rows[0].role_name,
+      color: roomRes.rows[0].role_color
+    } : null;
 
     const enriched = {
       ...message,
       username: user.username,
       avatar_url: user.avatar_url,
-      serverId: message.server_id,
-      chatroom_id: chatroomId,
+      serverId: serverId,
+      server_id: serverId,
+      chatroom_id: parseInt(chatroomId, 10),
       sender_role: senderRole
     };
 
