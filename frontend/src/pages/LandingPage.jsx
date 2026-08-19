@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import Logo from '../components/Logo';
+import TermsOfServiceModal from '../components/TermsOfServiceModal';
 import axios from 'axios';
 import '../styles/LandingPage.css';
 
 function LandingPage({ onEnterPortal }) {
   const [showPublicReportModal, setShowPublicReportModal] = useState(false);
+  const [showTosModal, setShowTosModal] = useState(false);
   const [bugDescription, setBugDescription] = useState('');
   const [bugSubmitting, setBugSubmitting] = useState(false);
   const [bugMessage, setBugMessage] = useState('');
@@ -232,10 +234,16 @@ function LandingPage({ onEnterPortal }) {
           <div>&copy; 2026 wired.inc. All rights reserved.</div>
           <div className="footer-bottom-links">
             <a href="#" className="footer-bottom-link" onClick={(e) => { e.preventDefault(); alert("Wired Privacy Policy:\n1. Your chat logs are stored securely.\n2. We do not sell user metadata.\n3. Cookies are used strictly to maintain your session."); }}>Privacy Policy</a>
-            <a href="#" className="footer-bottom-link" onClick={(e) => { e.preventDefault(); alert("Wired Terms:\n1. Respect community channels.\n2. Malicious automation is strictly prohibited.\n3. Content violates terms may be moderated."); }}>Terms of Service</a>
+            <a href="#" className="footer-bottom-link" onClick={(e) => { e.preventDefault(); setShowTosModal(true); }}>Terms of Service</a>
           </div>
         </div>
       </footer>
+
+      {/* Comprehensive Terms of Service Modal */}
+      <TermsOfServiceModal 
+        isOpen={showTosModal} 
+        onClose={() => setShowTosModal(false)} 
+      />
 
       {/* Public Report Modal */}
       {showPublicReportModal && (

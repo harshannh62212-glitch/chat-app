@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import bcrypt from 'bcryptjs';
 import Logo from '../components/Logo';
+import TermsOfServiceModal from '../components/TermsOfServiceModal';
 import { containsBannedWords } from '../utils/contentFilter';
 import '../styles/Auth.css';
 
@@ -12,6 +13,7 @@ function Auth({ onLogin, onBack }) {
     password: ''
   });
   const [acceptedTos, setAcceptedTos] = useState(false);
+  const [showTosModal, setShowTosModal] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -210,7 +212,7 @@ function Auth({ onLogin, onBack }) {
                 required
               />
               <label htmlFor="tos">
-                I accept the <a href="#" className="tos-link" onClick={(e) => { e.preventDefault(); alert("Terms of Service:\n1. Be respectful to others.\n2. Do not spam or bypass rate limits.\n3. Content moderation policies apply."); }}>Terms of Service</a>
+                I accept the <a href="#" className="tos-link" onClick={(e) => { e.preventDefault(); setShowTosModal(true); }}>Terms of Service & Rules</a>
               </label>
             </div>
           )}
@@ -259,6 +261,11 @@ function Auth({ onLogin, onBack }) {
           </button>
         </div>
       </div>
+
+      <TermsOfServiceModal 
+        isOpen={showTosModal} 
+        onClose={() => setShowTosModal(false)} 
+      />
     </div>
   );
 }
