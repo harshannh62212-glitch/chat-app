@@ -2,8 +2,10 @@ const { query } = require('../db/database');
 const fetch = globalThis.fetch || require('node-fetch');
 
 async function handleLocalBotResponse(io, serverId, chatroomId, content, senderId) {
-  const promptText = content.replace(/@(bot|gemini|Gemini AI Assistant|ai)/gi, '').trim();
-  if (!promptText) return;
+  let promptText = content.replace(/@(bot|gemini|Gemini AI Assistant|ai)/gi, '').trim();
+  if (!promptText) {
+    promptText = 'hello';
+  }
 
   // Resolve chatroomId if missing or invalid
   let targetChatroomId = chatroomId;
@@ -138,20 +140,26 @@ async function handleLocalBotResponse(io, serverId, chatroomId, content, senderI
     }
 
     if (io) {
-      io.to(botSocketRoom).emit('new-message', {
+      const payload = {
         id: newMsgId,
         senderId: 'gemini-bot-id',
         sender_id: 'gemini-bot-id',
         username: 'Gemini AI Assistant',
         avatar_url: 'https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/google-gemini-icon.png',
         content: botResponse,
-        serverId,
+        serverId: serverId || 1,
+        server_id: serverId || 1,
         chatroom_id: targetChatroomId || 1,
         created_at: createdAt,
         timestamp: createdAt,
         isDM: false,
         reactions: {}
-      });
+      };
+
+      io.to(botSocketRoom).emit('new-message', payload);
+      if (botSocketRoom !== 'server-1') {
+        io.to('server-1').emit('new-message', payload);
+      }
     }
   } catch (err) {
     console.error('[LOCAL BOT] Error generating response:', err);

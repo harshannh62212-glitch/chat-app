@@ -173,6 +173,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const [tagQuery, setTagQuery] = useState('');
+  const [tagCursorPos, setTagCursorPos] = useState(0);
 
   // WebRTC Video Rooms state & refs
   const [inVoiceRoom, setInVoiceRoom] = useState(false);
@@ -808,7 +809,9 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
   const allMentionableUsers = [
     { id: 'gemini-bot-id', username: 'bot' },
-    ...members.filter(u => u.id !== 'gemini-bot-id' && u.id !== 'bot-id')
+    { id: 'gemini-bot-id-2', username: 'gemini' },
+    { id: 'gemini-bot-id-3', username: 'ai' },
+    ...members.filter(u => u && u.id !== 'gemini-bot-id' && u.id !== 'bot-id')
   ];
   const filteredTags = allMentionableUsers.filter(u => 
     u.username && u.username.toLowerCase().includes(tagQuery)
@@ -1347,7 +1350,33 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                                     </a>
                                   );
                                 }
-                                return <span key={idx}>{part}</span>;
+                                return (
+                                  <span key={idx}>
+                                    {part.split(/(@[a-zA-Z0-9_?!-]+)/g).map((token, tIdx) => {
+                                      if (token.startsWith('@')) {
+                                        const isBotMention = /^@(bot|gemini|ai)$/i.test(token);
+                                        return (
+                                          <span
+                                            key={tIdx}
+                                            style={{
+                                              background: isBotMention ? 'rgba(138, 43, 226, 0.25)' : 'rgba(0, 255, 255, 0.15)',
+                                              color: isBotMention ? '#d8b4fe' : '#00ffff',
+                                              border: isBotMention ? '1px solid rgba(138, 43, 226, 0.45)' : '1px solid rgba(0, 255, 255, 0.35)',
+                                              padding: '1px 6px',
+                                              borderRadius: '4px',
+                                              fontWeight: '600',
+                                              display: 'inline-block',
+                                              margin: '0 2px'
+                                            }}
+                                          >
+                                            {token}
+                                          </span>
+                                        );
+                                      }
+                                      return token;
+                                    })}
+                                  </span>
+                                );
                               })}
                             </div>
 
