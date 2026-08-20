@@ -190,9 +190,9 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
     socket.on('dm-sent', handleDMSent);
     socket.on('message-deleted', handleMessageDeleted);
 
-    // Initial load + silent 3-second background sync
+    // Initial load + silent 1-second background sync
     fetchDMs();
-    const syncInterval = setInterval(fetchDMs, 3000);
+    const syncInterval = setInterval(fetchDMs, 1000);
 
     return () => {
       socket.off('connect', joinDMRoom);

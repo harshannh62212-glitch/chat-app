@@ -693,6 +693,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     };
 
     fetchMessages();
+    const interval = setInterval(fetchMessages, 1000);
 
     // Join the server room — must wait for socket to be connected
     const joinRoom = () => {
@@ -744,6 +745,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     socket.on('reaction-updated', handleReactionUpdated);
 
     return () => {
+      clearInterval(interval);
       socket.off('connect', joinRoom);
       socket.off('new-message', handleNewMessage);
       socket.off('message-deleted', handleMessageDeleted);

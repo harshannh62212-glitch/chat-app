@@ -23,6 +23,13 @@ function FriendsPanel({ currentUser, onStartDM, onBack }) {
     fetchFriendsData();
     fetchConversations();
     fetchSuggestedUsers();
+
+    const interval = setInterval(() => {
+      fetchFriendsData();
+      fetchConversations();
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, [activeSubTab]);
 
   const fetchFriendsData = async () => {
