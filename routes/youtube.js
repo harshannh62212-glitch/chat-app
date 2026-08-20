@@ -5,7 +5,58 @@ const ramCache = require('../utils/ramCache');
 
 const router = express.Router();
 
-// ─── CURATED MULTI-CATEGORY YOUTUBE CATALOG (100+ Top Videos & Streams) ─────
+// Helper to extract video ID from any YouTube or Google Search URL
+function extractUniversalVideoId(input) {
+  if (!input || typeof input !== 'string') return null;
+  let text = input.trim();
+
+  // 1. If it's a Google Search redirect URL, extract the embedded destination URL
+  if (text.includes('google.') && (text.includes('/url?') || text.includes('url=') || text.includes('q='))) {
+    try {
+      const parsed = new URL(text.startsWith('http') ? text : `https://${text}`);
+      const rawTarget = parsed.searchParams.get('url') || parsed.searchParams.get('q') || parsed.searchParams.get('dest');
+      if (rawTarget) {
+        text = decodeURIComponent(rawTarget);
+      }
+    } catch (e) {
+      // Fallback regex for Google url parameter
+      const gMatch = text.match(/[?&](?:url|q)=([^&]+)/);
+      if (gMatch && gMatch[1]) {
+        try {
+          text = decodeURIComponent(gMatch[1]);
+        } catch (decErr) {
+          text = gMatch[1];
+        }
+      }
+    }
+  }
+
+  // Handle URL decoded variations
+  try {
+    text = decodeURIComponent(text);
+  } catch (e) {}
+
+  // 2. Direct 11-char video ID
+  if (/^[a-zA-Z0-9_-]{11}$/.test(text.trim())) {
+    return text.trim();
+  }
+
+  // 3. YouTube Shorts: youtube.com/shorts/VIDEO_ID
+  const shortsMatch = text.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/i);
+  if (shortsMatch && shortsMatch[1]) return shortsMatch[1];
+
+  // 4. Standard YouTube watch/embed/v/live/youtu.be URLs
+  const match = text.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|live\/))([a-zA-Z0-9_-]{11})/i);
+  if (match && match[1]) return match[1];
+
+  // 5. Fallback regex for any v= param
+  const vParamMatch = text.match(/[?&]v=([a-zA-Z0-9_-]{11})/i);
+  if (vParamMatch && vParamMatch[1]) return vParamMatch[1];
+
+  return null;
+}
+
+// ─── MASSIVE CURATED MULTI-CATEGORY YOUTUBE CATALOG (150+ Top Videos & Streams) ─────
 const CURATED_CATALOG = {
   music: [
     { videoId: 'kJQP7kiw5Fk', title: 'Luis Fonsi - Despacito ft. Daddy Yankee', channelTitle: 'Luis Fonsi', views: '8.4B views', duration: '4:41', thumbnail: 'https://i.ytimg.com/vi/kJQP7kiw5Fk/hqdefault.jpg' },
@@ -17,7 +68,11 @@ const CURATED_CATALOG = {
     { videoId: 'CevxZvSJLk8', title: 'Katy Perry - Roar (Official)', channelTitle: 'Katy Perry', views: '3.9B views', duration: '4:30', thumbnail: 'https://i.ytimg.com/vi/CevxZvSJLk8/hqdefault.jpg' },
     { videoId: 'YQHsXMglC9A', title: 'Adele - Hello (Official Music Video)', channelTitle: 'Adele', views: '3.1B views', duration: '6:06', thumbnail: 'https://i.ytimg.com/vi/YQHsXMglC9A/hqdefault.jpg' },
     { videoId: 'LsoLEjrDogU', title: 'Bruno Mars - That’s What I Like (Official Video)', channelTitle: 'Bruno Mars', views: '2.2B views', duration: '3:30', thumbnail: 'https://i.ytimg.com/vi/LsoLEjrDogU/hqdefault.jpg' },
-    { videoId: 'k2qgadSvNyU', title: 'Dua Lipa - New Rules (Official Music Video)', channelTitle: 'Dua Lipa', views: '2.9B views', duration: '3:44', thumbnail: 'https://i.ytimg.com/vi/k2qgadSvNyU/hqdefault.jpg' }
+    { videoId: 'k2qgadSvNyU', title: 'Dua Lipa - New Rules (Official Music Video)', channelTitle: 'Dua Lipa', views: '2.9B views', duration: '3:44', thumbnail: 'https://i.ytimg.com/vi/k2qgadSvNyU/hqdefault.jpg' },
+    { videoId: 'fRh_vgS2dFE', title: 'Justin Bieber - Sorry (PURPOSE : The Movement)', channelTitle: 'Justin Bieber', views: '3.6B views', duration: '3:26', thumbnail: 'https://i.ytimg.com/vi/fRh_vgS2dFE/hqdefault.jpg' },
+    { videoId: 'RgKAFK5djSk', title: 'Wiz Khalifa - See You Again ft. Charlie Puth', channelTitle: 'Wiz Khalifa', views: '6.1B views', duration: '3:57', thumbnail: 'https://i.ytimg.com/vi/RgKAFK5djSk/hqdefault.jpg' },
+    { videoId: '4NRXx6U8ABQ', title: 'The Weeknd - Blinding Lights (Official Video)', channelTitle: 'The Weeknd', views: '800M views', duration: '4:20', thumbnail: 'https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg' },
+    { videoId: '7wtfhZwyrcc', title: 'Imagine Dragons - Believer (Official Music Video)', channelTitle: 'Imagine Dragons', views: '2.6B views', duration: '3:36', thumbnail: 'https://i.ytimg.com/vi/7wtfhZwyrcc/hqdefault.jpg' }
   ],
   chill: [
     { videoId: 'jfKfPfyJRdk', title: 'lofi hip hop radio 📚 - beats to relax/study to', channelTitle: 'Lofi Girl', views: 'Live Stream', duration: 'LIVE', thumbnail: 'https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg' },
@@ -25,7 +80,9 @@ const CURATED_CATALOG = {
     { videoId: '5yx6BWlEVcY', title: 'Chillhop Radio - jazzy & lofi hip hop beats', channelTitle: 'Chillhop Music', views: 'Live Stream', duration: 'LIVE', thumbnail: 'https://i.ytimg.com/vi/5yx6BWlEVcY/hqdefault.jpg' },
     { videoId: 'e3L1Ias45JU', title: 'Warm Morning - Coffee Shop Ambient Music', channelTitle: 'Coffee Relaxing', views: '14M views', duration: '3:00:00', thumbnail: 'https://i.ytimg.com/vi/e3L1Ias45JU/hqdefault.jpg' },
     { videoId: 'DWcJFNfaw9c', title: 'Relaxing Sleep Music • Deep Sleeping Music, Relaxing Music', channelTitle: 'Soothing Relaxation', views: '185M views', duration: '8:00:00', thumbnail: 'https://i.ytimg.com/vi/DWcJFNfaw9c/hqdefault.jpg' },
-    { videoId: 'lTRiuFIWV54', title: 'Night Ambience with Soft Rain & Jazz Piano', channelTitle: 'Calm Jazz', views: '22M views', duration: '3:30:00', thumbnail: 'https://i.ytimg.com/vi/lTRiuFIWV54/hqdefault.jpg' }
+    { videoId: 'lTRiuFIWV54', title: 'Night Ambience with Soft Rain & Jazz Piano', channelTitle: 'Calm Jazz', views: '22M views', duration: '3:30:00', thumbnail: 'https://i.ytimg.com/vi/lTRiuFIWV54/hqdefault.jpg' },
+    { videoId: '7NOSDKb0HlU', title: 'Peaceful Piano Radio - Relaxing Music for Focus', channelTitle: 'Lofi Girl Piano', views: 'Live Stream', duration: 'LIVE', thumbnail: 'https://i.ytimg.com/vi/7NOSDKb0HlU/hqdefault.jpg' },
+    { videoId: 'WPni755-Krg', title: 'Ambient Study Music to Concentrate [Deep Focus]', channelTitle: 'StudyMD', views: '19M views', duration: '3:00:00', thumbnail: 'https://i.ytimg.com/vi/WPni755-Krg/hqdefault.jpg' }
   ],
   gaming: [
     { videoId: 'V9PBRq_Gog8', title: 'Minecraft 1.21 Tricky Trials - Full Update Showcase', channelTitle: 'Minecraft', views: '8.5M views', duration: '18:24', thumbnail: 'https://i.ytimg.com/vi/V9PBRq_Gog8/hqdefault.jpg' },
@@ -33,7 +90,8 @@ const CURATED_CATALOG = {
     { videoId: 'd10kP_0fL6Q', title: 'Elden Ring: Shadow of the Erdtree - Official Gameplay Trailer', channelTitle: 'Bandai Namco', views: '12M views', duration: '3:07', thumbnail: 'https://i.ytimg.com/vi/d10kP_0fL6Q/hqdefault.jpg' },
     { videoId: 'mOD17gH3b9c', title: 'The Evolution of Video Game Graphics (1972-2026)', channelTitle: 'NeverKnowsBest', views: '6.4M views', duration: '42:15', thumbnail: 'https://i.ytimg.com/vi/mOD17gH3b9c/hqdefault.jpg' },
     { videoId: '04a6_5qJ1qU', title: 'Top 10 Most Insane Esports Plays of All Time', channelTitle: 'theScore esports', views: '9.2M views', duration: '21:10', thumbnail: 'https://i.ytimg.com/vi/04a6_5qJ1qU/hqdefault.jpg' },
-    { videoId: 'r72GP1PIZa0', title: 'Cyberpunk 2077: Phantom Liberty — Official Cinematic Trailer', channelTitle: 'Cyberpunk 2077', views: '16M views', duration: '3:50', thumbnail: 'https://i.ytimg.com/vi/r72GP1PIZa0/hqdefault.jpg' }
+    { videoId: 'r72GP1PIZa0', title: 'Cyberpunk 2077: Phantom Liberty — Official Cinematic Trailer', channelTitle: 'Cyberpunk 2077', views: '16M views', duration: '3:50', thumbnail: 'https://i.ytimg.com/vi/r72GP1PIZa0/hqdefault.jpg' },
+    { videoId: 'e_04ZrNroTo', title: 'Valorant Champions Grand Finals - Full Movie', channelTitle: 'VALORANT Champions Tour', views: '3.8M views', duration: '34:20', thumbnail: 'https://i.ytimg.com/vi/e_04ZrNroTo/hqdefault.jpg' }
   ],
   tech: [
     { videoId: 'kqtD5dpn9C8', title: 'Python for Beginners - Full Course [Programming Tutorial]', channelTitle: 'freeCodeCamp.org', views: '41M views', duration: '4:26:52', thumbnail: 'https://i.ytimg.com/vi/kqtD5dpn9C8/hqdefault.jpg' },
@@ -41,7 +99,8 @@ const CURATED_CATALOG = {
     { videoId: 'aircAruvnKk', title: 'Neural Networks from Scratch - Full Deep Dive', channelTitle: '3Blue1Brown', views: '18M views', duration: '19:13', thumbnail: 'https://i.ytimg.com/vi/aircAruvnKk/hqdefault.jpg' },
     { videoId: 'G3e-cpL7ofc', title: 'HTML & CSS Full Course - Beginner to Pro', channelTitle: 'SuperSimpleDev', views: '12M views', duration: '6:31:24', thumbnail: 'https://i.ytimg.com/vi/G3e-cpL7ofc/hqdefault.jpg' },
     { videoId: 'Z1BCujX3pw8', title: 'Building a Full Stack Realtime Web App with Node.js & React', channelTitle: 'Fireship', views: '2.5M views', duration: '12:45', thumbnail: 'https://i.ytimg.com/vi/Z1BCujX3pw8/hqdefault.jpg' },
-    { videoId: '8aGhZQkoFbQ', title: 'What is a REST API? [In 5 Minutes]', channelTitle: 'Web Dev Simplified', views: '3.1M views', duration: '5:24', thumbnail: 'https://i.ytimg.com/vi/8aGhZQkoFbQ/hqdefault.jpg' }
+    { videoId: '8aGhZQkoFbQ', title: 'What is a REST API? [In 5 Minutes]', channelTitle: 'Web Dev Simplified', views: '3.1M views', duration: '5:24', thumbnail: 'https://i.ytimg.com/vi/8aGhZQkoFbQ/hqdefault.jpg' },
+    { videoId: 'PkZNo7MFNFg', title: 'JavaScript Tutorial for Beginners: Learn JS in 1 Hour', channelTitle: 'Programming with Mosh', views: '8.2M views', duration: '48:16', thumbnail: 'https://i.ytimg.com/vi/PkZNo7MFNFg/hqdefault.jpg' }
   ],
   podcasts: [
     { videoId: 'vMgUq_rXw2M', title: 'Sam Altman: OpenAI, GPT-5, AGI, and the Future of AI', channelTitle: 'Lex Fridman Podcast', views: '4.2M views', duration: '2:14:30', thumbnail: 'https://i.ytimg.com/vi/vMgUq_rXw2M/hqdefault.jpg' },
@@ -70,7 +129,9 @@ const CURATED_CATALOG = {
     { videoId: 'kOCGKp7s-10', title: 'Top 50 Most Unbelievable Sports Moments of the Decade', channelTitle: 'Red Bull', views: '28M views', duration: '16:40', thumbnail: 'https://i.ytimg.com/vi/kOCGKp7s-10/hqdefault.jpg' },
     { videoId: 'fJ9rUzIMcZQ', title: 'Queen - Bohemian Rhapsody (Official Video Remastered)', channelTitle: 'Queen Official', views: '1.7B views', duration: '5:59', thumbnail: 'https://i.ytimg.com/vi/fJ9rUzIMcZQ/hqdefault.jpg' },
     { videoId: 'V9PBRq_Gog8', title: 'Minecraft 1.21 Tricky Trials - Full Update Showcase', channelTitle: 'Minecraft', views: '8.5M views', duration: '18:24', thumbnail: 'https://i.ytimg.com/vi/V9PBRq_Gog8/hqdefault.jpg' },
-    { videoId: 'rUxyKA_-grg', title: 'synthwave radio 🌌 - chill beats to relax/game to', channelTitle: 'Lofi Girl', views: 'Live Stream', duration: 'LIVE', thumbnail: 'https://i.ytimg.com/vi/rUxyKA_-grg/hqdefault.jpg' }
+    { videoId: 'rUxyKA_-grg', title: 'synthwave radio 🌌 - chill beats to relax/game to', channelTitle: 'Lofi Girl', views: 'Live Stream', duration: 'LIVE', thumbnail: 'https://i.ytimg.com/vi/rUxyKA_-grg/hqdefault.jpg' },
+    { videoId: '4NRXx6U8ABQ', title: 'The Weeknd - Blinding Lights (Official Video)', channelTitle: 'The Weeknd', views: '800M views', duration: '4:20', thumbnail: 'https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg' },
+    { videoId: '7wtfhZwyrcc', title: 'Imagine Dragons - Believer (Official Music Video)', channelTitle: 'Imagine Dragons', views: '2.6B views', duration: '3:36', thumbnail: 'https://i.ytimg.com/vi/7wtfhZwyrcc/hqdefault.jpg' }
   ]
 };
 
@@ -184,7 +245,23 @@ router.get('/search', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Search query required' });
     }
 
-    const queryKey = `yt_search_${q.trim().toLowerCase()}`;
+    const trimmed = q.trim();
+
+    // Check for direct YouTube video ID or Google redirect link
+    const directVideoId = extractUniversalVideoId(trimmed);
+    if (directVideoId) {
+      const directResult = [{
+        videoId: directVideoId,
+        title: `YouTube Video (${directVideoId})`,
+        channelTitle: 'Direct Link Playback',
+        thumbnail: `https://i.ytimg.com/vi/${directVideoId}/hqdefault.jpg`,
+        views: 'Direct Play',
+        duration: 'Full'
+      }];
+      return res.json({ results: directResult });
+    }
+
+    const queryKey = `yt_search_${trimmed.toLowerCase()}`;
     const cached = ramCache.get(queryKey);
     if (cached) {
       return res.json({ results: cached });

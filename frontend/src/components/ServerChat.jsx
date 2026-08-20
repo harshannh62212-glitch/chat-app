@@ -11,7 +11,12 @@ import '../styles/ServerSettings.css';
 
 
 const getActiveSocketUrl = () => {
-  return import.meta.env.PROD ? window.location.origin : 'http://localhost:8000';
+  const custom = localStorage.getItem('custom_proxy_target');
+  if (custom) return custom;
+  const active = localStorage.getItem('active_backend_target');
+  if (active && active.startsWith('http') && !active.includes('vercel.app')) return active;
+  if (axios.defaults.baseURL && axios.defaults.baseURL.startsWith('http') && !axios.defaults.baseURL.includes('vercel.app')) return axios.defaults.baseURL;
+  return import.meta.env.PROD ? (import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com') : 'http://localhost:8000';
 };
 
 const socket = io(getActiveSocketUrl(), {
@@ -100,21 +105,27 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   const [currentSocketUrl, setCurrentSocketUrl] = useState(getActiveSocketUrl());
 
   // Check currentUser server permissions
-  const isServerOwner = server.owner_id === currentUser.id;
-  const isGlobalAdmin = currentUser.is_admin || currentUser.username === 'Nxghtmare3621';
+  const safeUser = currentUser || {};
+  const isServerOwner = Boolean(server && server.owner_id && server.owner_id === safeUser.id);
+  const isGlobalAdmin = Boolean(
+    safeUser.is_admin || 
+    safeUser.username === 'ADMIN' || 
+    safeUser.username === 'Nxghtmare3621' || 
+    safeUser.username === 'admin'
+  );
 
-  const currentUserMember = Array.isArray(members) ? members.find(m => m.id === currentUser.id) : null;
+  const currentUserMember = Array.isArray(members) ? members.find(m => m && safeUser.id && m.id === safeUser.id) : null;
   const currentUserRoles = currentUserMember?.roles || [];
 
   const hasPerm = (permKey) => {
     if (isServerOwner || isGlobalAdmin) return true;
     return currentUserRoles.some(r => {
-      const p = r.permissions || {};
+      const p = r?.permissions || {};
       return p.administrator === true || p[permKey] === true;
     });
   };
 
-  const isGeneralServer = server.id === 1 || server.name === 'General';
+  const isGeneralServer = Boolean(server && (server.id === 1 || server.name === 'General'));
   const canManageRoles = (isServerOwner || isGlobalAdmin || hasPerm('manage_roles')) && !isGeneralServer;
   const canManageMessages = hasPerm('manage_messages');
   const canManageChannels = hasPerm('manage_channels');
@@ -536,7 +547,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       socket.off('chatroom-deleted', handleChatroomDeleted);
       socket.off('member-kicked', handleMemberKicked);
     };
-  }, [server.id, currentUser.id]);
+  }, [server?.id, safeUser?.id]);
 
   const handleCreateChannel = async () => {
     const name = window.prompt('Enter new channel name (e.g. announcements, gaming):');
@@ -1087,15 +1098,15 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
           <div className="discord-user-bar">
             <div className="user-bar-profile">
               <div className="user-bar-avatar">
-                {currentUser.avatar_url ? (
-                  <img src={currentUser.avatar_url} alt={currentUser.username} />
+                {safeUser.avatar_url ? (
+                  <img src={safeUser.avatar_url} alt={safeUser.username || 'User'} />
                 ) : (
-                  <div className="avatar-placeholder">{currentUser.username ? currentUser.username[0].toUpperCase() : '?'}</div>
+                  <div className="avatar-placeholder">{safeUser.username ? safeUser.username[0].toUpperCase() : '?'}</div>
                 )}
                 <span className="status-indicator online"></span>
               </div>
               <div className="user-bar-info">
-                <span className="user-bar-name">{currentUser.username}</span>
+                <span className="user-bar-name">{safeUser.username || 'User'}</span>
                 <span className="user-bar-tag">#0001</span>
               </div>
             </div>
@@ -1251,11 +1262,70 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                         </button>
                       </div>
 
-                      {msg.content.startsWith('http') && msg.content.includes('giphy.com') ? (
-                        <img src={msg.content} className="message-gif" alt="GIF" />
-                      ) : (
-                        <div className="message-text">{msg.content}</div>
-                      )}
+                      {(() => {
+                        const content = msg.content || '';
+                        
+                        // Single GIF / Image link
+                        if (typeof content === 'string' && (content.startsWith('http://') || content.startsWith('https://')) && !content.includes(' ')) {
+                          const isGif = content.includes('.gif') || content.includes('giphy.com') || content.includes('tenor.com');
+                          const isImage = /\.(png|jpg|jpeg|webp|svg)($|\?)/i.test(content);
+                          if (isGif || isImage) {
+                            return (
+                              <div style={{ marginTop: '6px' }}>
+                                <img 
+                                  src={content} 
+                                  className="message-gif" 
+                                  alt="Media" 
+                                  style={{ maxWidth: '320px', maxHeight: '240px', borderRadius: '8px', objectFit: 'contain' }}
+                                  loading="lazy"
+                                />
+                              </div>
+                            );
+                          }
+                        }
+
+                        // Parse URLs and text
+                        const urlRegex = /(https?:\/\/[^\s]+)/gi;
+                        const parts = content.split(urlRegex);
+                        const ytMatch = content.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([a-zA-Z0-9_-]{11})/i);
+                        const ytId = ytMatch ? ytMatch[1] : null;
+
+                        return (
+                          <div className="message-content-wrapper">
+                            <div className="message-text">
+                              {parts.map((part, idx) => {
+                                if (part.match(urlRegex)) {
+                                  return (
+                                    <a 
+                                      key={idx} 
+                                      href={part} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer" 
+                                      style={{ color: '#00ffff', textDecoration: 'underline', wordBreak: 'break-all' }}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {part}
+                                    </a>
+                                  );
+                                }
+                                return <span key={idx}>{part}</span>;
+                              })}
+                            </div>
+
+                            {ytId && (
+                              <div style={{ marginTop: '8px', maxWidth: '420px', borderRadius: '10px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                <iframe
+                                  src={`https://www.youtube.com/embed/${ytId}`}
+                                  title="YouTube Video"
+                                  style={{ width: '100%', height: '220px', border: 'none', display: 'block' }}
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       <div className="message-reactions-row">
                         {msg.reactions && Object.entries(msg.reactions).map(([emoji, userIds]) => {

@@ -8,6 +8,7 @@ import DirectMessage from '../components/DirectMessage';
 import AdminPanel from '../components/AdminPanel';
 import FriendsPanel from '../components/FriendsPanel';
 import Logo from '../components/Logo';
+import { formatErrorMessage } from '../utils/errorHandler';
 import '../styles/Dashboard.css';
 
 function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, onToggleToYouTube, onToggleToGames }) {
@@ -521,8 +522,14 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
         <SettingsModal 
           user={user}
           onClose={() => setShowSettingsModal(false)}
-          onUpdateAvatar={(newUrl) => {
-            setUser({ ...user, avatar_url: newUrl });
+          onUpdateUser={(updatedUser) => {
+            if (updatedUser) {
+              setUser(prev => ({ ...(prev || {}), ...updatedUser }));
+              try {
+                const combined = { ...(user || {}), ...updatedUser };
+                localStorage.setItem('chat_user', JSON.stringify(combined));
+              } catch (e) {}
+            }
           }}
           onLogout={onLogout}
         />
@@ -664,6 +671,32 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
                     {bugSubmitting ? 'Submitting...' : 'Submit Report'}
                   </button>
                 </div>
+
+                <div style={{ marginTop: '18px', paddingTop: '14px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: '#a4b0be', marginBottom: '8px' }}>Alternative Reporting Option:</div>
+                  <a
+                    href="https://forms.gle/4W1F9L2P5vM8x9rA7"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      background: 'rgba(66, 133, 244, 0.12)',
+                      border: '1px solid rgba(66, 133, 244, 0.4)',
+                      borderRadius: '8px',
+                      color: '#8ab4f8',
+                      padding: '8px 14px',
+                      textDecoration: 'none',
+                      fontWeight: 'bold',
+                      fontSize: '12px',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <span>📋</span> Open Google Forms Reporting System ↗
+                  </a>
+                </div>
               </form>
             )}
           </div>
@@ -707,7 +740,7 @@ function CreateServerModal({ currentUser, onClose, onServerCreated }) {
       onServerCreated();
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || err.message || 'Failed to create server');
+      setError(formatErrorMessage(err, 'Failed to create server'));
     } finally {
       setLoading(false);
     }
@@ -765,19 +798,20 @@ function CreateServerModal({ currentUser, onClose, onServerCreated }) {
 }
 
 function UserProfileBar({ user, onOpenSettings }) {
+  const safeUser = user || {};
   return (
     <div className="discord-user-bar">
       <div className="user-bar-profile">
         <div className="user-bar-avatar">
-          {user.avatar_url ? (
-            <img src={user.avatar_url} alt={user.username} />
+          {safeUser.avatar_url ? (
+            <img src={safeUser.avatar_url} alt={safeUser.username || 'User'} />
           ) : (
-            <div className="avatar-placeholder">{user.username ? user.username[0].toUpperCase() : '?'}</div>
+            <div className="avatar-placeholder">{safeUser.username ? safeUser.username[0].toUpperCase() : '?'}</div>
           )}
           <span className="status-indicator online"></span>
         </div>
         <div className="user-bar-info">
-          <span className="user-bar-name">{user.username}</span>
+          <span className="user-bar-name">{safeUser.username || 'User'}</span>
           <span className="user-bar-tag">#0001</span>
         </div>
       </div>
@@ -788,9 +822,11 @@ function UserProfileBar({ user, onOpenSettings }) {
   );
 }
 
-function SettingsModal({ user, onClose, onUpdateAvatar, onLogout }) {
+function SettingsModal({ user, onClose, onUpdateUser, onLogout }) {
+  const safeUser = user || {};
   const [activeSettingsTab, setActiveSettingsTab] = useState('profile');
-  const [avatarUrl, setAvatarUrl] = useState(user.avatar_url || '');
+  const [avatarUrl, setAvatarUrl] = useState(safeUser.avatar_url || '');
+  const [description, setDescription] = useState(safeUser.description || safeUser.bio || '');
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'cosmic-dark');
   const [font, setFont] = useState(localStorage.getItem('font') || 'Outfit');
   const [fontSize, setFontSize] = useState(localStorage.getItem('font-size') || '15px');
@@ -799,11 +835,12 @@ function SettingsModal({ user, onClose, onUpdateAvatar, onLogout }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  const username = safeUser.username || 'User';
   const presets = [
-    `https://robohash.org/${user.username}?set=set1`,
-    `https://robohash.org/${user.username}?set=set2`,
-    `https://robohash.org/${user.username}?set=set4`,
-    `https://robohash.org/${user.username}?set=set3`
+    `https://robohash.org/${username}?set=set1`,
+    `https://robohash.org/${username}?set=set2`,
+    `https://robohash.org/${username}?set=set4`,
+    `https://robohash.org/${username}?set=set3`
   ];
 
   useEffect(() => {
@@ -842,11 +879,25 @@ function SettingsModal({ user, onClose, onUpdateAvatar, onLogout }) {
     }
 
     try {
-      await axios.put('/api/users/profile', { avatarUrl });
-      onUpdateAvatar(avatarUrl);
+      const res = await axios.put('/api/users/profile', { 
+        avatarUrl: avatarUrl.trim() || null, 
+        description: description.trim() 
+      });
+      const returnedUser = res.data?.user;
+      const updated = returnedUser ? {
+        ...safeUser,
+        ...returnedUser,
+        avatar_url: returnedUser.avatar_url || avatarUrl.trim() || null,
+        description: returnedUser.description !== undefined ? returnedUser.description : description.trim()
+      } : {
+        ...safeUser,
+        avatar_url: avatarUrl.trim() || null,
+        description: description.trim()
+      };
+      if (onUpdateUser) onUpdateUser(updated);
       setSuccess('Profile updated successfully!');
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to update profile');
+      setError(formatErrorMessage(err, 'Failed to update profile'));
     } finally {
       setLoading(false);
     }
@@ -932,7 +983,33 @@ function SettingsModal({ user, onClose, onUpdateAvatar, onLogout }) {
                   />
                 </div>
 
-                <button type="submit" className="save-settings-btn" disabled={loading}>
+                <div className="input-group" style={{ marginTop: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label htmlFor="user-bio-input">About Me (Profile Description)</label>
+                    <span style={{ fontSize: '12px', color: '#72767d' }}>{description.length}/200</span>
+                  </div>
+                  <textarea
+                    id="user-bio-input"
+                    maxLength={200}
+                    rows={3}
+                    placeholder="Tell other students and members about yourself (e.g. Favorite games, hobbies, coding languages)..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      background: 'rgba(0, 0, 0, 0.3)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '8px',
+                      color: '#fff',
+                      fontSize: '14px',
+                      resize: 'none',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+
+                <button type="submit" className="save-settings-btn" disabled={loading} style={{ marginTop: '20px' }}>
                   {loading ? 'Saving...' : 'Save Profile Changes'}
                 </button>
               </form>

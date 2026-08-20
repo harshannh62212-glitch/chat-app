@@ -224,6 +224,9 @@ async function createTables() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT false;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS minecraft_username VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT '';
+      ALTER TABLE users ALTER COLUMN avatar_url TYPE TEXT;
       ALTER TABLE server_messages ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
       ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS is_moderated BOOLEAN DEFAULT false;
       ALTER TABLE reports ADD COLUMN IF NOT EXISTS ai_evaluation VARCHAR(20) DEFAULT 'unevaluated';

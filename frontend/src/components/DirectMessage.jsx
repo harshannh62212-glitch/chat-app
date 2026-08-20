@@ -8,8 +8,12 @@ import ReportButton from './ReportButton';
 import '../styles/DirectMessage.css';
 
 const getActiveSocketUrl = () => {
-  const saved = localStorage.getItem('custom_proxy_target');
-  return import.meta.env.PROD ? window.location.origin : 'http://localhost:8000';
+  const custom = localStorage.getItem('custom_proxy_target');
+  if (custom) return custom;
+  const active = localStorage.getItem('active_backend_target');
+  if (active && active.startsWith('http') && !active.includes('vercel.app')) return active;
+  if (axios.defaults.baseURL && axios.defaults.baseURL.startsWith('http') && !axios.defaults.baseURL.includes('vercel.app')) return axios.defaults.baseURL;
+  return import.meta.env.PROD ? (import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com') : 'http://localhost:8000';
 };
 
 const socket = io(getActiveSocketUrl(), {
@@ -444,11 +448,70 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
                     </span>
                   </div>
                   <div className="discord-msg-text">
-                    {msg.content && msg.content.startsWith('http') && (msg.content.includes('.gif') || msg.content.includes('giphy.com') || msg.content.includes('tenor.com')) ? (
-                      <img src={msg.content} alt="GIF" className="discord-msg-gif" />
-                    ) : (
-                      msg.content
-                    )}
+                    {(() => {
+                      const content = msg.content || '';
+                      
+                      // Single GIF / Image link
+                      if (typeof content === 'string' && (content.startsWith('http://') || content.startsWith('https://')) && !content.includes(' ')) {
+                        const isGif = content.includes('.gif') || content.includes('giphy.com') || content.includes('tenor.com');
+                        const isImage = /\.(png|jpg|jpeg|webp|svg)($|\?)/i.test(content);
+                        if (isGif || isImage) {
+                          return (
+                            <div style={{ marginTop: '6px' }}>
+                              <img 
+                                src={content} 
+                                alt="Media" 
+                                className="discord-msg-gif" 
+                                style={{ maxWidth: '320px', maxHeight: '240px', borderRadius: '8px', objectFit: 'contain' }}
+                                loading="lazy"
+                              />
+                            </div>
+                          );
+                        }
+                      }
+
+                      // Parse URLs and text
+                      const urlRegex = /(https?:\/\/[^\s]+)/gi;
+                      const parts = content.split(urlRegex);
+                      const ytMatch = content.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([a-zA-Z0-9_-]{11})/i);
+                      const ytId = ytMatch ? ytMatch[1] : null;
+
+                      return (
+                        <div>
+                          <div>
+                            {parts.map((part, idx) => {
+                              if (part.match(urlRegex)) {
+                                return (
+                                  <a 
+                                    key={idx} 
+                                    href={part} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    style={{ color: '#00ffff', textDecoration: 'underline', wordBreak: 'break-all' }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {part}
+                                  </a>
+                                );
+                              }
+                              return <span key={idx}>{part}</span>;
+                            })}
+                          </div>
+
+                          {ytId && (
+                            <div style={{ marginTop: '8px', maxWidth: '380px', borderRadius: '10px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                              <iframe
+                                src={`https://www.youtube.com/embed/${ytId}`}
+                                title="YouTube Video"
+                                style={{ width: '100%', height: '200px', border: 'none', display: 'block' }}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 

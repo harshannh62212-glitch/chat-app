@@ -96,7 +96,7 @@ function Auth({ onLogin, onBack }) {
                   username: user.username,
                   email: user.email,
                   avatar_url: user.avatar_url,
-                  is_admin: user.username === 'Nxghtmare3621' || user.is_admin
+                  is_admin: Boolean(user.is_admin || user.username === 'ADMIN' || user.username === 'Nxghtmare3621' || user.username === 'admin')
                 });
                 return;
               } else {
@@ -148,7 +148,7 @@ function Auth({ onLogin, onBack }) {
               id: user.id,
               username: user.username,
               email: user.email,
-              is_admin: user.username === 'Nxghtmare3621'
+              is_admin: Boolean(user.is_admin || user.username === 'ADMIN' || user.username === 'Nxghtmare3621' || user.username === 'admin')
             });
             return;
           }

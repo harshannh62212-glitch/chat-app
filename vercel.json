@@ -3,6 +3,14 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/api/:match*",
+      "destination": "https://gmc-broke-shore-publications.trycloudflare.com/api/:match*"
+    },
+    {
+      "source": "/socket.io/:match*",
+      "destination": "https://gmc-broke-shore-publications.trycloudflare.com/socket.io/:match*"
+    },
+    {
       "source": "/ping",
       "destination": "/api/ping.js"
     },

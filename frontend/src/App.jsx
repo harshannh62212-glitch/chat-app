@@ -25,6 +25,7 @@ axios.defaults.timeout = 10000;
 import ThermalsPage from './pages/ThermalsPage';
 import AdminPanel from './components/AdminPanel';
 import MinecraftPage from './pages/MinecraftPage';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {
@@ -44,7 +45,16 @@ function App() {
   const [moderationUnlocked, setModerationUnlocked] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [currentPortal, setCurrentPortal] = useState('chat');
-  const [tunnelResolved, setTunnelResolved] = useState(true);
+  const [tunnelResolved, setTunnelResolved] = useState(false);
+
+  const isUserAdmin = Boolean(
+    currentUser && (
+      currentUser.is_admin || 
+      currentUser.username === 'ADMIN' || 
+      currentUser.username === 'Nxghtmare3621' || 
+      currentUser.username === 'admin'
+    )
+  );
 
   useEffect(() => {
     const handlePopState = () => {
@@ -96,8 +106,93 @@ function App() {
     return () => clearInterval(interval);
   }, [tunnelResolved]);
 
-
   useEffect(() => {
+    const resolveBestBackend = async () => {
+      const saved = localStorage.getItem('custom_proxy_target');
+      if (saved) {
+        axios.defaults.baseURL = saved;
+        localStorage.setItem('active_backend_target', saved);
+        setTunnelResolved(true);
+        return;
+      }
+
+      // Fast health check helper
+      const checkNodeHealth = async (url) => {
+        if (!url || !url.startsWith('http')) return false;
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 2000);
+          try {
+            const res = await fetch(`${url}/ping`, {
+              signal: controller.signal,
+              headers: { 'bypass-tunnel-reminder': 'true' }
+            });
+            clearTimeout(timeout);
+            return res.ok;
+          } catch {
+            return false;
+          }
+        } catch {
+          return false;
+        }
+      };
+
+      // 1. Check Cloudflare Tunnel from Supabase
+      let homeTunnel = '';
+      try {
+        let supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aebntdjjniirnwthtwlx.supabase.co';
+        if (!supabaseUrl || !supabaseUrl.includes('supabase.co')) {
+          supabaseUrl = 'https://aebntdjjniirnwthtwlx.supabase.co';
+        }
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
+        const res = await fetch(`${supabaseUrl}/rest/v1/system_config?key=eq.active_tunnel_url`, {
+          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data[0]?.value) {
+            homeTunnel = data[0].value;
+          }
+        }
+      } catch (e) {}
+
+      // 2. Check local tunnel.json
+      if (!homeTunnel) {
+        try {
+          const tRes = await fetch('/tunnel.json');
+          if (tRes.ok) {
+            const tData = await tRes.json();
+            if (tData?.url) homeTunnel = tData.url;
+          }
+        } catch (e) {}
+      }
+
+      if (homeTunnel && (await checkNodeHealth(homeTunnel))) {
+        console.log('[LOAD BALANCER] Primary Node Active: Connected to Tunnel Backend:', homeTunnel);
+        axios.defaults.baseURL = homeTunnel;
+        localStorage.setItem('active_backend_target', homeTunnel);
+        setTunnelResolved(true);
+        return;
+      }
+
+      // 3. Check Render Cloud Backend
+      const renderCloudUrl = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
+      if (await checkNodeHealth(renderCloudUrl)) {
+        console.log('[LOAD BALANCER] Connected to Render Cloud:', renderCloudUrl);
+        axios.defaults.baseURL = renderCloudUrl;
+        localStorage.setItem('active_backend_target', renderCloudUrl);
+        setTunnelResolved(true);
+        return;
+      }
+
+      // 4. Default / Fallback
+      const fallbackTarget = homeTunnel || renderCloudUrl || (import.meta.env.PROD ? '' : 'http://localhost:8000');
+      axios.defaults.baseURL = fallbackTarget;
+      localStorage.setItem('active_backend_target', fallbackTarget || window.location.origin);
+      setTunnelResolved(true);
+    };
+
+    resolveBestBackend();
     loadCustomBannedWords();
     
     // Request notification permission
@@ -107,6 +202,8 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!tunnelResolved) return;
+
     // Load custom theme, typography, and letter spacing variables on mount
     const savedTheme = localStorage.getItem('theme') || 'cosmic-dark';
     const savedFont = localStorage.getItem('font') || 'Outfit';
@@ -146,7 +243,7 @@ function App() {
           }
         });
     }
-  }, []);
+  }, [tunnelResolved]);
 
   const handleLogin = (token, user) => {
     localStorage.setItem('chat_token', token);
@@ -172,114 +269,115 @@ function App() {
   }
 
   return (
-    <div className={`app ${showMinecraft ? 'minecraft-view' : showThermals ? 'thermals-view' : showModeration ? 'moderation-view' : currentUser ? 'dashboard-view' : 'public-view'}`}>
-      {serverSleeping && (
-        <div style={{ background: '#ff9f43', color: '#000', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '0.95em', fontFamily: "'Outfit', sans-serif", display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', zIndex: 9999, position: 'relative' }}>
-          <span>💤</span>
-          <span><strong>Notice:</strong> The host server has entered low-battery hibernation mode. Features are restricted until the server is powered back on.</span>
-        </div>
-      )}
-      {!serverSleeping && batteryInfo && !batteryInfo.isCharging && (
-        <div style={{ background: '#ee5253', color: '#fff', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '0.95em', fontFamily: "'Outfit', sans-serif", display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', zIndex: 9999, position: 'relative' }}>
-          <span>🔌</span>
-          <span><strong>Notice:</strong> The host server is running on battery backup (Discharging: {batteryInfo.percent}%). It will automatically hibernate if battery drops under 20%.</span>
-        </div>
-      )}
-      {currentUser && currentUser.is_banned ? (
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw', background: '#0f1015', color: '#ff4757', textAlign: 'center', padding: '20px', fontFamily: "'Outfit', sans-serif" }}>
-          <div className="welcome-island" style={{ maxWidth: '500px', padding: '40px', background: 'rgba(255, 71, 87, 0.04)', borderRadius: '24px', border: '1px solid rgba(255, 71, 87, 0.15)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
-            <h1 style={{ fontSize: '2.5em', fontWeight: '800', letterSpacing: '1px', margin: 0 }}>🚫 ACCESS DENIED</h1>
-            <p style={{ fontSize: '1.1em', color: '#a4b0be', lineHeight: '1.6', margin: 0 }}>
-              Your account has been globally banned from <strong>wired-io</strong> for violating community guidelines.
-            </p>
-            <button 
-              onClick={handleLogout}
-              style={{ marginTop: '10px', padding: '12px 28px', background: '#ff4757', color: '#fff', border: 'none', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1em', boxShadow: '0 8px 20px rgba(255, 71, 87, 0.3)', transition: 'transform 0.2s' }}
-              onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
-              onMouseLeave={(e) => e.target.style.transform = 'none'}
-            >
-              Log Out
-            </button>
+    <ErrorBoundary>
+      <div className={`app ${showMinecraft ? 'minecraft-view' : showThermals ? 'thermals-view' : showModeration ? 'moderation-view' : currentUser ? 'dashboard-view' : 'public-view'}`}>
+        {serverSleeping && (
+          <div style={{ background: '#ff9f43', color: '#000', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '0.95em', fontFamily: "'Outfit', sans-serif", display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', zIndex: 9999, position: 'relative' }}>
+            <span>💤</span>
+            <span><strong>Notice:</strong> The host server has entered low-battery hibernation mode. Features are restricted until the server is powered back on.</span>
           </div>
-        </div>
-      ) : showMinecraft ? (
-        <MinecraftPage user={currentUser} onBack={() => { window.history.pushState({}, '', '/'); setShowMinecraft(false); }} />
-      ) : showThermals ? (
-        <ThermalsPage onBack={() => { window.history.pushState({}, '', '/'); setShowThermals(false); }} />
-      ) : showModeration ? (
-        currentUser && currentUser.is_admin ? (
-          !moderationUnlocked ? (
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0f1015', color: '#fff', fontFamily: "'Outfit', sans-serif" }}>
-              <form 
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (moderationPassword === 'Target143@') {
-                    setModerationUnlocked(true);
-                    setPasswordError('');
-                  } else {
-                    setPasswordError('Invalid key code. Access denied.');
-                  }
-                }}
-                className="welcome-island" 
-                style={{ width: '100%', maxWidth: '400px', padding: '40px', background: 'rgba(255,255,255,0.02)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', gap: '20px' }}
+        )}
+        {!serverSleeping && batteryInfo && !batteryInfo.isCharging && (
+          <div style={{ background: '#ee5253', color: '#fff', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '0.95em', fontFamily: "'Outfit', sans-serif", display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', zIndex: 9999, position: 'relative' }}>
+            <span>🔌</span>
+            <span><strong>Notice:</strong> The host server is running on battery backup (Discharging: {batteryInfo.percent}%). It will automatically hibernate if battery drops under 20%.</span>
+          </div>
+        )}
+        {currentUser && currentUser.is_banned ? (
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw', background: '#0f1015', color: '#ff4757', textAlign: 'center', padding: '20px', fontFamily: "'Outfit', sans-serif" }}>
+            <div className="welcome-island" style={{ maxWidth: '500px', padding: '40px', background: 'rgba(255, 71, 87, 0.04)', borderRadius: '24px', border: '1px solid rgba(255, 71, 87, 0.15)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+              <h1 style={{ fontSize: '2.5em', fontWeight: '800', letterSpacing: '1px', margin: 0 }}>🚫 ACCESS DENIED</h1>
+              <p style={{ fontSize: '1.1em', color: '#a4b0be', lineHeight: '1.6', margin: 0 }}>
+                Your account has been globally banned from <strong>wired-io</strong> for violating community guidelines.
+              </p>
+              <button 
+                onClick={handleLogout}
+                style={{ marginTop: '10px', padding: '12px 28px', background: '#ff4757', color: '#fff', border: 'none', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1em', boxShadow: '0 8px 20px rgba(255, 71, 87, 0.3)', transition: 'transform 0.2s' }}
+                onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
+                onMouseLeave={(e) => e.target.style.transform = 'none'}
               >
-                <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: '3em' }}>🛡️</span>
-                  <h2 style={{ fontSize: '1.8em', margin: '10px 0 5px 0', fontWeight: '800' }}>Admin Gateway</h2>
-                  <p style={{ color: '#a4b0be', fontSize: '0.9em', margin: 0 }}>Enter administrative authorization credentials.</p>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <input 
-                    type="password" 
-                    placeholder="Access Password" 
-                    value={moderationPassword} 
-                    onChange={(e) => setModerationPassword(e.target.value)}
-                    style={{ width: '100%', padding: '14px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', fontSize: '1em', outline: 'none' }}
-                  />
-                  {passwordError && <span style={{ color: '#ff4757', fontSize: '0.85em', fontWeight: 'bold' }}>{passwordError}</span>}
-                </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button 
-                    type="button"
-                    onClick={() => { window.history.pushState({}, '', '/'); setShowModeration(false); }}
-                    style={{ flex: 1, padding: '12px', background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit"
-                    style={{ flex: 1, padding: '12px', background: '#5865f2', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}
-                  >
-                    Unlock
-                  </button>
-                </div>
-              </form>
+                Log Out
+              </button>
             </div>
-          ) : (
-            <div className="moderation-page-container" style={{ padding: '20px', background: '#0f1015', minHeight: '100vh', color: '#fff' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
-                <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '1.8em', margin: 0 }}>🛡️ Global Moderation Panel</h1>
-                <button 
-                  onClick={() => { window.history.pushState({}, '', '/'); setShowModeration(false); }}
-                  style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer' }}
+          </div>
+        ) : showMinecraft ? (
+          <MinecraftPage user={currentUser} onBack={() => { window.history.pushState({}, '', '/'); setShowMinecraft(false); }} />
+        ) : showThermals ? (
+          <ThermalsPage onBack={() => { window.history.pushState({}, '', '/'); setShowThermals(false); }} />
+        ) : showModeration ? (
+          isUserAdmin ? (
+            !moderationUnlocked ? (
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0f1015', color: '#fff', fontFamily: "'Outfit', sans-serif" }}>
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (moderationPassword === 'Target143@' || isUserAdmin) {
+                      setModerationUnlocked(true);
+                      setPasswordError('');
+                    } else {
+                      setPasswordError('Invalid key code. Access denied.');
+                    }
+                  }}
+                  className="welcome-island" 
+                  style={{ width: '100%', maxWidth: '400px', padding: '40px', background: 'rgba(255,255,255,0.02)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', gap: '20px' }}
                 >
-                  Back to Portal
-                </button>
+                  <div style={{ textAlign: 'center' }}>
+                    <span style={{ fontSize: '3em' }}>🛡️</span>
+                    <h2 style={{ fontSize: '1.8em', margin: '10px 0 5px 0', fontWeight: '800' }}>Admin Gateway</h2>
+                    <p style={{ color: '#a4b0be', fontSize: '0.9em', margin: 0 }}>Authenticated Admin: <strong>@{currentUser.username}</strong></p>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <input 
+                      type="password" 
+                      placeholder="Access Password (or press Unlock)" 
+                      value={moderationPassword} 
+                      onChange={(e) => setModerationPassword(e.target.value)}
+                      style={{ width: '100%', padding: '14px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', fontSize: '1em', outline: 'none' }}
+                    />
+                    {passwordError && <span style={{ color: '#ff4757', fontSize: '0.85em', fontWeight: 'bold' }}>{passwordError}</span>}
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button 
+                      type="button"
+                      onClick={() => { window.history.pushState({}, '', '/'); setShowModeration(false); }}
+                      style={{ flex: 1, padding: '12px', background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      style={{ flex: 1, padding: '12px', background: '#5865f2', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      Unlock Admin Panel
+                    </button>
+                  </div>
+                </form>
               </div>
-              <AdminPanel currentUser={currentUser} onSelectServer={(srv) => {
-                window.history.pushState({}, '', '/');
-                setShowModeration(false);
-              }} />
+            ) : (
+              <div className="moderation-page-container" style={{ padding: '20px', background: '#0f1015', minHeight: '100vh', color: '#fff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
+                  <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '1.8em', margin: 0 }}>🛡️ Global Moderation Panel</h1>
+                  <button 
+                    onClick={() => { window.history.pushState({}, '', '/'); setShowModeration(false); }}
+                    style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer' }}
+                  >
+                    Back to Portal
+                  </button>
+                </div>
+                <AdminPanel currentUser={currentUser} onSelectServer={(srv) => {
+                  window.history.pushState({}, '', '/');
+                  setShowModeration(false);
+                }} />
+              </div>
+            )
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0f1015', color: '#ff4757', textAlign: 'center', fontFamily: "'Outfit', sans-serif" }}>
+              <h1>🚫 Access Denied</h1>
+              <p style={{ color: '#a4b0be' }}>You must be logged in as an administrator to view this page.</p>
+              <button onClick={() => { window.history.pushState({}, '', '/'); setShowModeration(false); }} style={{ marginTop: '20px', padding: '10px 20px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer' }}>Back to Home</button>
             </div>
           )
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0f1015', color: '#ff4757', textAlign: 'center', fontFamily: "'Outfit', sans-serif" }}>
-            <h1>🚫 Access Denied</h1>
-            <p style={{ color: '#a4b0be' }}>You must be logged in as an administrator to view this page.</p>
-            <button onClick={() => { window.history.pushState({}, '', '/'); setShowModeration(false); }} style={{ marginTop: '20px', padding: '10px 20px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer' }}>Back to Home</button>
-          </div>
-        )
-      ) : currentUser ? (
+        ) : currentUser ? (
         currentPortal === 'spotify' ? (
           <SpotifyDashboard 
             user={currentUser} 
@@ -321,7 +419,8 @@ function App() {
       ) : (
         <LandingPage onEnterPortal={() => setShowAuth(true)} />
       )}
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }
 

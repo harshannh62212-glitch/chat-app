@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { formatErrorMessage } from '../utils/errorHandler';
 import '../styles/FriendsPanel.css';
 
 function FriendsPanel({ currentUser, onStartDM, onBack }) {
@@ -99,7 +100,7 @@ function FriendsPanel({ currentUser, onStartDM, onBack }) {
       alert(res.data?.message || 'Friend request sent!');
       fetchFriendsData();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to send friend request');
+      alert(formatErrorMessage(err, 'Failed to send friend request'));
     }
   };
 
@@ -120,7 +121,7 @@ function FriendsPanel({ currentUser, onStartDM, onBack }) {
     } catch (err) {
       setAddStatus({
         type: 'error',
-        message: err.response?.data?.error || 'Failed to send friend request'
+        message: formatErrorMessage(err, 'Failed to send friend request')
       });
     } finally {
       setLoading(false);
@@ -132,7 +133,7 @@ function FriendsPanel({ currentUser, onStartDM, onBack }) {
       await axios.post('/api/users/friends/accept', { requesterId });
       fetchFriendsData();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to accept friend request');
+      alert(formatErrorMessage(err, 'Failed to accept friend request'));
     }
   };
 
@@ -141,7 +142,7 @@ function FriendsPanel({ currentUser, onStartDM, onBack }) {
       await axios.post('/api/users/friends/decline', { otherUserId });
       fetchFriendsData();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to action friend request');
+      alert(formatErrorMessage(err, 'Failed to action friend request'));
     }
   };
 
@@ -153,7 +154,7 @@ function FriendsPanel({ currentUser, onStartDM, onBack }) {
       await axios.post('/api/users/friends/decline', { otherUserId: friendId });
       fetchFriendsData();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to remove friend');
+      alert(formatErrorMessage(err, 'Failed to remove friend'));
     }
   };
 
@@ -514,10 +515,10 @@ function FriendsPanel({ currentUser, onStartDM, onBack }) {
               ) : (
                 <div className="pending-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {(searchQuery.trim() ? searchResults : suggestedUsers).map(usr => {
-                    const isSelf = usr.id === currentUser.id;
-                    const isFriend = friends.some(f => f.id === usr.id);
-                    const isIncoming = pendingIncoming.some(p => p.user_id === usr.id);
-                    const isOutgoing = pendingOutgoing.some(p => p.user_id === usr.id);
+                    const isSelf = String(usr.id) === String(currentUser?.id);
+                    const isFriend = friends.some(f => String(f.id) === String(usr.id));
+                    const isIncoming = pendingIncoming.some(p => String(p.user_id) === String(usr.id));
+                    const isOutgoing = pendingOutgoing.some(p => String(p.user_id) === String(usr.id));
 
                     return (
                       <div key={usr.id} className="pending-item glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)' }}>

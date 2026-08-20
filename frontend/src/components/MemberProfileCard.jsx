@@ -5,10 +5,10 @@ import '../styles/ServerSettings.css';
 function MemberProfileCard({
   member,
   server,
-  currentUser,
-  serverRoles,
-  canManageRoles,
-  canKickMembers,
+  currentUser = {},
+  serverRoles = [],
+  canManageRoles = false,
+  canKickMembers = false,
   onStartDM,
   onRolesUpdated,
   onClose,
@@ -17,14 +17,17 @@ function MemberProfileCard({
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const assignedRoleIds = Array.isArray(member.roles) ? member.roles.map(r => r.id) : [];
-  const availableRolesToAssign = (serverRoles || []).filter(r => !assignedRoleIds.includes(r.id));
-  const isOwner = member.id === server.owner_id;
+  if (!member) return null;
+
+  const safeServer = server || { id: 1, owner_id: null };
+  const assignedRoleIds = Array.isArray(member.roles) ? member.roles.map(r => r?.id).filter(Boolean) : [];
+  const availableRolesToAssign = (serverRoles || []).filter(r => r && !assignedRoleIds.includes(r.id));
+  const isOwner = member.id === safeServer.owner_id;
 
   const handleAssignRole = async (roleId) => {
     try {
       setLoading(true);
-      await axios.post(`/api/servers/${server.id}/members/${member.id}/roles/${roleId}`);
+      await axios.post(`/api/servers/${safeServer.id}/members/${member.id}/roles/${roleId}`);
       setShowRoleDropdown(false);
       if (onRolesUpdated) onRolesUpdated();
     } catch (err) {
@@ -38,7 +41,7 @@ function MemberProfileCard({
   const handleRemoveRole = async (roleId) => {
     try {
       setLoading(true);
-      await axios.delete(`/api/servers/${server.id}/members/${member.id}/roles/${roleId}`);
+      await axios.delete(`/api/servers/${safeServer.id}/members/${member.id}/roles/${roleId}`);
       if (onRolesUpdated) onRolesUpdated();
     } catch (err) {
       console.error('Failed to remove role:', err);
@@ -52,7 +55,7 @@ function MemberProfileCard({
     if (!window.confirm(`Are you sure you want to kick @${member.username} from this server?`)) return;
     try {
       setLoading(true);
-      await axios.delete(`/api/servers/${server.id}/members/${member.id}`);
+      await axios.delete(`/api/servers/${safeServer.id}/members/${member.id}`);
       onClose();
       if (onRolesUpdated) onRolesUpdated();
     } catch (err) {
@@ -72,8 +75,8 @@ function MemberProfileCard({
       <div 
         className="member-popover-card"
         style={{
-          top: position.top,
-          left: position.left,
+          top: position.top || '50%',
+          left: position.left || '50%',
           transform: position.isFixedCenter ? 'translate(-50%, -50%)' : 'none'
         }}
         onClick={e => e.stopPropagation()}
@@ -96,8 +99,22 @@ function MemberProfileCard({
           <div className="member-popover-username">
             {member.username}
             {isOwner && (
-              <span title="Server Owner" style={{ fontSize: '14px' }}>👑</span>
+              <span title="Server Owner" style={{ fontSize: '14px', marginLeft: '6px' }}>👑</span>
             )}
+          </div>
+
+          {/* About Me / Description Section */}
+          <div className="member-popover-divider" />
+          <div className="member-popover-section-title">ABOUT ME</div>
+          <div style={{
+            fontSize: '13px',
+            color: member.description || member.bio ? '#dcddde' : '#72767d',
+            lineHeight: '1.4',
+            wordBreak: 'break-word',
+            fontStyle: member.description || member.bio ? 'normal' : 'italic',
+            marginBottom: '12px'
+          }}>
+            {member.description || member.bio || 'No profile description provided yet.'}
           </div>
 
           <div className="member-popover-divider" />
@@ -114,7 +131,7 @@ function MemberProfileCard({
                     style={{ backgroundColor: role.color || '#99aab5', width: '8px', height: '8px' }}
                   />
                   <span>{role.name}</span>
-                  {canManageRoles && server.id !== 1 && (
+                  {canManageRoles && safeServer.id !== 1 && (
                     <button
                       className="role-chip-remove-btn"
                       onClick={() => handleRemoveRole(role.id)}
@@ -132,7 +149,7 @@ function MemberProfileCard({
           </div>
 
           {/* Add Role Control for Admins */}
-          {canManageRoles && server.id !== 1 && availableRolesToAssign.length > 0 && (
+          {canManageRoles && safeServer.id !== 1 && availableRolesToAssign.length > 0 && (
             <div style={{ position: 'relative' }}>
               <button
                 className="add-role-select-btn"
@@ -176,7 +193,7 @@ function MemberProfileCard({
               </button>
             )}
 
-            {!isOwner && member.id !== currentUser.id && (canKickMembers || canManageRoles) && server.id !== 1 && (
+            {!isOwner && member.id !== currentUser.id && (canKickMembers || canManageRoles) && safeServer.id !== 1 && (
               <button
                 className="popover-dm-btn"
                 style={{ background: 'transparent', border: '1px solid #da373c', color: '#da373c' }}
@@ -194,3 +211,4 @@ function MemberProfileCard({
 }
 
 export default MemberProfileCard;
+

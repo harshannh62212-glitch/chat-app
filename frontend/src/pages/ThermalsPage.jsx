@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import Logo from '../components/Logo';
+import { formatErrorMessage } from '../utils/errorHandler';
 import '../styles/ThermalsPage.css';
 
 function ThermalsPage({ onBack }) {
@@ -319,7 +320,7 @@ function ThermalsPage({ onBack }) {
       setMessage(res.data.message);
       fetchThermalMetrics();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to adjust fan speed');
+      setError(formatErrorMessage(err, 'Failed to adjust fan speed'));
     }
   };
 

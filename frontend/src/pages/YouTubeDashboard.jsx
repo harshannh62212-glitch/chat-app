@@ -69,13 +69,47 @@ export default function YouTubeDashboard({ user, onLogout, onToggleToChat, onTog
     }
   };
 
-  // Helper to extract video ID from raw text or URLs (e.g. youtube.com/watch?v=xxx, youtu.be/xxx, or raw 11-char ID)
+  // Helper to extract video ID from raw text or URLs (including Google redirects, Shorts, Live, and watch links)
   const extractVideoId = (input) => {
     if (!input) return null;
-    const clean = input.trim();
+    let clean = input.trim();
+
+    // Decode Google Search redirect URLs
+    if (clean.includes('google.') && (clean.includes('/url?') || clean.includes('url=') || clean.includes('q='))) {
+      try {
+        const parsed = new URL(clean.startsWith('http') ? clean : `https://${clean}`);
+        const rawTarget = parsed.searchParams.get('url') || parsed.searchParams.get('q') || parsed.searchParams.get('dest');
+        if (rawTarget) {
+          clean = decodeURIComponent(rawTarget);
+        }
+      } catch (e) {
+        const gMatch = clean.match(/[?&](?:url|q)=([^&]+)/);
+        if (gMatch && gMatch[1]) {
+          try {
+            clean = decodeURIComponent(gMatch[1]);
+          } catch (decErr) {
+            clean = gMatch[1];
+          }
+        }
+      }
+    }
+
+    try {
+      clean = decodeURIComponent(clean);
+    } catch (e) {}
+
     if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) return clean;
-    const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-    return match ? match[1] : null;
+
+    const shortsMatch = clean.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/i);
+    if (shortsMatch && shortsMatch[1]) return shortsMatch[1];
+
+    const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|live\/))([a-zA-Z0-9_-]{11})/i);
+    if (match && match[1]) return match[1];
+
+    const vParamMatch = clean.match(/[?&]v=([a-zA-Z0-9_-]{11})/i);
+    if (vParamMatch && vParamMatch[1]) return vParamMatch[1];
+
+    return null;
   };
 
   const handleSearch = async (e) => {

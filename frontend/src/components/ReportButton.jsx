@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { formatErrorMessage } from '../utils/errorHandler';
 
 function ReportButton({ messageId }) {
   const [showModal, setShowModal] = useState(false);
@@ -27,7 +28,7 @@ function ReportButton({ messageId }) {
         setSuccess(false);
       }, 2000);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to submit report. Please try again.');
+      setError(formatErrorMessage(err, 'Failed to submit report. Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -167,6 +168,26 @@ function ReportButton({ messageId }) {
                   >
                     {submitting ? 'Submitting...' : 'Submit Report'}
                   </button>
+                </div>
+
+                <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: '#a4b0be', marginBottom: '6px' }}>Or submit via school form:</div>
+                  <a
+                    href="https://forms.gle/4W1F9L2P5vM8x9rA7"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      color: '#8ab4f8',
+                      textDecoration: 'none',
+                      fontSize: '12px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    📋 Open Google Forms Reporting System ↗
+                  </a>
                 </div>
               </form>
             )}

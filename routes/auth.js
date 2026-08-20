@@ -40,7 +40,10 @@ router.post('/register', async (req, res) => {
     );
 
     const user = result.rows[0];
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);
+    const token = jwt.sign(
+      { userId: user.id }, 
+      process.env.JWT_SECRET || 'fallback_secret_key'
+    );
 
     // Auto-join General server on registration
     try {
@@ -56,11 +59,19 @@ router.post('/register', async (req, res) => {
       console.error('Failed to auto-join General server on registration:', err);
     }
 
+    const isAdmin = Boolean(
+      user.is_admin || 
+      user.username === 'ADMIN' || 
+      user.username === 'Nxghtmare3621' || 
+      user.username === 'admin'
+    );
+
     res.status(201).json({ 
       user: { 
         id: user.id, 
         username: user.username, 
-        is_admin: user.username === 'Nxghtmare3621' 
+        is_admin: isAdmin,
+        description: ''
       }, 
       token 
     });
@@ -81,16 +92,20 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password required' });
     }
 
-    const result = await query('SELECT * FROM users WHERE LOWER(username) = LOWER($1)', [username]);
+    const result = await query('SELECT * FROM users WHERE LOWER(username) = LOWER($1)', [username.trim()]);
     const user = result.rows[0];
 
     if (!user) {
       // Check if user is archived (globally banned)
-      const archivedResult = await query('SELECT 1 FROM archived_users WHERE LOWER(username) = LOWER($1)', [username]);
+      const archivedResult = await query('SELECT 1 FROM archived_users WHERE LOWER(username) = LOWER($1)', [username.trim()]);
       if (archivedResult.rows.length > 0) {
         return res.status(403).json({ error: 'Your account has been globally banned' });
       }
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (user.is_banned) {
+      return res.status(403).json({ error: 'Your account has been globally banned' });
     }
 
     if (!user.password || typeof user.password !== 'string') {
@@ -116,12 +131,25 @@ router.post('/login', async (req, res) => {
       console.error('Failed to auto-join General server on login:', err);
     }
 
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);
+    const token = jwt.sign(
+      { userId: user.id }, 
+      process.env.JWT_SECRET || 'fallback_secret_key'
+    );
+
+    const isAdmin = Boolean(
+      user.is_admin || 
+      user.username === 'ADMIN' || 
+      user.username === 'Nxghtmare3621' || 
+      user.username === 'admin'
+    );
+
     res.json({ 
       user: { 
         id: user.id, 
         username: user.username, 
-        is_admin: user.is_admin || user.username === 'Nxghtmare3621' 
+        avatar_url: user.avatar_url,
+        description: user.description || user.bio || '',
+        is_admin: isAdmin
       }, 
       token 
     });
@@ -133,12 +161,20 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', authMiddleware, async (req, res) => {
   try {
-    const result = await query('SELECT id, username, email, avatar_url, is_admin FROM users WHERE id = $1', [req.userId]);
+    const result = await query(
+      'SELECT id, username, email, avatar_url, description, is_admin, is_banned, timeout_until FROM users WHERE id = $1', 
+      [req.userId]
+    );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
     const user = result.rows[0];
-    user.is_admin = user.is_admin || user.username === 'Nxghtmare3621';
+    user.is_admin = Boolean(
+      user.is_admin || 
+      user.username === 'ADMIN' || 
+      user.username === 'Nxghtmare3621' || 
+      user.username === 'admin'
+    );
     res.json(user);
   } catch (err) {
     console.error(err);

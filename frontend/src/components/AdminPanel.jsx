@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { loadCustomBannedWords } from '../utils/contentFilter';
+import { formatErrorMessage } from '../utils/errorHandler';
 
 function AdminPanel({ currentUser, onSelectServer }) {
   const [activeSubTab, setActiveSubTab] = useState('users');
@@ -42,7 +43,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       setMessage(res.data.message);
       fetchFanStatus();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to adjust fan speed');
+      setError(formatErrorMessage(err, 'Failed to adjust fan speed'));
     }
   };
 
@@ -55,7 +56,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       const statsRes = await axios.get('/api/admin/database/stats');
       setDbStats(statsRes.data);
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Database maintenance action failed');
+      setError(formatErrorMessage(err, 'Database maintenance action failed'));
     }
   };
 
@@ -67,7 +68,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       const res = await axios.get(`/api/admin/database/table/${tableName}`);
       setTableRows(res.data.rows || []);
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to inspect table records');
+      setError(formatErrorMessage(err, 'Failed to inspect table records'));
     } finally {
       setTableLoading(false);
     }
@@ -99,7 +100,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
         setDbStats(res.data);
       }
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to fetch administration data');
+      setError(formatErrorMessage(err, 'Failed to fetch administration data'));
     } finally {
       setLoading(false);
     }
@@ -112,7 +113,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       setMessage('User banned globally');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to ban user');
+      setError(formatErrorMessage(err, 'Failed to ban user'));
     }
   };
 
@@ -122,7 +123,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       setMessage('User unbanned globally');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to unban user');
+      setError(formatErrorMessage(err, 'Failed to unban user'));
     }
   };
 
@@ -132,7 +133,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       setMessage('User kicked from all servers');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to kick user');
+      setError(formatErrorMessage(err, 'Failed to kick user'));
     }
   };
 
@@ -148,7 +149,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       setTimeoutMinutes(prev => ({ ...prev, [userId]: '' }));
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to timeout user');
+      setError(formatErrorMessage(err, 'Failed to timeout user'));
     }
   };
 
@@ -158,7 +159,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       setMessage('Timeout removed');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to remove timeout');
+      setError(formatErrorMessage(err, 'Failed to remove timeout'));
     }
   };
 
@@ -171,7 +172,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       setMessage(`User administrative privileges ${makeAdmin ? 'granted' : 'revoked'} successfully`);
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to update administrative permissions');
+      setError(formatErrorMessage(err, 'Failed to update administrative permissions'));
     }
   };
 
@@ -181,7 +182,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       await axios.post(`/api/servers/${server.id}/join`);
       onSelectServer(server);
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to join server');
+      setError(formatErrorMessage(err, 'Failed to join server'));
     }
   };
 
@@ -194,7 +195,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       setMessage('Server deleted successfully');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to delete server');
+      setError(formatErrorMessage(err, 'Failed to delete server'));
     }
   };
 
@@ -210,7 +211,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       setNewWord('');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to add word');
+      setError(formatErrorMessage(err, 'Failed to add word'));
     }
   };
 
@@ -221,7 +222,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       setMessage(`Word "${word}" removed from filter`);
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to delete word');
+      setError(formatErrorMessage(err, 'Failed to delete word'));
     }
   };
 
@@ -231,7 +232,7 @@ function AdminPanel({ currentUser, onSelectServer }) {
       setMessage('Report marked as resolved');
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to update report status');
+      setError(formatErrorMessage(err, 'Failed to update report status'));
     }
   };
 

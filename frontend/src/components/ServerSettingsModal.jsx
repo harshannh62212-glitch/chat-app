@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { formatErrorMessage } from '../utils/errorHandler';
 import '../styles/ServerSettings.css';
 
 const DISCORD_COLOR_PALETTE = [
@@ -62,7 +63,7 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
       }
     } catch (err) {
       console.error('Failed to fetch server roles:', err);
-      setError(err.response?.data?.error || 'Failed to load roles');
+      setError(formatErrorMessage(err, 'Failed to load roles'));
     } finally {
       setLoading(false);
     }
@@ -115,7 +116,7 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
       }
     } catch (err) {
       console.error('Failed to create role:', err);
-      setError(err.response?.data?.error || 'Failed to create role');
+      setError(formatErrorMessage(err, 'Failed to create role'));
     }
   };
 
@@ -135,7 +136,7 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
       await fetchMembers();
     } catch (err) {
       console.error('Failed to save role:', err);
-      setError(err.response?.data?.error || 'Failed to save changes');
+      setError(formatErrorMessage(err, 'Failed to save changes'));
     } finally {
       setSaving(false);
     }
@@ -153,7 +154,7 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
       setSuccessMsg('Role deleted!');
     } catch (err) {
       console.error('Failed to delete role:', err);
-      setError(err.response?.data?.error || 'Failed to delete role');
+      setError(formatErrorMessage(err, 'Failed to delete role'));
     }
   };
 
@@ -166,7 +167,7 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
       await fetchRoles();
     } catch (err) {
       console.error('Failed to assign role:', err);
-      setError(err.response?.data?.error || 'Failed to assign role');
+      setError(formatErrorMessage(err, 'Failed to assign role'));
     }
   };
 
@@ -178,7 +179,7 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
       await fetchRoles();
     } catch (err) {
       console.error('Failed to remove role:', err);
-      setError(err.response?.data?.error || 'Failed to remove role');
+      setError(formatErrorMessage(err, 'Failed to remove role'));
     }
   };
 
@@ -191,7 +192,7 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
       await fetchMembers();
     } catch (err) {
       console.error('Failed to kick member:', err);
-      setError(err.response?.data?.error || 'Failed to kick member');
+      setError(formatErrorMessage(err, 'Failed to kick member'));
     }
   };
 

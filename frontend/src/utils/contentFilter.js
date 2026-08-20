@@ -139,7 +139,11 @@ export async function loadCustomBannedWords() {
 
 export function containsBannedWords(text) {
   if (!text || typeof text !== 'string') return { blocked: false, reason: null };
-  const lower = text.toLowerCase();
+  
+  // Extract URLs to avoid false positives on URL tokens
+  const urlRegex = /(https?:\/\/[^\s]+)/gi;
+  const textWithoutUrls = text.replace(urlRegex, ' ');
+  const lower = textWithoutUrls.toLowerCase();
 
   for (const pattern of BYPASS_PATTERNS) {
     pattern.lastIndex = 0;
@@ -149,13 +153,17 @@ export function containsBannedWords(text) {
   }
 
   for (const word of BANNED_WORDS) {
-    if (lower.includes(word.toLowerCase())) {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+    if (regex.test(lower)) {
       return { blocked: true, reason: `banned_word:${word}` };
     }
   }
 
   for (const word of customBannedWords) {
-    if (lower.includes(word.toLowerCase())) {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+    if (regex.test(lower)) {
       return { blocked: true, reason: `custom_word:${word}` };
     }
   }
@@ -165,27 +173,83 @@ export function containsBannedWords(text) {
 
 export function filterContent(text) {
   if (!text || typeof text !== 'string') return text;
-  let filtered = text;
 
-  // Filter bypass patterns first
+  // 1. Temporarily replace URLs with placeholders so they are never corrupted
+  const urlRegex = /(https?:\/\/[^\s]+)/gi;
+  const urls = [];
+  let protectedText = text.replace(urlRegex, (match) => {
+    const placeholder = `__WIRED_URL_${urls.length}__`;
+    urls.push(match);
+    return placeholder;
+  });
+
+  // 2. Filter bypass patterns
   BYPASS_PATTERNS.forEach(pattern => {
     pattern.lastIndex = 0;
-    filtered = filtered.replace(pattern, match => '*'.repeat(match.length));
+    protectedText = protectedText.replace(pattern, match => '*'.repeat(match.length));
   });
 
-  // Filter default words
+  // 3. Filter default words using word boundaries
   BANNED_WORDS.forEach(word => {
     const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(escaped, 'gi');
-    filtered = filtered.replace(regex, match => '*'.repeat(match.length));
+    const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
+    protectedText = protectedText.replace(regex, match => '*'.repeat(match.length));
   });
 
-  // Filter custom words
+  // 4. Filter custom words
   customBannedWords.forEach(word => {
     const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(escaped, 'gi');
-    filtered = filtered.replace(regex, match => '*'.repeat(match.length));
+    const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
+    protectedText = protectedText.replace(regex, match => '*'.repeat(match.length));
   });
 
-  return filtered;
+  // 5. Restore intact URLs
+  urls.forEach((url, i) => {
+    protectedText = protectedText.replace(`__WIRED_URL_${i}__`, url);
+  });
+
+  return protectedText;
 }
+
+// Universal YouTube URL extractor for rich embeds & playback
+export function extractYouTubeId(url) {
+  if (!url || typeof url !== 'string') return null;
+  let text = url.trim();
+
+  // Decode Google search redirect URLs
+  if (text.includes('google.') && (text.includes('/url?') || text.includes('url=') || text.includes('q='))) {
+    try {
+      const parsed = new URL(text.startsWith('http') ? text : `https://${text}`);
+      const rawTarget = parsed.searchParams.get('url') || parsed.searchParams.get('q') || parsed.searchParams.get('dest');
+      if (rawTarget) {
+        text = decodeURIComponent(rawTarget);
+      }
+    } catch (e) {
+      const gMatch = text.match(/[?&](?:url|q)=([^&]+)/);
+      if (gMatch && gMatch[1]) {
+        try {
+          text = decodeURIComponent(gMatch[1]);
+        } catch (decErr) {
+          text = gMatch[1];
+        }
+      }
+    }
+  }
+
+  try {
+    text = decodeURIComponent(text);
+  } catch (e) {}
+
+  if (/^[a-zA-Z0-9_-]{11}$/.test(text)) return text;
+  const shortsMatch = text.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/i);
+  if (shortsMatch && shortsMatch[1]) return shortsMatch[1];
+
+  const match = text.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|live\/))([a-zA-Z0-9_-]{11})/i);
+  if (match && match[1]) return match[1];
+
+  const vParamMatch = text.match(/[?&]v=([a-zA-Z0-9_-]{11})/i);
+  if (vParamMatch && vParamMatch[1]) return vParamMatch[1];
+
+  return null;
+}
+
