@@ -195,6 +195,22 @@ function FriendsPanel({ currentUser, onStartDM, onBack }) {
             {conversations.length > 0 && (
               <span className="count-badge">{conversations.length}</span>
             )}
+            {conversations.reduce((acc, c) => acc + (c.unread_count || 0), 0) > 0 && (
+              <span 
+                style={{
+                  background: '#ed4245',
+                  color: '#fff',
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                  padding: '2px 6px',
+                  borderRadius: '10px',
+                  marginLeft: '6px',
+                  boxShadow: '0 0 8px rgba(237, 66, 69, 0.8)'
+                }}
+              >
+                {conversations.reduce((acc, c) => acc + (c.unread_count || 0), 0)} unread
+              </span>
+            )}
           </button>
           <button 
             className={`sub-tab-btn ${activeSubTab === 'all' ? 'active' : ''}`}
@@ -240,45 +256,70 @@ function FriendsPanel({ currentUser, onStartDM, onBack }) {
 
             {conversations.length > 0 ? (
               <div className="conversations-grid" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {conversations.map(conv => (
-                  <div 
-                    key={conv.other_user_id} 
-                    className="friend-card glass-panel"
-                    onClick={() => onStartDM(conv)}
-                    style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
-                  >
-                    <div className="friend-card-info">
-                      <div className="friend-avatar">
-                        {conv.avatar_url ? (
-                          <img src={conv.avatar_url} alt={conv.username} />
-                        ) : (
-                          <div className="avatar-placeholder">{conv.username ? conv.username[0].toUpperCase() : '?'}</div>
+                {conversations.map(conv => {
+                  const hasUnread = Boolean(conv.unread_count && conv.unread_count > 0);
+                  return (
+                    <div 
+                      key={conv.other_user_id} 
+                      className="friend-card glass-panel"
+                      onClick={() => onStartDM(conv)}
+                      style={{
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        borderLeft: hasUnread ? '4px solid #ed4245' : '1px solid rgba(255, 255, 255, 0.08)',
+                        background: hasUnread ? 'rgba(237, 66, 69, 0.08)' : undefined
+                      }}
+                    >
+                      <div className="friend-card-info">
+                        <div className="friend-avatar">
+                          {conv.avatar_url ? (
+                            <img src={conv.avatar_url} alt={conv.username} />
+                          ) : (
+                            <div className="avatar-placeholder">{conv.username ? conv.username[0].toUpperCase() : '?'}</div>
+                          )}
+                          <span className="status-indicator online"></span>
+                        </div>
+                        <div className="friend-details">
+                          <span className="friend-name" style={{ fontWeight: hasUnread ? '700' : '600', color: hasUnread ? '#fff' : undefined }}>
+                            {conv.username}
+                          </span>
+                          <span className="friend-status-text" style={{ color: hasUnread ? '#dcddde' : 'rgba(255,255,255,0.6)', fontWeight: hasUnread ? '600' : 'normal', maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {conv.last_message_content || 'Click to open conversation'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="friend-actions" style={{ alignItems: 'center', gap: '12px' }}>
+                        {hasUnread && (
+                          <span
+                            style={{
+                              background: '#ed4245',
+                              color: '#fff',
+                              fontSize: '11px',
+                              fontWeight: 'bold',
+                              padding: '2px 8px',
+                              borderRadius: '12px',
+                              boxShadow: '0 0 10px rgba(237, 66, 69, 0.7)'
+                            }}
+                          >
+                            {conv.unread_count} unread
+                          </span>
                         )}
-                        <span className="status-indicator online"></span>
-                      </div>
-                      <div className="friend-details">
-                        <span className="friend-name">{conv.username}</span>
-                        <span className="friend-status-text" style={{ color: 'rgba(255,255,255,0.6)', maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {conv.last_message_content || 'Click to open conversation'}
-                        </span>
+                        {conv.last_message_at && (
+                          <span style={{ fontSize: '0.75em', color: hasUnread ? '#dcddde' : 'rgba(255,255,255,0.4)', fontWeight: hasUnread ? '600' : 'normal' }}>
+                            {new Date(conv.last_message_at).toLocaleDateString()}
+                          </span>
+                        )}
+                        <button 
+                          className="friend-action-btn message-btn"
+                          onClick={(e) => { e.stopPropagation(); onStartDM(conv); }}
+                          title="Open Chat"
+                        >
+                          💬
+                        </button>
                       </div>
                     </div>
-                    <div className="friend-actions" style={{ alignItems: 'center', gap: '12px' }}>
-                      {conv.last_message_at && (
-                        <span style={{ fontSize: '0.75em', color: 'rgba(255,255,255,0.4)' }}>
-                          {new Date(conv.last_message_at).toLocaleDateString()}
-                        </span>
-                      )}
-                      <button 
-                        className="friend-action-btn message-btn"
-                        onClick={(e) => { e.stopPropagation(); onStartDM(conv); }}
-                        title="Open Chat"
-                      >
-                        💬
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="empty-friends-view" style={{ padding: '30px 20px', textAlign: 'center' }}>
