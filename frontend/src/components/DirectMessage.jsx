@@ -16,12 +16,25 @@ const getActiveSocketUrl = () => {
   return import.meta.env.PROD ? (import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com') : 'http://localhost:8000';
 };
 
-const socket = io(getActiveSocketUrl(), {
-  autoConnect: true,
-  extraHeaders: {
-    'bypass-tunnel-reminder': 'true'
+// Lazy socket — connected on first component mount after backend resolution
+let socket = null;
+const getSocket = () => {
+  if (!socket) {
+    const url = getActiveSocketUrl();
+    socket = io(url, {
+      autoConnect: false,
+      withCredentials: true,
+      extraHeaders: {
+        'bypass-tunnel-reminder': 'true'
+      },
+      transports: ['websocket', 'polling']
+    });
+    socket.connect();
+  } else if (!socket.connected && !socket.connecting) {
+    socket.connect();
   }
-});
+  return socket;
+};
 
 // Universal bulletproof message updater that guarantees zero duplicates
 const upsertMessage = (prev, newMsg) => {
@@ -69,6 +82,8 @@ const upsertMessage = (prev, newMsg) => {
 };
 
 function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
+  // Initialize lazy socket on first render (backend URL guaranteed resolved by App.jsx)
+  if (!socket) getSocket();
   const [messages, setMessages] = useState([]);
   const [messageInput, setMessageInput] = useState('');
   const [showGiphy, setShowGiphy] = useState(false);

@@ -40,7 +40,7 @@ function App() {
   const [showThermals, setShowThermals] = useState(window.location.pathname === '/thermals');
   const [showModeration, setShowModeration] = useState(window.location.pathname === '/moderation');
   const [showMinecraft, setShowMinecraft] = useState(window.location.pathname === '/mc');
-  const [loadingApp, setLoadingApp] = useState(false);
+  const [loadingApp, setLoadingApp] = useState(true);
   const [moderationPassword, setModerationPassword] = useState('');
   const [moderationUnlocked, setModerationUnlocked] = useState(false);
   const [passwordError, setPasswordError] = useState('');
@@ -108,29 +108,46 @@ function App() {
 
   useEffect(() => {
     const resolveBestBackend = async () => {
+      // Don't render anything until we know where the backend is
+      setLoadingApp(true);
+
       const saved = localStorage.getItem('custom_proxy_target');
       if (saved) {
         axios.defaults.baseURL = saved;
         localStorage.setItem('active_backend_target', saved);
         setTunnelResolved(true);
+        setLoadingApp(false);
         return;
       }
 
-      // Fast health check helper
+      // Fast health check helper with CORS-safe fallback
       const checkNodeHealth = async (url) => {
         if (!url || !url.startsWith('http')) return false;
         try {
           const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 2000);
+          const timeout = setTimeout(() => controller.abort(), 3000);
           try {
             const res = await fetch(`${url}/ping`, {
               signal: controller.signal,
+              mode: 'cors',
               headers: { 'bypass-tunnel-reminder': 'true' }
             });
             clearTimeout(timeout);
             return res.ok;
           } catch {
-            return false;
+            // CORS may block the response but the server may still be alive
+            // Try no-cors as a last resort (opaque response = server exists)
+            try {
+              const res2 = await fetch(`${url}/ping`, {
+                signal: controller.signal,
+                mode: 'no-cors'
+              });
+              clearTimeout(timeout);
+              return res2.type === 'opaque';
+            } catch {
+              clearTimeout(timeout);
+              return false;
+            }
           }
         } catch {
           return false;
@@ -139,6 +156,7 @@ function App() {
 
       // 1. Check Cloudflare Tunnel from Supabase
       let homeTunnel = '';
+      let homeTunnelHealthy = false;
       try {
         let supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aebntdjjniirnwthtwlx.supabase.co';
         if (!supabaseUrl || !supabaseUrl.includes('supabase.co')) {
@@ -154,9 +172,11 @@ function App() {
             homeTunnel = data[0].value;
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[LOAD BALANCER] Supabase lookup failed:', e.message);
+      }
 
-      // 2. Check local tunnel.json
+      // 2. Check local tunnel.json fallback
       if (!homeTunnel) {
         try {
           const tRes = await fetch('/tunnel.json');
@@ -167,29 +187,41 @@ function App() {
         } catch (e) {}
       }
 
-      if (homeTunnel && (await checkNodeHealth(homeTunnel))) {
-        console.log('[LOAD BALANCER] Primary Node Active: Connected to Tunnel Backend:', homeTunnel);
-        axios.defaults.baseURL = homeTunnel;
-        localStorage.setItem('active_backend_target', homeTunnel);
-        setTunnelResolved(true);
-        return;
+      // 3. Health-check the tunnel
+      if (homeTunnel) {
+        homeTunnelHealthy = await checkNodeHealth(homeTunnel);
+        if (homeTunnelHealthy) {
+          console.log('[LOAD BALANCER] Primary Node Active: Connected to Tunnel Backend:', homeTunnel);
+          axios.defaults.baseURL = homeTunnel;
+          localStorage.setItem('active_backend_target', homeTunnel);
+          setTunnelResolved(true);
+          setLoadingApp(false);
+          return;
+        } else {
+          console.warn('[LOAD BALANCER] Tunnel URL is stale/offline:', homeTunnel);
+        }
       }
 
-      // 3. Check Render Cloud Backend
+      // 4. Check Render Cloud Backend
       const renderCloudUrl = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
-      if (await checkNodeHealth(renderCloudUrl)) {
+      const renderHealthy = await checkNodeHealth(renderCloudUrl);
+      if (renderHealthy) {
         console.log('[LOAD BALANCER] Connected to Render Cloud:', renderCloudUrl);
         axios.defaults.baseURL = renderCloudUrl;
         localStorage.setItem('active_backend_target', renderCloudUrl);
         setTunnelResolved(true);
+        setLoadingApp(false);
         return;
       }
 
-      // 4. Default / Fallback
-      const fallbackTarget = homeTunnel || renderCloudUrl || (import.meta.env.PROD ? '' : 'http://localhost:8000');
-      axios.defaults.baseURL = fallbackTarget;
-      localStorage.setItem('active_backend_target', fallbackTarget || window.location.origin);
+      // 5. ALL backends offline — use whichever we have as best-effort, preferring Render over dead tunnel
+      // NEVER use a URL that failed DNS (ERR_NAME_NOT_RESOLVED)
+      const bestEffort = renderCloudUrl; // Render at least has a valid DNS entry even when suspended
+      console.warn('[LOAD BALANCER] All backends offline. Best-effort target:', bestEffort);
+      axios.defaults.baseURL = bestEffort;
+      localStorage.setItem('active_backend_target', bestEffort);
       setTunnelResolved(true);
+      setLoadingApp(false);
     };
 
     resolveBestBackend();
@@ -260,10 +292,11 @@ function App() {
     setShowAuth(false);
   };
 
-  if (loadingApp) {
+  if (loadingApp || !tunnelResolved) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw', background: '#0f1015', color: '#00ffff', fontFamily: "'Outfit', sans-serif" }}>
-        <div style={{ fontSize: '1.2em', fontWeight: 'bold', letterSpacing: '1px' }}>LOADING PORTAL...</div>
+        <div style={{ fontSize: '1.2em', fontWeight: 'bold', letterSpacing: '1px' }}>CONNECTING TO SERVER...</div>
+        <div style={{ marginTop: '12px', fontSize: '0.85em', color: '#a4b0be', letterSpacing: '0.5px' }}>Resolving best backend node...</div>
       </div>
     );
   }

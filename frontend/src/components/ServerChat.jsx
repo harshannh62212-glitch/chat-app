@@ -19,12 +19,40 @@ const getActiveSocketUrl = () => {
   return import.meta.env.PROD ? (import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com') : 'http://localhost:8000';
 };
 
-const socket = io(getActiveSocketUrl(), {
-  autoConnect: true,
-  extraHeaders: {
-    'bypass-tunnel-reminder': 'true'
+// Lazy socket — created with autoConnect:false, connected on first component mount
+// (App.jsx blocks rendering until backend is resolved, so this is safe)
+let socket = null;
+const getSocket = () => {
+  if (!socket) {
+    const url = getActiveSocketUrl();
+    socket = io(url, {
+      autoConnect: false,
+      withCredentials: true,
+      extraHeaders: {
+        'bypass-tunnel-reminder': 'true'
+      },
+      transports: ['websocket', 'polling']
+    });
+    socket.connect();
+  } else if (!socket.connected && !socket.connecting) {
+    // Reconnect if URL changed
+    const currentUrl = getActiveSocketUrl();
+    if (socket.io?.uri !== currentUrl) {
+      socket.disconnect();
+      socket = io(currentUrl, {
+        autoConnect: true,
+        withCredentials: true,
+        extraHeaders: {
+          'bypass-tunnel-reminder': 'true'
+        },
+        transports: ['websocket', 'polling']
+      });
+    } else {
+      socket.connect();
+    }
   }
-});
+  return socket;
+};
 
 function VideoParticipant({ stream, username, avatarUrl, isLocal, isMuted, isDeafened, isSpeaking }) {
   const videoRef = useRef(null);
@@ -91,6 +119,8 @@ function VideoParticipant({ stream, username, avatarUrl, isLocal, isMuted, isDea
 }
 
 function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInfo, onBack }) {
+  // Initialize lazy socket on first render (backend URL is guaranteed resolved by App.jsx)
+  if (!socket) getSocket();
   const [chatrooms, setChatrooms] = useState([]);
   const [selectedChatroom, setSelectedChatroom] = useState(null);
   const [messages, setMessages] = useState([]);

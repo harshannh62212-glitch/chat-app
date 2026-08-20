@@ -164,7 +164,20 @@ function startTunnelUrlWatcher() {
 
 const app = express();
 const server = http.createServer(app);
-const corsWhitelist = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['*'];
+const corsWhitelist = (() => {
+  const envOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : [];
+  // Always allow these known production/dev origins
+  const alwaysAllowed = [
+    'https://wired-io.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:8000',
+    'http://localhost:3000'
+  ];
+  const merged = new Set([...envOrigins, ...alwaysAllowed]);
+  // If env explicitly sets '*', keep wildcard behavior
+  if (envOrigins.includes('*')) return ['*'];
+  return [...merged];
+})();
 
 const allowedOrigin = (origin, callback) => {
   if (!origin || corsWhitelist.includes('*') || corsWhitelist.includes(origin)) {
