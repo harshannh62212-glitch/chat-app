@@ -693,7 +693,16 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
     fetchMessages();
 
-    socket.emit('user-joined', currentUser.id, server.id);
+    // Join the server room — must wait for socket to be connected
+    const joinRoom = () => {
+      socket.emit('user-joined', currentUser.id, server.id);
+    };
+
+    if (socket.connected) {
+      joinRoom();
+    }
+    // Also join (or re-join) whenever socket connects/reconnects
+    socket.on('connect', joinRoom);
 
     const handleNewMessage = (msgData) => {
       const isSelf = msgData.senderId === currentUser.id || msgData.sender_id === currentUser.id;
@@ -734,6 +743,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     socket.on('reaction-updated', handleReactionUpdated);
 
     return () => {
+      socket.off('connect', joinRoom);
       socket.off('new-message', handleNewMessage);
       socket.off('message-deleted', handleMessageDeleted);
       socket.off('reaction-updated', handleReactionUpdated);
@@ -844,13 +854,11 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       isOptimistic: true
     };
 
-    // 1. INSTANT (0ms) local state update
+    // 1. INSTANT local state update (optimistic)
     setMessages(prev => [...prev, optimisticMsg]);
 
-    // 2. INSTANT Socket.IO broadcast to room
-    socket.emit('send-message', optimisticMsg);
-
-    // 3. Asynchronous DB persistence in background
+    // 2. Persist to DB — the server POST handler broadcasts to the room via io.to()
+    // This single-path approach prevents double-delivery to other users
     try {
       const res = await axios.post('/api/messages/server', {
         chatroomId: targetRoom.id,
@@ -858,6 +866,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       });
 
       const newMsg = res.data;
+      // Replace optimistic with confirmed DB message
       setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: newMsg.id, isOptimistic: false } : m));
     } catch (err) {
       console.error('Failed to persist message to DB:', err);

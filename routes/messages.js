@@ -166,7 +166,7 @@ router.post('/server', authMiddleware, async (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
-      io.emit('new-message', enriched);
+      io.to(`server-${serverId}`).emit('new-message', enriched);
     }
 
     res.status(201).json(enriched);

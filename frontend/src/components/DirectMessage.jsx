@@ -127,9 +127,18 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
 
   // 2. Real-Time Socket.IO Streaming with precise targeted handlers
   useEffect(() => {
-    if (currentUser?.id && dmUserId) {
-      socket.emit('user-joined', currentUser.id, dmUserId);
+    // Join the DM room — must wait for socket to be connected
+    const joinDMRoom = () => {
+      if (currentUser?.id && dmUserId) {
+        socket.emit('user-joined', currentUser.id, dmUserId);
+      }
+    };
+
+    if (socket.connected) {
+      joinDMRoom();
     }
+    // Also join (or re-join) whenever socket connects/reconnects
+    socket.on('connect', joinDMRoom);
 
     // Handle incoming DM from partner
     const handleNewDM = (data) => {
@@ -186,6 +195,7 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
     const syncInterval = setInterval(fetchDMs, 3000);
 
     return () => {
+      socket.off('connect', joinDMRoom);
       socket.off('new-dm', handleNewDM);
       socket.off('dm-sent', handleDMSent);
       socket.off('message-deleted', handleMessageDeleted);
