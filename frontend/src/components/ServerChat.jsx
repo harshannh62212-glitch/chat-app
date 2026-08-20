@@ -155,7 +155,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     });
   };
 
-  const isGeneralServer = Boolean(server && (server.id === 1 || server.name === 'General'));
+  const isGeneralServer = Boolean(server && (server.id === 1 || String(server.id) === '1' || server.name === 'General'));
   const canManageRoles = (isServerOwner || isGlobalAdmin || hasPerm('manage_roles')) && !isGeneralServer;
   const canManageMessages = hasPerm('manage_messages');
   const canManageChannels = hasPerm('manage_channels');
@@ -715,7 +715,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
       const isMatch = String(msgData.serverId) === String(server.id) || 
                       String(msgData.chatroom_id) === String(selectedChatroom?.id) ||
-                      (isGeneralServer && String(msgData.chatroom_id) === '1');
+                      (isGeneralServer && (String(msgData.chatroom_id) === '1' || String(msgData.serverId) === '1' || selectedChatroom?.is_general));
 
       if (isMatch) {
         setMessages(prev => {

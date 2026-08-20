@@ -3,7 +3,6 @@ const axios = require('axios');
 const fs = require('fs');
 
 const LOCAL_BACKEND = 'http://localhost:8000';
-const TUNNEL_URL = 'https://oxygen-sequences-appreciated-ottawa.trycloudflare.com';
 
 async function runFullAudit() {
   console.log('===================================================');
@@ -26,33 +25,38 @@ async function runFullAudit() {
     errors++;
   }
 
-  // 2. Cloudflare Tunnel Health Check
-  try {
-    const res = await axios.get(`${TUNNEL_URL}/api/health`, {
-      headers: { 'bypass-tunnel-reminder': 'true' }
-    });
-    if (res.data.status === 'ok') {
-      console.log('✅ Cloudflare Tunnel Health Check: OK');
-    } else {
-      console.error('❌ Cloudflare Tunnel Health Check: FAILED', res.data);
-      errors++;
-    }
-  } catch (err) {
-    console.error('❌ Cloudflare Tunnel Health Check: ERROR', err.message);
-    errors++;
-  }
-
-  // 3. Tunnel URL Resolver Check
+  // 2. Resolve Active Tunnel URL from Backend
+  let TUNNEL_URL = '';
   try {
     const res = await axios.get(`${LOCAL_BACKEND}/api/resolve-tunnel`);
-    if (res.data.url === TUNNEL_URL) {
-      console.log(`✅ DB System Config Tunnel Resolver: OK (${res.data.url})`);
+    if (res.data.url) {
+      TUNNEL_URL = res.data.url;
+      console.log(`✅ DB System Config Tunnel Resolver: OK (${TUNNEL_URL})`);
     } else {
-      console.warn(`⚠️ DB Tunnel mismatch: Expected ${TUNNEL_URL}, got ${res.data.url}`);
+      console.error('❌ DB Tunnel Resolver returned empty URL');
+      errors++;
     }
   } catch (err) {
     console.error('❌ Tunnel Resolver Check: ERROR', err.message);
     errors++;
+  }
+
+  // 3. Cloudflare Tunnel Health Check
+  if (TUNNEL_URL) {
+    try {
+      const res = await axios.get(`${TUNNEL_URL}/api/health`, {
+        headers: { 'bypass-tunnel-reminder': 'true' }
+      });
+      if (res.data.status === 'ok') {
+        console.log(`✅ Cloudflare Tunnel Public Reach: OK (${TUNNEL_URL}/api/health)`);
+      } else {
+        console.error('❌ Cloudflare Tunnel Health Check: FAILED', res.data);
+        errors++;
+      }
+    } catch (err) {
+      console.error('❌ Cloudflare Tunnel Health Check: ERROR', err.message);
+      errors++;
+    }
   }
 
   // 4. Ollama Local LLM Check

@@ -3,6 +3,7 @@ const { query } = require('../db/database');
 const { authMiddleware } = require('../middleware/auth');
 const batchWriter = require('../utils/batchWriter');
 const ramCache = require('../utils/ramCache');
+const { handleLocalBotResponse } = require('../utils/botHandler');
 
 const router = express.Router();
 
@@ -167,6 +168,10 @@ router.post('/server', authMiddleware, async (req, res) => {
     const io = req.app.get('io');
     if (io) {
       io.to(`server-${serverId}`).emit('new-message', enriched);
+    }
+
+    if (content.toLowerCase().includes('@bot') || content.toLowerCase().includes('@gemini') || content.toLowerCase().includes('@ai')) {
+      handleLocalBotResponse(io, serverId, chatroomId, content, senderId);
     }
 
     res.status(201).json(enriched);

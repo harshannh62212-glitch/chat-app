@@ -524,11 +524,16 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
           onClose={() => setShowSettingsModal(false)}
           onUpdateUser={(updatedUser) => {
             if (updatedUser) {
-              setUser(prev => ({ ...(prev || {}), ...updatedUser }));
+              const combined = { ...(user || {}), ...updatedUser };
+              setUser(combined);
               try {
-                const combined = { ...(user || {}), ...updatedUser };
                 localStorage.setItem('chat_user', JSON.stringify(combined));
               } catch (e) {}
+              setActiveTab('servers');
+              const gen = (Array.isArray(servers) ? servers.find(s => s.name === 'General' || s.id === 1 || String(s.id) === '1') : null) || DEFAULT_GENERAL_SERVER;
+              setSelectedServer(gen);
+              setSelectedDM(null);
+              setViewingFriends(false);
             }
           }}
           onLogout={onLogout}
@@ -895,7 +900,10 @@ function SettingsModal({ user, onClose, onUpdateUser, onLogout }) {
         description: description.trim()
       };
       if (onUpdateUser) onUpdateUser(updated);
-      setSuccess('Profile updated successfully!');
+      setSuccess('Profile updated successfully! Redirecting...');
+      setTimeout(() => {
+        onClose();
+      }, 400);
     } catch (err) {
       setError(formatErrorMessage(err, 'Failed to update profile'));
     } finally {
