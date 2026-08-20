@@ -10,48 +10,56 @@ function extractUniversalVideoId(input) {
   if (!input || typeof input !== 'string') return null;
   let text = input.trim();
 
-  // 1. If it's a Google Search redirect URL, extract the embedded destination URL
-  if (text.includes('google.') && (text.includes('/url?') || text.includes('url=') || text.includes('q='))) {
+  // Multi-pass URL decoding for double-encoded Chromebook/Google redirects
+  for (let i = 0; i < 3; i++) {
     try {
-      const parsed = new URL(text.startsWith('http') ? text : `https://${text}`);
-      const rawTarget = parsed.searchParams.get('url') || parsed.searchParams.get('q') || parsed.searchParams.get('dest');
-      if (rawTarget) {
-        text = decodeURIComponent(rawTarget);
-      }
+      const decoded = decodeURIComponent(text);
+      if (decoded === text) break;
+      text = decoded;
     } catch (e) {
-      // Fallback regex for Google url parameter
-      const gMatch = text.match(/[?&](?:url|q)=([^&]+)/);
-      if (gMatch && gMatch[1]) {
-        try {
-          text = decodeURIComponent(gMatch[1]);
-        } catch (decErr) {
-          text = gMatch[1];
-        }
-      }
+      break;
     }
   }
 
-  // Handle URL decoded variations
-  try {
-    text = decodeURIComponent(text);
-  } catch (e) {}
+  // 1. Direct 11-char video ID check
+  if (/^[a-zA-Z0-9_-]{11}$/.test(text)) return text;
 
-  // 2. Direct 11-char video ID
-  if (/^[a-zA-Z0-9_-]{11}$/.test(text.trim())) {
-    return text.trim();
+  // 2. Chromebook / Google SafeSearch / GoGuardian redirectors (google/goto=..., goto=..., google.com/goto=...)
+  if (text.includes('goto=') || text.includes('goto?') || text.includes('goto/')) {
+    const directGoto = text.match(/goto[=?/]([a-zA-Z0-9_-]{11})/i);
+    if (directGoto && directGoto[1]) return directGoto[1];
+
+    const gotoUrl = text.match(/goto[=?/](https?:\/\/[^\s&]+)/i);
+    if (gotoUrl && gotoUrl[1]) {
+      const subId = extractUniversalVideoId(gotoUrl[1]);
+      if (subId) return subId;
+    }
   }
 
-  // 3. YouTube Shorts: youtube.com/shorts/VIDEO_ID
+  // 3. Google search & link redirectors (google.com/url?q=..., google/url?dest=..., etc.)
+  if (text.includes('google.') || text.includes('google/')) {
+    const gMatch = text.match(/[?&](?:url|q|dest|goto)=([^&]+)/i);
+    if (gMatch && gMatch[1]) {
+      const subId = extractUniversalVideoId(gMatch[1]);
+      if (subId) return subId;
+    }
+  }
+
+  // 4. YouTube Shorts: youtube.com/shorts/VIDEO_ID
   const shortsMatch = text.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/i);
   if (shortsMatch && shortsMatch[1]) return shortsMatch[1];
 
-  // 4. Standard YouTube watch/embed/v/live/youtu.be URLs
+  // 5. Standard YouTube watch/embed/v/live/youtu.be URLs
   const match = text.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|live\/))([a-zA-Z0-9_-]{11})/i);
   if (match && match[1]) return match[1];
 
-  // 5. Fallback regex for any v= param
+  // 6. Any v= parameter anywhere in the text
   const vParamMatch = text.match(/[?&]v=([a-zA-Z0-9_-]{11})/i);
   if (vParamMatch && vParamMatch[1]) return vParamMatch[1];
+
+  // 7. Last-ditch check for any 11-char sequence after a slash or equals
+  const fallbackMatch = text.match(/[=/]([a-zA-Z0-9_-]{11})(?:[&/?#]|$)/);
+  if (fallbackMatch && fallbackMatch[1]) return fallbackMatch[1];
 
   return null;
 }

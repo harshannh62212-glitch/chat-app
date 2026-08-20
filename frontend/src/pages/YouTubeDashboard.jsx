@@ -71,34 +71,39 @@ export default function YouTubeDashboard({ user, onLogout, onToggleToChat, onTog
 
   // Helper to extract video ID from raw text or URLs (including Google redirects, Shorts, Live, and watch links)
   const extractVideoId = (input) => {
-    if (!input) return null;
+    if (!input || typeof input !== 'string') return null;
     let clean = input.trim();
 
-    // Decode Google Search redirect URLs
-    if (clean.includes('google.') && (clean.includes('/url?') || clean.includes('url=') || clean.includes('q='))) {
+    for (let i = 0; i < 3; i++) {
       try {
-        const parsed = new URL(clean.startsWith('http') ? clean : `https://${clean}`);
-        const rawTarget = parsed.searchParams.get('url') || parsed.searchParams.get('q') || parsed.searchParams.get('dest');
-        if (rawTarget) {
-          clean = decodeURIComponent(rawTarget);
-        }
+        const decoded = decodeURIComponent(clean);
+        if (decoded === clean) break;
+        clean = decoded;
       } catch (e) {
-        const gMatch = clean.match(/[?&](?:url|q)=([^&]+)/);
-        if (gMatch && gMatch[1]) {
-          try {
-            clean = decodeURIComponent(gMatch[1]);
-          } catch (decErr) {
-            clean = gMatch[1];
-          }
-        }
+        break;
       }
     }
 
-    try {
-      clean = decodeURIComponent(clean);
-    } catch (e) {}
-
     if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) return clean;
+
+    if (clean.includes('goto=') || clean.includes('goto?') || clean.includes('goto/')) {
+      const directGoto = clean.match(/goto[=?/]([a-zA-Z0-9_-]{11})/i);
+      if (directGoto && directGoto[1]) return directGoto[1];
+
+      const gotoUrl = clean.match(/goto[=?/](https?:\/\/[^\s&]+)/i);
+      if (gotoUrl && gotoUrl[1]) {
+        const subId = extractVideoId(gotoUrl[1]);
+        if (subId) return subId;
+      }
+    }
+
+    if (clean.includes('google.') || clean.includes('google/')) {
+      const gMatch = clean.match(/[?&](?:url|q|dest|goto)=([^&]+)/i);
+      if (gMatch && gMatch[1]) {
+        const subId = extractVideoId(gMatch[1]);
+        if (subId) return subId;
+      }
+    }
 
     const shortsMatch = clean.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/i);
     if (shortsMatch && shortsMatch[1]) return shortsMatch[1];
@@ -108,6 +113,9 @@ export default function YouTubeDashboard({ user, onLogout, onToggleToChat, onTog
 
     const vParamMatch = clean.match(/[?&]v=([a-zA-Z0-9_-]{11})/i);
     if (vParamMatch && vParamMatch[1]) return vParamMatch[1];
+
+    const fallbackMatch = clean.match(/[=/]([a-zA-Z0-9_-]{11})(?:[&/?#]|$)/);
+    if (fallbackMatch && fallbackMatch[1]) return fallbackMatch[1];
 
     return null;
   };
