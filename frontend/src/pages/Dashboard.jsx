@@ -86,8 +86,15 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
     setNotifications(prev => prev.filter(n => n.id !== notif.id));
   };
 
-  const handleServerCreated = () => {
+  const handleServerCreated = async (newServer) => {
     setShowNewServerModal(false);
+    await fetchUserServers();
+    if (newServer) {
+      setSelectedServer(newServer);
+      setActiveTab('servers');
+      setSelectedDM(null);
+      setViewingFriends(false);
+    }
   };
 
   const handleGlobalReportSubmit = async (e) => {
@@ -480,7 +487,18 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
             )}
 
             {activeTab === 'discovery' && (
-              <Discovery currentUser={user} />
+              <Discovery 
+                currentUser={user} 
+                onServerJoined={async (srvDoc) => {
+                  await fetchUserServers();
+                  if (srvDoc) {
+                    setSelectedServer(srvDoc);
+                    setActiveTab('servers');
+                    setSelectedDM(null);
+                    setViewingFriends(false);
+                  }
+                }}
+              />
             )}
 
 
@@ -773,14 +791,14 @@ function CreateServerModal({ currentUser, onClose, onServerCreated }) {
     setLoading(true);
 
     try {
-      await axios.post('/api/servers', {
+      const res = await axios.post('/api/servers', {
         name: formData.name,
         description: formData.description || '',
         password: formData.password || null,
         isPublic: formData.isPublic !== false
       });
 
-      onServerCreated();
+      if (onServerCreated) onServerCreated(res.data);
     } catch (err) {
       console.error(err);
       setError(formatErrorMessage(err, 'Failed to create server'));

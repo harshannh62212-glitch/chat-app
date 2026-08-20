@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { GENERAL_SERVER_ID } from '../utils/generalServer';
 
-function Discovery({ currentUser }) {
+function Discovery({ currentUser, onServerJoined }) {
   const [servers, setServers] = useState([]);
   const [joinedServerIds, setJoinedServerIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
@@ -52,6 +52,7 @@ function Discovery({ currentUser }) {
         return next;
       });
       setPasswordPrompt(null);
+      if (onServerJoined) onServerJoined(serverDoc);
     } catch (err) {
       const errMsg = err.response?.data?.error || err.message || 'Failed to join server';
       if (errMsg.includes('password required')) {
