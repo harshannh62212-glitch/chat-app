@@ -1,7 +1,22 @@
 const { query } = require('../db/database');
 const fetch = globalThis.fetch || require('node-fetch');
 
+const recentBotPrompts = new Map();
+
 async function handleLocalBotResponse(io, serverId, chatroomId, content, senderId) {
+  const dedupKey = `${serverId}_${chatroomId}_${senderId}_${content.trim().toLowerCase()}`;
+  const now = Date.now();
+  if (recentBotPrompts.has(dedupKey) && (now - recentBotPrompts.get(dedupKey)) < 3000) {
+    console.log('[BOT DEDUP] Prevented duplicate bot response for key:', dedupKey);
+    return;
+  }
+  recentBotPrompts.set(dedupKey, now);
+  if (recentBotPrompts.size > 200) {
+    for (const [k, v] of recentBotPrompts.entries()) {
+      if (now - v > 10000) recentBotPrompts.delete(k);
+    }
+  }
+
   let promptText = content.replace(/@(bot|gemini|Gemini AI Assistant|ai)/gi, '').trim();
   if (!promptText) {
     promptText = 'hello';
