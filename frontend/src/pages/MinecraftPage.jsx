@@ -5,11 +5,15 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://aebntdjjniirnwthtwlx.supabase.co';
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
 
-const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const realtimeChannel = supabaseClient.channel('mc_realtime_bridge', {
-  config: { broadcast: { self: true } }
-});
-realtimeChannel.subscribe();
+let supabaseClient = null;
+let realtimeChannel = null;
+try {
+  supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  realtimeChannel = supabaseClient.channel('mc_realtime_bridge', {
+    config: { broadcast: { self: true } }
+  });
+  realtimeChannel.subscribe();
+} catch (e) {}
 
 function MinecraftPage({ user, onBack }) {
   const [serverIp, setServerIp] = useState('atoms-fools.tun.ply.gg');
@@ -97,6 +101,25 @@ function MinecraftPage({ user, onBack }) {
   const fetchStatus = async () => {
     setIsRefreshing(true);
     try {
+      // 0. Primary: Query local backend TCP/SRV ping status
+      try {
+        const backendRes = await axios.get('/api/minecraft/status');
+        if (backendRes.data && backendRes.data.online) {
+          setStatus({
+            online: true,
+            players: backendRes.data.players || { online: 0, max: 20, sample: [] },
+            version: backendRes.data.version || '1.21.11',
+            motd: backendRes.data.motd || 'Wired-IO Private Minecraft Server',
+            latency: backendRes.data.latency || 150,
+            loading: false,
+            source: 'backend'
+          });
+          setServerIp(backendRes.data.host ? `${backendRes.data.host}${backendRes.data.port && backendRes.data.port !== 25565 ? ':' + backendRes.data.port : ''}` : 'atoms-fools.tun.ply.gg');
+          setIsRefreshing(false);
+          return;
+        }
+      } catch (e0) {}
+
       // 1. Query minetools API
       try {
         const directRes = await fetch('https://api.minetools.eu/ping/atoms-fools.tun.ply.gg/60364');
