@@ -53,6 +53,23 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
     }
   };
 
+  const [totalUnreadDMs, setTotalUnreadDMs] = useState(0);
+
+  useEffect(() => {
+    const fetchUnread = async () => {
+      try {
+        const res = await axios.get('/api/messages/dm-conversations/list');
+        if (Array.isArray(res.data)) {
+          const count = res.data.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+          setTotalUnreadDMs(count);
+        }
+      } catch(e) {}
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 4000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
   useEffect(() => {
     fetchUserServers();
   }, [user?.id]);
@@ -137,8 +154,29 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
           className={`rail-icon home-icon ${activeTab === 'dms' && !selectedServer ? 'active' : ''}`}
           onClick={() => { setActiveTab('dms'); setSelectedServer(null); setSelectedDM(null); setViewingFriends(true); }}
           title="Direct Messages & Friends"
+          style={{ position: 'relative' }}
         >
           💬
+          {totalUnreadDMs > 0 && (
+            <span
+              style={{
+                position: 'absolute',
+                top: '-4px',
+                right: '-4px',
+                background: '#ed4245',
+                color: '#fff',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                borderRadius: '10px',
+                padding: '1px 6px',
+                border: '2px solid #1e1f29',
+                boxShadow: '0 0 8px rgba(237, 66, 69, 0.8)'
+              }}
+              title={`${totalUnreadDMs} unread direct messages`}
+            >
+              {totalUnreadDMs}
+            </span>
+          )}
         </div>
         
         <div className="rail-separator"></div>

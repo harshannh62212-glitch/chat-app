@@ -129,16 +129,46 @@ function DMList({ onSelectDM, selectedDM, viewingFriends, onShowFriends }) {
         {conversations.length === 0 ? (
           <p className="empty-message">No conversations</p>
         ) : (
-          conversations.map(conv => (
-            <div
-              key={conv.other_user_id}
-              className={`conversation-item ${selectedDM?.id === conv.other_user_id ? 'active' : ''}`}
-              onClick={() => onSelectDM(conv)}
-            >
-              <h4>{conv.username}</h4>
-              <p className="last-message">Last: {new Date(conv.last_message_at).toLocaleDateString()}</p>
-            </div>
-          ))
+          conversations.map(conv => {
+            const hasUnread = Boolean(conv.unread_count && conv.unread_count > 0);
+            return (
+              <div
+                key={conv.other_user_id}
+                className={`conversation-item ${selectedDM?.id === conv.other_user_id ? 'active' : ''} ${hasUnread ? 'has-unread' : ''}`}
+                onClick={() => onSelectDM(conv)}
+                style={{
+                  position: 'relative',
+                  borderLeft: hasUnread ? '3px solid #ed4245' : '3px solid transparent',
+                  background: hasUnread ? 'rgba(237, 66, 69, 0.08)' : undefined
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                  <h4 style={{ fontWeight: hasUnread ? '700' : '500', color: hasUnread ? '#fff' : undefined }}>
+                    {conv.username}
+                  </h4>
+                  {hasUnread && (
+                    <span
+                      style={{
+                        background: '#ed4245',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        padding: '2px 7px',
+                        borderRadius: '10px',
+                        boxShadow: '0 0 10px rgba(237, 66, 69, 0.7)'
+                      }}
+                      title={`${conv.unread_count} unread messages`}
+                    >
+                      {conv.unread_count}
+                    </span>
+                  )}
+                </div>
+                <p className="last-message" style={{ color: hasUnread ? '#dcddde' : '#72767d', fontWeight: hasUnread ? '600' : 'normal' }}>
+                  {conv.last_message_content ? (conv.last_message_content.length > 28 ? `${conv.last_message_content.substring(0, 28)}...` : conv.last_message_content) : 'Active chat'}
+                </p>
+              </div>
+            );
+          })
         )}
       </div>
     </div>

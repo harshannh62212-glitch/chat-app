@@ -60,6 +60,12 @@ router.get('/dm/:otherUserId', authMiddleware, async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
     const offset = parseInt(req.query.offset) || 0;
 
+    // Mark unread incoming messages from this user as read
+    await query(
+      'UPDATE direct_messages SET is_read = true WHERE sender_id = $1 AND recipient_id = $2 AND is_read = false',
+      [otherUserId, userId]
+    );
+
     const result = await query(
       `SELECT id, sender_id, content, created_at
        FROM direct_messages
@@ -111,9 +117,17 @@ router.get('/dm-conversations/list', authMiddleware, async (req, res) => {
              ELSE dm.sender_id 
            END,
            dm.created_at DESC
+       ),
+       unread_counts AS (
+         SELECT sender_id as other_user_id, COUNT(*) as unread_count
+         FROM direct_messages
+         WHERE recipient_id = $1 AND is_read = false
+         GROUP BY sender_id
        )
-       SELECT * FROM latest_messages
-       ORDER BY last_message_at DESC`,
+       SELECT lm.*, COALESCE(uc.unread_count, 0)::int as unread_count
+       FROM latest_messages lm
+       LEFT JOIN unread_counts uc ON lm.other_user_id = uc.other_user_id
+       ORDER BY unread_count DESC, lm.last_message_at DESC`,
       [userId]
     );
 
