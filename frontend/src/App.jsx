@@ -109,7 +109,15 @@ function App() {
   useEffect(() => {
     const resolveBestBackend = async () => {
       // Don't render anything until we know where the backend is
-      setLoadingApp(true);
+      // If running directly on localhost, use current origin
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        const localOrigin = window.location.origin;
+        axios.defaults.baseURL = localOrigin;
+        localStorage.setItem('active_backend_target', localOrigin);
+        setTunnelResolved(true);
+        setLoadingApp(false);
+        return;
+      }
 
       const saved = localStorage.getItem('custom_proxy_target');
       if (saved) {
