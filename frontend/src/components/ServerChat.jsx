@@ -653,7 +653,19 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
   // Organize members into hoisted role groups + online members
   const getGroupedMembers = () => {
-    const cleanMembers = members.filter(m => m.id !== 'bot-id');
+    let cleanMembers = members.filter(m => m.id !== 'bot-id');
+    const hasBot = cleanMembers.some(m => m.id === 'gemini-bot-id');
+    if (!hasBot) {
+      cleanMembers = [
+        {
+          id: 'gemini-bot-id',
+          username: 'bot',
+          avatar_url: 'https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/google-gemini-icon.png',
+          roles: []
+        },
+        ...cleanMembers
+      ];
+    }
     const hoistedRoles = serverRoles.filter(r => r.hoist).sort((a, b) => b.position - a.position);
     
     const groups = [];
@@ -1293,6 +1305,21 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                         >
                           {msg.username}
                         </span>
+                        {(msg.sender_id === 'gemini-bot-id' || msg.senderId === 'gemini-bot-id' || msg.username === 'Gemini AI Assistant' || msg.username === 'bot') && (
+                          <span style={{
+                            background: '#5865F2',
+                            color: '#fff',
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            padding: '1px 4px',
+                            borderRadius: '3px',
+                            marginLeft: '6px',
+                            display: 'inline-block',
+                            verticalAlign: 'middle'
+                          }}>
+                            BOT
+                          </span>
+                        )}
                         {senderRole && (
                           <span 
                             className="sender-role-pill"
@@ -1555,6 +1582,19 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                           <span style={{ color: nameColor, fontWeight: 500, fontSize: '13px' }}>
                             {member.username}
                           </span>
+                          {(member.id === 'gemini-bot-id' || member.username === 'bot' || member.username === 'Gemini AI Assistant') && (
+                            <span style={{
+                              background: '#5865F2',
+                              color: '#fff',
+                              fontSize: '9px',
+                              fontWeight: 'bold',
+                              padding: '1px 4px',
+                              borderRadius: '3px',
+                              marginLeft: '4px'
+                            }}>
+                              BOT
+                            </span>
+                          )}
                           {member.id === server.owner_id && (
                             <span title="Server Owner" style={{ fontSize: '12px', marginLeft: 'auto' }}>👑</span>
                           )}
