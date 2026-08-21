@@ -295,6 +295,54 @@ router.delete('/:serverId/leave', authMiddleware, async (req, res) => {
   }
 });
 
+// Delete a server (Owner or Admin)
+router.delete('/:serverId', authMiddleware, async (req, res) => {
+  try {
+    const { serverId } = req.params;
+    const userId = req.userId;
+
+    if (await isGeneralServer(serverId)) {
+      return res.status(403).json({ error: 'Cannot delete the mandatory General server.' });
+    }
+
+    const serverResult = await query('SELECT id, name, owner_id FROM servers WHERE id = $1', [serverId]);
+    if (serverResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Server not found' });
+    }
+
+    const server = serverResult.rows[0];
+
+    // Verify user is owner or site admin
+    let isOwnerOrAdmin = server.owner_id === userId;
+    if (!isOwnerOrAdmin) {
+      const userRes = await query('SELECT is_admin FROM users WHERE id = $1', [userId]);
+      if (userRes.rows.length > 0 && userRes.rows[0].is_admin) {
+        isOwnerOrAdmin = true;
+      }
+    }
+
+    if (!isOwnerOrAdmin) {
+      return res.status(403).json({ error: 'Only the server owner can delete this server.' });
+    }
+
+    await query('DELETE FROM servers WHERE id = $1', [serverId]);
+
+    ramCache.invalidate('all_servers');
+    ramCache.invalidate('all_chatrooms');
+    ramCache.invalidate(`user_servers_${userId}`);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('server-' + serverId).emit('server-deleted', { serverId: parseInt(serverId, 10) });
+    }
+
+    res.json({ message: 'Server deleted successfully', serverId: parseInt(serverId, 10) });
+  } catch (err) {
+    console.error('Error deleting server:', err);
+    res.status(500).json({ error: 'Failed to delete server' });
+  }
+});
+
 // Helper to check any server permission (administrator or server owner bypasses all)
 async function hasServerPermission(userId, serverId, permissionKey) {
   if (parseInt(serverId, 10) === 1 && permissionKey === 'manage_roles') return false; // General server excluded from role customization

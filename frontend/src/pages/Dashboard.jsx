@@ -53,6 +53,11 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
     }
   };
 
+  const handleServerDeleted = (deletedServerId) => {
+    setSelectedServer(DEFAULT_GENERAL_SERVER);
+    fetchUserServers();
+  };
+
   const [totalUnreadDMs, setTotalUnreadDMs] = useState(0);
 
   useEffect(() => {
@@ -527,6 +532,7 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
             }}
             batteryInfo={batteryInfo}
             onBack={handleBack}
+            onServerDeleted={handleServerDeleted}
           />
         )}
 

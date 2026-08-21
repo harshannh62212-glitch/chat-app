@@ -20,7 +20,7 @@ const DISCORD_COLOR_PALETTE = [
   { name: 'Dark Grey', color: '#4E5058' }
 ];
 
-function ServerSettingsModal({ server, currentUser, onClose }) {
+function ServerSettingsModal({ server, currentUser, onClose, onServerDeleted }) {
   const [activeTab, setActiveTab] = useState('roles');
   const [roles, setRoles] = useState([]);
   const [members, setMembers] = useState([]);
@@ -31,6 +31,29 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState('');
   const [assignDropdownUserId, setAssignDropdownUserId] = useState(null);
+
+  const isGeneralServer = Boolean(server && (server.id === 1 || String(server.id) === '1' || server.name === 'General'));
+  const isOwnerOrAdmin = Boolean(server && (server.owner_id === currentUser?.id || currentUser?.is_admin));
+
+  const handleDeleteServer = async () => {
+    if (isGeneralServer) return;
+    if (!window.confirm(`Are you sure you want to delete "${server.name}"? This action cannot be undone and will erase all channels and messages.`)) {
+      return;
+    }
+    try {
+      setSaving(true);
+      await axios.delete(`/api/servers/${server.id}`);
+      if (onServerDeleted) {
+        onServerDeleted(server.id);
+      }
+      onClose();
+    } catch (err) {
+      console.error('Failed to delete server:', err);
+      setError(formatErrorMessage(err, 'Failed to delete server'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Editable fields for the selected role
   const [roleName, setRoleName] = useState('');
@@ -262,6 +285,37 @@ function ServerSettingsModal({ server, currentUser, onClose }) {
                 <label className="form-label">Server ID</label>
                 <div style={{ fontFamily: 'monospace', color: '#949ba4' }}>#{server.id}</div>
               </div>
+
+              {isOwnerOrAdmin && !isGeneralServer && (
+                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid rgba(237, 66, 69, 0.3)' }}>
+                  <h4 style={{ color: '#ed4245', margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Danger Zone
+                  </h4>
+                  <p style={{ color: '#949ba4', fontSize: '13px', marginBottom: '14px', lineHeight: '1.4' }}>
+                    Deleting this server will permanently erase all chatrooms, messages, and role assignments for all members.
+                  </p>
+                  <button
+                    onClick={handleDeleteServer}
+                    disabled={saving}
+                    style={{
+                      background: '#ed4245',
+                      color: '#fff',
+                      border: 'none',
+                      padding: '10px 18px',
+                      borderRadius: '6px',
+                      fontWeight: '600',
+                      fontSize: '13px',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      opacity: saving ? 0.7 : 1
+                    }}
+                  >
+                    🗑️ {saving ? 'Deleting Server...' : 'Delete Server'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

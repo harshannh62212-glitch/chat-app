@@ -118,7 +118,7 @@ function VideoParticipant({ stream, username, avatarUrl, isLocal, isMuted, isDea
   );
 }
 
-function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInfo, onBack }) {
+function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInfo, onBack, onServerDeleted }) {
   // Initialize lazy socket on first render (backend URL is guaranteed resolved by App.jsx)
   if (!socket) getSocket();
   const [chatrooms, setChatrooms] = useState([]);
@@ -1547,6 +1547,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
           server={server}
           currentUser={currentUser}
           onClose={() => setShowServerSettingsModal(false)}
+          onServerDeleted={onServerDeleted}
         />
       )}
 

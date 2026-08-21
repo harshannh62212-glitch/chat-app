@@ -92,11 +92,26 @@ function Discovery({ currentUser, onServerJoined }) {
     }
   };
 
-  if (loading) return <div className="discovery">Loading servers...</div>;
+  const handleDeleteServer = async (serverId, serverName) => {
+    const confirmDelete = window.confirm(`Are you sure you want to delete "${serverName}"? This action is permanent and cannot be undone.`);
+    if (!confirmDelete) return;
+
+    try {
+      await axios.delete(`/api/servers/${serverId}`);
+      fetchDiscoveryServers();
+    } catch (err) {
+      console.error('Failed to delete server:', err);
+      alert(err.response?.data?.error || 'Failed to delete server');
+    }
+  };
+
+  if (loading) {
+    return <div className="discovery-container"><p>Loading servers...</p></div>;
+  }
 
   return (
-    <div className="discovery">
-      <h3>Discover Servers</h3>
+    <div className="discovery-container">
+      <h3>Public Servers</h3>
       {servers.length === 0 ? (
         <p>No public servers available</p>
       ) : (
@@ -104,31 +119,52 @@ function Discovery({ currentUser, onServerJoined }) {
           {servers.map(server => {
             const isGeneral = server.id === GENERAL_SERVER_ID || server.name === 'General';
             const isJoined = isGeneral || joinedServerIds.has(server.id);
+            const isOwnerOrAdmin = server.owner_id === currentUser?.id || currentUser?.is_admin;
             
             return (
               <div key={server.id} className="discovery-card">
                 <h4>{server.name}</h4>
                 <p>{server.description || 'No description'}</p>
                 
-                {isGeneral ? (
-                  <span className="joined-badge" style={{ color: '#00ffff', background: 'rgba(0, 255, 255, 0.15)', border: '1px solid rgba(0, 255, 255, 0.3)', padding: '5px 10px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.85em' }}>
-                    🔒 Mandatory Community Hub (Locked)
-                  </span>
-                ) : isJoined ? (
-                  <button
-                    className="leave-server-btn"
-                    onClick={() => handleLeaveServer(server.id)}
-                  >
-                    ❌ Leave Server
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleJoinServer(server.id)}
-                    disabled={joiningServer === server.id}
-                  >
-                    {joiningServer === server.id ? 'Joining...' : 'Join Server'}
-                  </button>
-                )}
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+                  {isGeneral ? (
+                    <span className="joined-badge" style={{ color: '#00ffff', background: 'rgba(0, 255, 255, 0.15)', border: '1px solid rgba(0, 255, 255, 0.3)', padding: '5px 10px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.85em' }}>
+                      🔒 Mandatory Community Hub (Locked)
+                    </span>
+                  ) : isJoined ? (
+                    <button
+                      className="leave-server-btn"
+                      onClick={() => handleLeaveServer(server.id)}
+                    >
+                      ❌ Leave Server
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleJoinServer(server.id)}
+                      disabled={joiningServer === server.id}
+                    >
+                      {joiningServer === server.id ? 'Joining...' : 'Join Server'}
+                    </button>
+                  )}
+
+                  {!isGeneral && isOwnerOrAdmin && (
+                    <button
+                      onClick={() => handleDeleteServer(server.id, server.name)}
+                      style={{
+                        background: '#ed4245',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '6px 12px',
+                        fontSize: '0.85em',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🗑️ Delete Server
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
