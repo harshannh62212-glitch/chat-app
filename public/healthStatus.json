@@ -1,6 +1,5 @@
 {
-  "status": "healthy",
-  "timestamp": "2026-08-20T03:03:05.572Z",
-  "dbConnected": true,
-  "ramCacheActive": true
+  "ok": true,
+  "timestamp": "2026-08-21T12:44:29.116Z",
+  "message": "OK"
 }

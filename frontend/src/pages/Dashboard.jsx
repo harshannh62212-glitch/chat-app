@@ -278,26 +278,6 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
           </svg>
         </div>
 
-        {/* Games Portal Button */}
-        <div 
-          className="rail-icon games-rail-btn"
-          onClick={onToggleToGames}
-          title="Games Arcade (Under Development 🚧)"
-          style={{
-            background: 'rgba(165, 94, 234, 0.15)',
-            border: '1px solid rgba(165, 94, 234, 0.4)',
-            color: '#a55eea',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '20px',
-            marginBottom: '10px'
-          }}
-        >
-          🎮
-        </div>
-
         {/* Minecraft Server Portal Button */}
         <div 
           className="rail-icon minecraft-rail-btn"
@@ -347,36 +327,6 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
           </div>
         )}
 
-        {/* Global Bug Report Button at the bottom of the server rail */}
-        <div 
-          className="rail-icon bug-report-rail-btn"
-          onClick={() => setShowGlobalReportModal(true)}
-          title="Report Bug / System Glitch"
-          style={{
-            background: 'rgba(255, 71, 87, 0.1)',
-            border: '1px solid rgba(255, 71, 87, 0.2)',
-            color: '#ff4757',
-            marginBottom: '16px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '20px',
-            transition: 'background 0.2s, transform 0.2s, border-radius 0.2s'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 71, 87, 0.25)';
-            e.currentTarget.style.transform = 'scale(1.15)';
-            e.currentTarget.style.borderRadius = '16px';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 71, 87, 0.1)';
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.borderRadius = '50%';
-          }}
-        >
-          🪲
-        </div>
 
       </div>
 

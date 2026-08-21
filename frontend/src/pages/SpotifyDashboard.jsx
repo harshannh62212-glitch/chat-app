@@ -677,9 +677,6 @@ export default function SpotifyDashboard({ user, setUser, onLogout, onToggleToCh
             <button className="chat-toggle-btn youtube-toggle-btn" onClick={onToggleToYouTube} style={{ marginRight: '8px', background: '#ff0000', borderColor: '#ff0000' }}>
               ▶️ Open WiredTube
             </button>
-            <button className="chat-toggle-btn games-toggle-btn" onClick={onToggleToGames} style={{ marginRight: '8px', background: '#a55eea', borderColor: '#a55eea' }}>
-              🎮 Open Games Portal
-            </button>
             <div className="user-profile-badge">
               <div className="user-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.8rem', fontWeight: 'bold' }}>
                 {user.username.substring(0, 2).toUpperCase()}

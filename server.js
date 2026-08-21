@@ -122,13 +122,22 @@ function startTunnelUrlWatcher() {
         }
 
         const jsonContent = JSON.stringify({ url: tunnelUrl }, null, 2);
-        const p1 = path.join(__dirname, 'public', 'tunnel.json');
-        const p2 = path.join(__dirname, 'frontend', 'public', 'tunnel.json');
-        if (!fs.existsSync(p1) || fs.readFileSync(p1, 'utf8') !== jsonContent) {
-          fs.writeFileSync(p1, jsonContent, 'utf8');
-        }
-        if (fs.existsSync(path.dirname(p2)) && (!fs.existsSync(p2) || fs.readFileSync(p2, 'utf8') !== jsonContent)) {
-          fs.writeFileSync(p2, jsonContent, 'utf8');
+        const tunnelPaths = [
+          path.join(__dirname, 'tunnel.json'),
+          path.join(__dirname, 'public', 'tunnel.json'),
+          path.join(__dirname, 'dist', 'tunnel.json'),
+          path.join(__dirname, 'frontend', 'public', 'tunnel.json'),
+          path.join(__dirname, 'frontend', 'dist', 'tunnel.json')
+        ];
+        for (const tp of tunnelPaths) {
+          try {
+            const dir = path.dirname(tp);
+            if (fs.existsSync(dir)) {
+              if (!fs.existsSync(tp) || fs.readFileSync(tp, 'utf8') !== jsonContent) {
+                fs.writeFileSync(tp, jsonContent, 'utf8');
+              }
+            }
+          } catch (e) {}
         }
 
         // Sync vercel.json rewrites with active tunnel URL
@@ -180,8 +189,30 @@ const corsWhitelist = (() => {
   return [...merged];
 })();
 
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (corsWhitelist.includes('*') || corsWhitelist.includes(origin)) return true;
+  try {
+    const url = new URL(origin);
+    const host = url.hostname;
+    if (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host.endsWith('.trycloudflare.com') ||
+      host.endsWith('.vercel.app') ||
+      host.endsWith('.onrender.com') ||
+      host.startsWith('192.168.') ||
+      host.startsWith('10.') ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    ) {
+      return true;
+    }
+  } catch (e) {}
+  return false;
+};
+
 const allowedOrigin = (origin, callback) => {
-  if (!origin || corsWhitelist.includes('*') || corsWhitelist.includes(origin)) {
+  if (isAllowedOrigin(origin)) {
     callback(null, true);
   } else {
     callback(new Error('Not allowed by CORS'));
@@ -235,9 +266,7 @@ app.use(helmet({
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  const isWhitelisted = corsWhitelist.includes('*') || corsWhitelist.includes(origin);
-  
-  if (isWhitelisted && origin) {
+  if (origin && isAllowedOrigin(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
   } else if (corsWhitelist.includes('*')) {

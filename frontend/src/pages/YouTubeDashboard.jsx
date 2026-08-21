@@ -352,14 +352,6 @@ export default function YouTubeDashboard({ user, onLogout, onToggleToChat, onTog
           >
             🎵 Spotify
           </button>
-          <button 
-            className="yt-nav-btn"
-            onClick={onToggleToGames}
-            title="Switch to Games Portal"
-            style={{ color: '#a55eea' }}
-          >
-            🎮 Games
-          </button>
           <div className="yt-user-avatar" title={`Logged in as ${user?.username || 'User'}`}>
             {(user?.username || 'U').substring(0, 2).toUpperCase()}
           </div>

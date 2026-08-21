@@ -51,11 +51,25 @@ async function handleLocalBotResponse(io, serverId, chatroomId, content, senderI
 
     // 1. Try local Ollama if available
     try {
+      let localModel = 'llama3.2:1b';
+      try {
+        const tagRes = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(1500) });
+        if (tagRes.ok) {
+          const tagData = await tagRes.json();
+          if (tagData && tagData.models && tagData.models.length > 0) {
+            const preferred = tagData.models.find(m => m.name.includes('llama')) ||
+                              tagData.models.find(m => m.name.includes('gemma')) ||
+                              tagData.models.find(m => m.name.includes('qwen'));
+            localModel = preferred ? preferred.name : tagData.models[0].name;
+          }
+        }
+      } catch (tagErr) {}
+
       const response = await fetch('http://127.0.0.1:11434/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'llama3.2:1b',
+          model: localModel,
           prompt: `You are a helpful, friendly AI assistant for the wired-io chat platform. Respond concisely and helpfully to: ${promptText}`,
           stream: false,
           options: {
@@ -73,11 +87,11 @@ async function handleLocalBotResponse(io, serverId, chatroomId, content, senderI
       }
     } catch (e) {}
 
-    // 2. Try Gemini API fallback (gemini-1.5-flash / gemini-2.0-flash)
+    // 2. Try Gemini API fallback (gemini-3.6-flash / gemini-3.5-flash-lite)
     if (!botResponse) {
       const apiKey = process.env.GEMINI_API_KEY;
       if (apiKey) {
-        const geminiModels = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+        const geminiModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite'];
         for (const model of geminiModels) {
           try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
