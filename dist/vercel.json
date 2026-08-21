@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/resolve-tunnel",
+      "destination": "/api/resolve-tunnel"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "https://springfield-definition-bin-configurations.trycloudflare.com/api/$1"
+    },
+    {
+      "source": "/socket.io/(.*)",
+      "destination": "https://springfield-definition-bin-configurations.trycloudflare.com/socket.io/$1"
+    },
+    {
+      "source": "/ping",
+      "destination": "https://springfield-definition-bin-configurations.trycloudflare.com/ping"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
