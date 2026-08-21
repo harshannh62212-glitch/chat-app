@@ -142,6 +142,21 @@ async function handleLocalBotResponse(io, serverId, chatroomId, content, senderI
       }
     }
 
+    // Fetch sender username to tag/respond directly to the user
+    let senderTag = '';
+    if (senderId) {
+      try {
+        const uRes = await query('SELECT username FROM users WHERE id = $1', [senderId]);
+        if (uRes.rows.length > 0 && uRes.rows[0].username) {
+          senderTag = `@${uRes.rows[0].username}`;
+        }
+      } catch (uErr) {}
+    }
+
+    if (senderTag && !botResponse.startsWith(senderTag)) {
+      botResponse = `${senderTag} ${botResponse}`;
+    }
+
     // Ensure bot user exists in database
     await query(
       `INSERT INTO users (id, username, email, password, avatar_url)
