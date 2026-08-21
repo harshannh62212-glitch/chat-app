@@ -526,57 +526,85 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
   useEffect(() => {
     fetchMembers();
     fetchServerRoles();
-  }, [server.id]);
 
-  // Real-time listener for role and member changes
+    // Auto-refresh member list periodically and on window focus
+    const interval = setInterval(() => {
+      fetchMembers();
+    }, 5000);
+
+    const handleFocus = () => {
+      fetchMembers();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [server?.id, server?.name]);
+
+  // Real-time listener for role, channel, and member changes
   useEffect(() => {
+    const activeSocket = getSocket();
+    if (!activeSocket) return;
+
     const handleRolesUpdated = (data) => {
-      if (!data || data.serverId === server.id) {
+      if (!data || data.serverId === server?.id) {
         fetchServerRoles();
         fetchMembers();
       }
     };
 
     const handleMemberRolesUpdated = (data) => {
-      if (!data || data.serverId === server.id) {
+      if (!data || data.serverId === server?.id) {
         fetchMembers();
       }
     };
 
+    const handleMemberChanged = () => {
+      fetchMembers();
+    };
+
     const handleChatroomCreated = (data) => {
-      if (data && data.serverId === server.id) {
+      if (data && data.serverId === server?.id) {
         fetchChatrooms();
       }
     };
 
     const handleChatroomDeleted = (data) => {
-      if (data && data.serverId === server.id) {
+      if (data && data.serverId === server?.id) {
         fetchChatrooms();
       }
     };
 
     const handleMemberKicked = (data) => {
-      if (data && data.serverId === server.id) {
+      if (data && data.serverId === server?.id) {
         fetchMembers();
-        if (data.userId === currentUser.id) {
+        if (data.userId === safeUser.id) {
           alert('You have been kicked from this server.');
           if (onBack) onBack();
         }
       }
     };
 
-    socket.on('server-roles-updated', handleRolesUpdated);
-    socket.on('member-roles-updated', handleMemberRolesUpdated);
-    socket.on('chatroom-created', handleChatroomCreated);
-    socket.on('chatroom-deleted', handleChatroomDeleted);
-    socket.on('member-kicked', handleMemberKicked);
+    activeSocket.on('roles-updated', handleRolesUpdated);
+    activeSocket.on('server-roles-updated', handleRolesUpdated);
+    activeSocket.on('member-roles-updated', handleMemberRolesUpdated);
+    activeSocket.on('member-joined', handleMemberChanged);
+    activeSocket.on('member-left', handleMemberChanged);
+    activeSocket.on('chatroom-created', handleChatroomCreated);
+    activeSocket.on('chatroom-deleted', handleChatroomDeleted);
+    activeSocket.on('member-kicked', handleMemberKicked);
 
     return () => {
-      socket.off('server-roles-updated', handleRolesUpdated);
-      socket.off('member-roles-updated', handleMemberRolesUpdated);
-      socket.off('chatroom-created', handleChatroomCreated);
-      socket.off('chatroom-deleted', handleChatroomDeleted);
-      socket.off('member-kicked', handleMemberKicked);
+      activeSocket.off('roles-updated', handleRolesUpdated);
+      activeSocket.off('server-roles-updated', handleRolesUpdated);
+      activeSocket.off('member-roles-updated', handleMemberRolesUpdated);
+      activeSocket.off('member-joined', handleMemberChanged);
+      activeSocket.off('member-left', handleMemberChanged);
+      activeSocket.off('chatroom-created', handleChatroomCreated);
+      activeSocket.off('chatroom-deleted', handleChatroomDeleted);
+      activeSocket.off('member-kicked', handleMemberKicked);
     };
   }, [server?.id, safeUser?.id]);
 
