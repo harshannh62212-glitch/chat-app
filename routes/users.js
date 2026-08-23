@@ -41,26 +41,6 @@ router.get('/search', authMiddleware, async (req, res) => {
   }
 });
 
-// Get user profile
-router.get('/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    const result = await query(
-      'SELECT id, username, avatar_url, description, is_admin, created_at FROM users WHERE id = $1 OR username = $1',
-      [userId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch user' });
-  }
-});
 
 // Update user profile avatar URL & description (bio)
 router.put('/profile', authMiddleware, async (req, res) => {
@@ -113,18 +93,26 @@ router.put('/profile', authMiddleware, async (req, res) => {
 // Send a friend request
 router.post('/friends/request', authMiddleware, async (req, res) => {
   try {
-    const { friendUsername } = req.body;
+    const { friendUsername, friendId: directFriendId } = req.body;
     const userId = req.userId;
 
-    if (!friendUsername || !friendUsername.trim()) {
-      return res.status(400).json({ error: 'Username is required' });
+    if ((!friendUsername || !friendUsername.trim()) && !directFriendId) {
+      return res.status(400).json({ error: 'Username or friendId is required' });
     }
 
-    // Find the friend by username
-    const friendResult = await query(
-      'SELECT id, username, avatar_url FROM users WHERE LOWER(username) = LOWER($1)',
-      [friendUsername.trim()]
-    );
+    // Find the friend by username or ID
+    let friendResult;
+    if (directFriendId) {
+      friendResult = await query(
+        'SELECT id, username, avatar_url FROM users WHERE id = $1',
+        [directFriendId]
+      );
+    } else {
+      friendResult = await query(
+        'SELECT id, username, avatar_url FROM users WHERE LOWER(username) = LOWER($1)',
+        [friendUsername.trim()]
+      );
+    }
 
     if (friendResult.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
@@ -256,7 +244,7 @@ router.post('/friends/decline', authMiddleware, async (req, res) => {
 });
 
 // Get friends list
-router.get('/friends/list', authMiddleware, async (req, res) => {
+router.get(['/friends', '/friends/list'], authMiddleware, async (req, res) => {
   try {
     const userId = req.userId;
 
@@ -380,11 +368,31 @@ router.get('/minecraft/balance', authMiddleware, async (req, res) => {
     if (balance === null) {
       return res.json({ username, balance: null, found: false });
     }
-    
     return res.json({ username, balance, found: true });
   } catch (err) {
     console.error('Error fetching Minecraft balance:', err);
     res.status(500).json({ error: 'Failed to fetch Minecraft balance' });
+  }
+});
+
+// Get user profile (placed at end of router to avoid shadowing specific routes)
+router.get(['/profile/:userId', '/:userId'], async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const result = await query(
+      'SELECT id, username, avatar_url, description, is_admin, created_at FROM users WHERE id = $1 OR username = $1',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
 

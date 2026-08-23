@@ -53,7 +53,7 @@ router.get('/chatroom/:chatroomId', authMiddleware, async (req, res) => {
 });
 
 // Get DMs with a user
-router.get('/dm/:otherUserId', authMiddleware, async (req, res) => {
+router.get(['/dm/:otherUserId', '/direct/:otherUserId'], authMiddleware, async (req, res) => {
   try {
     const { otherUserId } = req.params;
     const userId = req.userId;
@@ -141,7 +141,8 @@ router.get('/dm-conversations/list', authMiddleware, async (req, res) => {
 // Post message in chatroom with ultra-fast batch database writer
 router.post('/server', authMiddleware, async (req, res) => {
   try {
-    const { chatroomId, content } = req.body;
+    const chatroomId = req.body.chatroomId || req.body.chatroom_id;
+    const content = req.body.content;
     const senderId = req.userId;
 
     if (!chatroomId || !content || !content.trim()) {
@@ -198,7 +199,9 @@ router.post('/server', authMiddleware, async (req, res) => {
 // Post direct message
 router.post('/dm', authMiddleware, async (req, res) => {
   try {
-    const { recipientId, content, tempId } = req.body;
+    const recipientId = req.body.recipientId || req.body.recipient_id;
+    const content = req.body.content;
+    const tempId = req.body.tempId;
     const senderId = req.userId;
 
     if (!recipientId || !content || !content.trim()) {
@@ -238,7 +241,7 @@ router.post('/dm', authMiddleware, async (req, res) => {
 });
 
 // Delete a server message (own messages only, or admin)
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete(['/:id', '/server/:id'], authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.userId;

@@ -182,4 +182,28 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
+// Alias for /verify
+router.get('/verify', authMiddleware, async (req, res) => {
+  try {
+    const result = await query(
+      'SELECT id, username, email, avatar_url, description, is_admin, is_banned, timeout_until FROM users WHERE id = $1', 
+      [req.userId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const user = result.rows[0];
+    user.is_admin = Boolean(
+      user.is_admin || 
+      user.username === 'ADMIN' || 
+      user.username === 'Nxghtmare3621' || 
+      user.username === 'admin'
+    );
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
 module.exports = router;

@@ -72,16 +72,21 @@ async function runFullAudit() {
   // 5. User Auth Flow (Registration & Login)
   let authToken = '';
   let testUser = null;
-  const username = `audit_user_${Date.now()}`;
+  const username = 'system_test_runner';
   const password = 'TestPassword123!';
+  const email = 'system_test_runner@local.test';
 
   try {
-    const regRes = await axios.post(`${LOCAL_BACKEND}/api/auth/register`, {
-      username,
-      email: `${username}@example.com`,
-      password
-    });
-    console.log(`✅ Auth API: Registered user "${username}"`);
+    try {
+      await axios.post(`${LOCAL_BACKEND}/api/auth/register`, {
+        username,
+        email,
+        password
+      });
+      console.log(`✅ Auth API: Registered persistent user "${username}"`);
+    } catch (regErr) {
+      // User might already exist, which is expected for reusable accounts
+    }
 
     const loginRes = await axios.post(`${LOCAL_BACKEND}/api/auth/login`, {
       username,

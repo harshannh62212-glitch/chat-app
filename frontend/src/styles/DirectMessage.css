@@ -11,6 +11,7 @@
   color: #dbdee1;
   position: relative;
   overflow: hidden;
+  min-height: 0;
   font-family: var(--font-family, 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif);
 }
 
@@ -517,9 +518,18 @@
   position: absolute;
   bottom: 74px;
   right: 16px;
-  z-index: 100;
+  z-index: 1000;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.discord-giphy-popover .giphy-panel {
+  position: relative !important;
+  bottom: auto !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  margin: 0 !important;
 }

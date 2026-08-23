@@ -31,7 +31,21 @@ const getSocket = () => {
     });
     socket.connect();
   } else if (!socket.connected && !socket.connecting) {
-    socket.connect();
+    // Reconnect if URL changed
+    const currentUrl = getActiveSocketUrl();
+    if (socket.io?.uri !== currentUrl) {
+      socket.disconnect();
+      socket = io(currentUrl, {
+        autoConnect: true,
+        withCredentials: true,
+        extraHeaders: {
+          'bypass-tunnel-reminder': 'true'
+        },
+        transports: ['websocket', 'polling']
+      });
+    } else {
+      socket.connect();
+    }
   }
   return socket;
 };
@@ -474,18 +488,19 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
                   </div>
                   <div className="discord-msg-text">
                     {(() => {
-                      const content = msg.content || '';
+                      const rawContent = (msg.content || '').trim();
                       
                       // Single GIF / Image link
-                      if (typeof content === 'string' && (content.startsWith('http://') || content.startsWith('https://')) && !content.includes(' ')) {
-                        const isGif = content.includes('.gif') || content.includes('giphy.com') || content.includes('tenor.com');
-                        const isImage = /\.(png|jpg|jpeg|webp|svg)($|\?)/i.test(content);
+                      if (typeof rawContent === 'string' && (rawContent.startsWith('http://') || rawContent.startsWith('https://')) && !rawContent.includes(' ')) {
+                        const lowerContent = rawContent.toLowerCase();
+                        const isGif = lowerContent.includes('giphy') || lowerContent.includes('tenor') || /\.gif($|\?)/i.test(rawContent);
+                        const isImage = /\.(png|jpg|jpeg|webp|gif|svg)($|\?)/i.test(rawContent);
                         if (isGif || isImage) {
                           return (
                             <div style={{ marginTop: '6px' }}>
                               <img 
-                                src={content} 
-                                alt="Media" 
+                                src={rawContent} 
+                                alt="GIF" 
                                 className="discord-msg-gif" 
                                 style={{ maxWidth: '320px', maxHeight: '240px', borderRadius: '8px', objectFit: 'contain' }}
                                 loading="lazy"

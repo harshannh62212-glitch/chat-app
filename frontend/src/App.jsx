@@ -267,18 +267,20 @@ function App() {
           }
         })
         .catch((err) => {
-          if (err.response && err.response.status === 401) {
+          if (err.response && (err.response.status === 401 || err.response.status === 404)) {
             localStorage.removeItem('chat_token');
             localStorage.removeItem('chat_user');
             delete axios.defaults.headers.common['Authorization'];
             setCurrentUser(null);
           } else {
-            // On temporary connection glitch, preserve cached user so session is not lost
+            // On temporary connection glitch (network offline), preserve cached user so session is not lost
             const cachedUser = localStorage.getItem('chat_user');
             if (cachedUser) {
               try {
                 setCurrentUser(JSON.parse(cachedUser));
-              } catch(e) {}
+              } catch(e) {
+                setCurrentUser(null);
+              }
             }
           }
         });

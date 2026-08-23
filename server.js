@@ -62,6 +62,7 @@ if (!fs.existsSync(publicDir)) { fs.mkdirSync(publicDir, { recursive: true }); }
 const socketIO = require('socket.io');
 require('dotenv').config();
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'chat_app_jwt_super_secret_key_2026';
+const PORT = parseInt(process.env.PORT || '8000', 10);
 const fetch = globalThis.fetch || require('node-fetch');
 const authRoutes = require('./routes/auth');
 const serverRoutes = require('./routes/servers');
@@ -76,19 +77,43 @@ const { filterContent, containsBannedWords } = require('./utils/contentFilter');
 const { startHealthCheck } = require('./backend/scripts/healthCheck');
 const { handleLocalBotResponse } = require('./utils/botHandler');
 
+// Helper to check if a Cloudflare tunnel URL is actually live and answering HTTP
+async function isTunnelAlive(url) {
+  if (!url || !url.startsWith('http')) return false;
+  try {
+    const controller = new AbortController();
+    const to = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(`${url}/ping`, {
+      headers: { 'bypass-tunnel-reminder': 'true' },
+      signal: controller.signal
+    });
+    clearTimeout(to);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // Start tunnel URL watcher to update Supabase with the active Cloudflare tunnel URL
 function startTunnelUrlWatcher() {
   if (process.env.VERCEL || cluster.isWorker) return;
 
   console.log('[TUNNEL WATCHER] Starting active Cloudflare tunnel watcher...');
   
+  let isChecking = false;
+
   const ensureCloudflaredRunning = () => {
     const { exec, spawn } = require('child_process');
     exec('pgrep -f "cloudflared tunnel"', (err, stdout) => {
       if (err || !stdout.trim()) {
         console.log('[TUNNEL WATCHER] Cloudflare tunnel process not found. Auto-launching cloudflared...');
         const logPath = path.join(__dirname, 'cloudflared.log');
-        const child = spawn('cloudflared', ['tunnel', '--logfile', logPath, '--url', 'http://127.0.0.1:8000'], {
+        try {
+          if (!fs.existsSync(logPath)) {
+            fs.writeFileSync(logPath, '', 'utf8');
+          }
+        } catch (e) {}
+        const child = spawn('cloudflared', ['tunnel', '--logfile', logPath, '--url', `http://127.0.0.1:${PORT}`], {
           detached: true,
           stdio: 'ignore'
         });
@@ -98,10 +123,12 @@ function startTunnelUrlWatcher() {
   };
 
   const checkTunnelLog = async () => {
-    ensureCloudflaredRunning();
+    if (isChecking) return;
+    isChecking = true;
     try {
       const logPath = path.join(__dirname, 'cloudflared.log');
       if (!fs.existsSync(logPath)) {
+        ensureCloudflaredRunning();
         return;
       }
       
@@ -109,11 +136,12 @@ function startTunnelUrlWatcher() {
       const matches = [...logContent.matchAll(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/g)];
       if (matches.length > 0) {
         const tunnelUrl = matches[matches.length - 1][0];
+        
         const currentRes = await query("SELECT value FROM system_config WHERE key = 'active_tunnel_url'");
         const currentUrl = currentRes.rows[0]?.value;
         
         if (currentUrl !== tunnelUrl) {
-          console.log(`[TUNNEL WATCHER] New tunnel URL detected: ${tunnelUrl}. Updating database...`);
+          console.log(`[TUNNEL WATCHER] Active tunnel URL detected: ${tunnelUrl}. Updating database & configs...`);
           await query(`
             INSERT INTO system_config (key, value, updated_at)
             VALUES ('active_tunnel_url', $1, CURRENT_TIMESTAMP)
@@ -161,15 +189,20 @@ function startTunnelUrlWatcher() {
             }
           }
         }
+      } else {
+        ensureCloudflaredRunning();
       }
     } catch (err) {
       console.error('[TUNNEL WATCHER] Error checking/updating tunnel URL:', err);
+    } finally {
+      isChecking = false;
     }
   };
 
-  // Run initial check and then poll every 15 seconds
-  setTimeout(checkTunnelLog, 2000);
-  setInterval(checkTunnelLog, 15000);
+  ensureCloudflaredRunning();
+  // Run initial check and then poll every 10 seconds
+  setTimeout(checkTunnelLog, 2500);
+  setInterval(checkTunnelLog, 10000);
 }
 
 const app = express();
@@ -316,14 +349,18 @@ const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
 app.set('trust proxy', 1);
 
-// Rate limiting – max 2000 requests per 15 minutes per IP, excluding health checks and status polling
+// Rate limiting – max 20000 requests per 15 minutes per IP, excluding health checks, status polling, and localhost loopback
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 2000,
+  max: parseInt(process.env.RATE_LIMIT_MAX || '20000', 10),
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false },
   skip: (req) => {
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || req.hostname === 'localhost') {
+      return true;
+    }
     const p = req.path || req.url || '';
     return (
       p === '/ping' ||
@@ -1079,12 +1116,15 @@ const connectedUsers = new Map();
 
 async function getLocalOllamaModel() {
   try {
-    const res = await fetch('http://127.0.0.1:11434/api/tags');
+    const res = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(2000) });
     if (res.ok) {
       const data = await res.json();
       if (data && data.models && data.models.length > 0) {
-        const preferred = data.models.find(m => m.name.includes('llama')) ||
-                          data.models.find(m => m.name.includes('gemma')) ||
+        const preferred = data.models.find(m => m.name.includes('llama3.2:1b')) ||
+                          data.models.find(m => m.name.includes('llama3.2')) ||
+                          data.models.find(m => m.name.includes('gemma3')) ||
+                          data.models.find(m => m.name.includes('llama')) ||
+                          data.models.find(m => m.name.includes('qwen2.5-coder:7b')) ||
                           data.models.find(m => m.name.includes('qwen'));
         return preferred ? preferred.name : data.models[0].name;
       }
@@ -1095,40 +1135,112 @@ async function getLocalOllamaModel() {
   return null;
 }
 
-// Asynchronous Optimistic Moderation (Ollama Llama 3.2:3b with Gemini fallback)
+// Multi-model Gemini fallback helper
+const GEMINI_MODELS = [
+  process.env.GEMINI_MODERATION_MODEL || 'gemma-4-26b-a4b-it',
+  'gemma-4-26b-a4b-it',
+  'gemini-3-flash-preview',
+  'gemini-3.5-flash-lite',
+  'gemini-3.6-flash',
+  'gemini-3.7-flash',
+  'gemini-3.1-flash-lite'
+];
+
+async function callGeminiAPI(contents, generationConfig = { responseMimeType: 'application/json' }, timeoutMs = 7000) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  const models = [...new Set(GEMINI_MODELS)];
+  for (const model of models) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({ contents, generationConfig })
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const json = await response.json();
+        const parts = json.candidates?.[0]?.content?.parts || [];
+        const answerPart = parts.find(p => !p.thought) || parts[parts.length - 1];
+        const text = answerPart?.text;
+        if (text) return text.trim();
+      }
+    } catch (e) {
+      // Continue to next model
+    }
+  }
+  return null;
+}
+
+// Robust JSON extractor for LLM outputs (handles markdown fences, reasoning preambles, and conversational artifacts)
+function parseJsonFromLlm(rawText) {
+  if (!rawText || typeof rawText !== 'string') return null;
+  const trimmed = rawText.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch (e) {
+    // 1. Try markdown code block ```json ... ``` or ``` ... ```
+    const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (codeBlockMatch && codeBlockMatch[1]) {
+      try {
+        return JSON.parse(codeBlockMatch[1].trim());
+      } catch (e2) {}
+    }
+    // 2. Try extracting JSON object { ... }
+    const firstBrace = trimmed.indexOf('{');
+    const lastBrace = trimmed.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+      } catch (e3) {}
+    }
+    // 3. Try extracting JSON array [ ... ]
+    const firstBracket = trimmed.indexOf('[');
+    const lastBracket = trimmed.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+      try {
+        return JSON.parse(trimmed.slice(firstBracket, lastBracket + 1));
+      } catch (e4) {}
+    }
+  }
+  return null;
+}
+
+// Asynchronous Optimistic Moderation (Ollama Llama/Qwen with Gemini fallback)
 async function evaluateMessageAsync(id, content, type) {
   if (!id || !content) return;
 
-  const prompt = `You are a strict content safety moderator for a real-time chat platform. Analyze the following message and determine if it is appropriate.
+  const escapedContent = String(content).replace(/"/g, '\\"');
+  const prompt = `You are a content safety AI for a chat app.
+Evaluate if the following message violates safety rules (hate speech, sexual harassment, explicit NSFW, graphic violence, severe profanity, or deliberate bypass tricks).
+General friendly chat, casual conversation, questions, and coding discussions are SAFE and appropriate.
 
-Flag as INAPPROPRIATE (respond false) if the message contains ANY of:
-- Profanity or cuss words (fuck, shit, ass, bitch, cunt, dick, cock, etc.)
-- Sexual content, pornographic references, or NSFW material (porn, nude, naked, sex, blowjob, orgasm, masturbate, OnlyFans, hentai, etc.)
-- Requests for or sharing of explicit/adult content (nude pics, sex videos, cam links, etc.)
-- Racial slurs, ethnic slurs, or hate speech targeting any group
-- Harassment, bullying, threats, or personal attacks
-- Graphic violence or self-harm content
-- Drug promotion or illegal activity
-- Deliberate character substitutions to bypass filters (f*ck, $hit, a$$, pr0n, s3x, n00ds, etc.)
-- Spam or repeated nonsense intended to disrupt
+Examples:
+"Hello world" -> {"appropriate": true}
+"How are you doing?" -> {"appropriate": true}
+"Fuck this shit" -> {"appropriate": false, "reason": "Profanity"}
+"f.u.c.k y.o.u" -> {"appropriate": false, "reason": "Bypassing profanity filter"}
 
-Allow APPROPRIATE (respond true) if the message is:
-- Normal conversation, questions, or technical discussion
-- Mild expressions of frustration without slurs or explicit content
+Message to evaluate:
+"${escapedContent}"
 
-Message to evaluate: "${content}"
-
-Respond ONLY with this JSON:
-{ "appropriate": true or false }`;
+Respond ONLY with valid JSON: {"appropriate": true} or {"appropriate": false, "reason": "..."}`;
 
   let isAppropriate = true;
   let ollamaSuccess = false;
 
   // 1. Try local Ollama
   try {
-    const localModel = await getLocalOllamaModel() || 'llama3.2:1b';
+    const localModel = await getLocalOllamaModel() || 'qwen2.5-coder:7b';
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     const response = await fetch('http://127.0.0.1:11434/api/generate', {
       method: 'POST',
@@ -1138,7 +1250,8 @@ Respond ONLY with this JSON:
         model: localModel,
         prompt: prompt,
         format: 'json',
-        stream: false
+        stream: false,
+        options: { temperature: 0.0 }
       })
     });
 
@@ -1146,9 +1259,13 @@ Respond ONLY with this JSON:
 
     if (response.ok) {
       const json = await response.json();
-      const parsed = JSON.parse(json.response.trim());
-      if (parsed && typeof parsed.appropriate === 'boolean') {
-        isAppropriate = parsed.appropriate;
+      const parsed = parseJsonFromLlm(json.response);
+      let val = parsed ? parsed.appropriate : undefined;
+      if (typeof val === 'string') {
+        val = val.toLowerCase() === 'true';
+      }
+      if (typeof val === 'boolean') {
+        isAppropriate = val;
         ollamaSuccess = true;
       }
     }
@@ -1158,36 +1275,24 @@ Respond ONLY with this JSON:
 
   // 2. Fallback to Gemini
   if (!ollamaSuccess) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-        const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash-lite';
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json' }
-          })
-        });
-
-        clearTimeout(timeoutId);
-
-        if (response.ok) {
-          const json = await response.json();
-          const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          const parsed = JSON.parse(textResponse.trim());
-          if (parsed && typeof parsed.appropriate === 'boolean') {
-            isAppropriate = parsed.appropriate;
-          }
+    try {
+      const textResponse = await callGeminiAPI(
+        [{ parts: [{ text: prompt }] }],
+        { responseMimeType: 'application/json' },
+        6000
+      );
+      if (textResponse) {
+        const parsed = parseJsonFromLlm(textResponse);
+        let val = parsed ? parsed.appropriate : undefined;
+        if (typeof val === 'string') {
+          val = val.toLowerCase() === 'true';
         }
-      } catch (err) {
-        console.error('[ASYNC MODERATOR] Gemini fallback failed:', err.message);
+        if (typeof val === 'boolean') {
+          isAppropriate = val;
+        }
       }
+    } catch (err) {
+      console.error('[ASYNC MODERATOR] Gemini fallback failed:', err.message);
     }
   }
 
@@ -1394,8 +1499,6 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
-
 // Local & Cloud Bot response handled by utils/botHandler.js
 
 // Gemini AI Moderation Daemon
@@ -1430,11 +1533,11 @@ async function runGeminiModeration() {
       let flaggedIds = null;
       let aiSource = 'OLLAMA';
 
-      // Try local Ollama (Llama 3.2) first
+      // Try local Ollama (Llama 3.2 / Qwen) first
       try {
         const localModel = await getLocalOllamaModel() || 'llama3.2:1b';
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
 
         const response = await fetch('http://127.0.0.1:11434/api/generate', {
           method: 'POST',
@@ -1452,7 +1555,7 @@ async function runGeminiModeration() {
 
         if (response.ok) {
           const json = await response.json();
-          flaggedIds = JSON.parse(json.response.trim());
+          flaggedIds = parseJsonFromLlm(json.response);
         }
       } catch (err) {
         // Quiet fallback
@@ -1460,34 +1563,18 @@ async function runGeminiModeration() {
 
       // Fallback to Gemini if Ollama failed or returned invalid results
       if (!Array.isArray(flaggedIds)) {
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (apiKey) {
-          try {
-            aiSource = 'GEMINI';
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-            const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash-lite';
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              signal: controller.signal,
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { responseMimeType: 'application/json' }
-              })
-            });
-
-            clearTimeout(timeoutId);
-
-            if (response.ok) {
-              const json = await response.json();
-              const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-              flaggedIds = JSON.parse(textResponse.trim());
-            }
-          } catch (err) {
-            // Quiet fallback
+        try {
+          aiSource = 'GEMINI';
+          const textResponse = await callGeminiAPI(
+            [{ parts: [{ text: prompt }] }],
+            { responseMimeType: 'application/json' },
+            6000
+          );
+          if (textResponse) {
+            flaggedIds = parseJsonFromLlm(textResponse);
           }
+        } catch (err) {
+          // Quiet fallback
         }
       }
 
@@ -1533,35 +1620,23 @@ async function runGeminiModeration() {
           continue;
         }
 
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-          console.warn('[AI MODERATOR] GEMINI_API_KEY is missing for avatar moderation!');
-          continue;
-        }
-
         const promptText = `Analyze this user profile picture. Is this image appropriate for a general-audience chat platform? It should not contain nudity, sexually suggestive content, hate symbols, graphic violence, drugs/weapons, or harassment. Respond with JSON: {"appropriate": true} or {"appropriate": false, "reason": "reason"}.`;
 
-        const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-3.5-flash-lite';
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                imagePart,
-                { text: promptText }
-              ]
-            }],
-            generationConfig: { responseMimeType: 'application/json' }
-          })
-        });
+        const textResponse = await callGeminiAPI(
+          [{
+            parts: [
+              imagePart,
+              { text: promptText }
+            ]
+          }],
+          { responseMimeType: 'application/json' },
+          7000
+        );
 
-        if (response.ok) {
-          const json = await response.json();
-          const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        if (textResponse) {
           try {
-            const resData = JSON.parse(textResponse.trim());
-            if (resData.appropriate === false) {
+            const resData = parseJsonFromLlm(textResponse);
+            if (resData && resData.appropriate === false) {
               console.warn(`[AI MODERATOR] User ${u.username} (${u.id}) has inappropriate avatar. Reason: ${resData.reason}. Resetting user avatar.`);
               await query("UPDATE users SET avatar_url = '' WHERE id = $1", [u.id]);
             }
@@ -1688,7 +1763,9 @@ if (require.main === module) {
       server.listen(PORT, '0.0.0.0', 65535, () => {
         console.log(`Server running on port ${PORT} with 65,535 TCP backlog and 100k max connections`);
         startHealthCheck();
-        ramCache.prewarmDatabaseToRAM(query);
+        setTimeout(() => {
+          ramCache.prewarmDatabaseToRAM(query).catch(e => console.warn('[RAM ENGINE] Non-fatal prewarm catch:', e.message));
+        }, 1500);
       });
     } catch (err) {
       console.error('Failed to start server:', err);

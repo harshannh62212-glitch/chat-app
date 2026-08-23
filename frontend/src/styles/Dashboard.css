@@ -1141,6 +1141,8 @@ body.theme-cyberpunk-neon {
 .admin-panel,
 .welcome-island {
   flex: 1;
+  height: 100%;
+  min-height: 0;
   background: var(--chat-bg) !important;
   border: 1px solid var(--sidebar-border) !important;
   border-radius: 8px !important;
@@ -1222,6 +1224,7 @@ body.theme-cyberpunk-neon {
   display: flex;
   flex: 1;
   overflow: hidden;
+  min-height: 0;
   padding: 12px !important;
   gap: 12px !important;
 }
@@ -1234,6 +1237,8 @@ body.theme-cyberpunk-neon {
   padding: 14px !important;
   display: flex;
   flex-direction: column;
+  overflow-y: auto !important;
+  min-height: 0;
 }
 
 .server-chat .chat-main {
@@ -1244,6 +1249,7 @@ body.theme-cyberpunk-neon {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
 }
 
 .server-chat .members-sidebar {
@@ -1252,6 +1258,8 @@ body.theme-cyberpunk-neon {
   border: 1px solid rgba(255, 255, 255, 0.05) !important;
   border-radius: 14px !important;
   padding: 14px !important;
+  overflow-y: auto !important;
+  min-height: 0;
 }
 
 /* Message list items structured with avatars next to usernames (Discord format) */

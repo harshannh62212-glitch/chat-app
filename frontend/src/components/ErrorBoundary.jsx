@@ -79,6 +79,8 @@ class ErrorBoundary extends React.Component {
               </button>
               <button
                 onClick={() => {
+                  localStorage.removeItem('chat_token');
+                  localStorage.removeItem('chat_user');
                   window.history.pushState({}, '', '/');
                   window.location.reload();
                 }}

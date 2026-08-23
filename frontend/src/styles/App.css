@@ -113,6 +113,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
 }
 
 /* Discord Floating Bottom Controls Bar */
@@ -553,11 +554,13 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .messages {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
   padding: 20px;
   display: flex;
   flex-direction: column;

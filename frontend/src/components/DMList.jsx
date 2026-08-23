@@ -9,7 +9,7 @@ function DMList({ onSelectDM, selectedDM, viewingFriends, onShowFriends }) {
 
   useEffect(() => {
     fetchConversations();
-    const interval = setInterval(fetchConversations, 1000);
+    const interval = setInterval(fetchConversations, 3500);
     return () => clearInterval(interval);
   }, []);
 

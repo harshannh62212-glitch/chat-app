@@ -71,7 +71,7 @@ function Dashboard({ user, setUser, onLogout, batteryInfo, onToggleToSpotify, on
       } catch(e) {}
     };
     fetchUnread();
-    const interval = setInterval(fetchUnread, 1000);
+    const interval = setInterval(fetchUnread, 4000);
     return () => clearInterval(interval);
   }, [user?.id]);
 

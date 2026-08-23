@@ -733,7 +733,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     };
 
     fetchMessages();
-    const interval = setInterval(fetchMessages, 1000);
+    const interval = setInterval(fetchMessages, 3000);
 
     // Join the server room — must wait for socket to be connected
     const joinRoom = () => {
@@ -1362,19 +1362,20 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                       </div>
 
                       {(() => {
-                        const content = msg.content || '';
+                        const rawContent = (msg.content || '').trim();
                         
                         // Single GIF / Image link
-                        if (typeof content === 'string' && (content.startsWith('http://') || content.startsWith('https://')) && !content.includes(' ')) {
-                          const isGif = content.includes('.gif') || content.includes('giphy.com') || content.includes('tenor.com');
-                          const isImage = /\.(png|jpg|jpeg|webp|svg)($|\?)/i.test(content);
+                        if (typeof rawContent === 'string' && (rawContent.startsWith('http://') || rawContent.startsWith('https://')) && !rawContent.includes(' ')) {
+                          const lowerContent = rawContent.toLowerCase();
+                          const isGif = lowerContent.includes('giphy') || lowerContent.includes('tenor') || /\.gif($|\?)/i.test(rawContent);
+                          const isImage = /\.(png|jpg|jpeg|webp|gif|svg)($|\?)/i.test(rawContent);
                           if (isGif || isImage) {
                             return (
                               <div style={{ marginTop: '6px' }}>
                                 <img 
-                                  src={content} 
+                                  src={rawContent} 
                                   className="message-gif" 
-                                  alt="Media" 
+                                  alt="GIF" 
                                   style={{ maxWidth: '320px', maxHeight: '240px', borderRadius: '8px', objectFit: 'contain' }}
                                   loading="lazy"
                                 />

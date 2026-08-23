@@ -39,7 +39,7 @@ cat <<EOT > server.properties
 enable-query=false
 prevent-proxy-connections=false
 server-port=25565
-online-mode=true
+online-mode=false
 pvp=true
 difficulty=easy
 max-players=20

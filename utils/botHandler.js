@@ -53,12 +53,15 @@ async function handleLocalBotResponse(io, serverId, chatroomId, content, senderI
     try {
       let localModel = 'llama3.2:1b';
       try {
-        const tagRes = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(1500) });
+        const tagRes = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(2000) });
         if (tagRes.ok) {
           const tagData = await tagRes.json();
           if (tagData && tagData.models && tagData.models.length > 0) {
-            const preferred = tagData.models.find(m => m.name.includes('llama')) ||
-                              tagData.models.find(m => m.name.includes('gemma')) ||
+            const preferred = tagData.models.find(m => m.name.includes('llama3.2:1b')) ||
+                              tagData.models.find(m => m.name.includes('llama3.2')) ||
+                              tagData.models.find(m => m.name.includes('gemma3')) ||
+                              tagData.models.find(m => m.name.includes('llama')) ||
+                              tagData.models.find(m => m.name.includes('qwen2.5-coder:7b')) ||
                               tagData.models.find(m => m.name.includes('qwen'));
             localModel = preferred ? preferred.name : tagData.models[0].name;
           }
@@ -70,14 +73,14 @@ async function handleLocalBotResponse(io, serverId, chatroomId, content, senderI
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: localModel,
-          prompt: `You are a helpful, friendly AI assistant for the wired-io chat platform. Respond concisely and helpfully to: ${promptText}`,
+          prompt: `You are a helpful, friendly AI assistant for the wired-io chat platform. Respond concisely and helpfully in 1-2 sentences to: ${promptText}`,
           stream: false,
           options: {
-            num_thread: 2,
-            num_predict: 120
+            temperature: 0.7,
+            num_predict: 80
           }
         }),
-        signal: AbortSignal.timeout(3000)
+        signal: AbortSignal.timeout(8000)
       });
       if (response.ok) {
         const json = await response.json();
@@ -87,12 +90,21 @@ async function handleLocalBotResponse(io, serverId, chatroomId, content, senderI
       }
     } catch (e) {}
 
-    // 2. Try Gemini API fallback (gemini-3.6-flash / gemini-3.5-flash-lite)
+    // 2. Try Gemini API fallback (gemini-3.1-flash-lite / gemini-3.6-flash)
     if (!botResponse) {
       const apiKey = process.env.GEMINI_API_KEY;
       if (apiKey) {
-        const geminiModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite'];
-        for (const model of geminiModels) {
+        const geminiModels = [
+          process.env.GEMINI_MODERATION_MODEL || 'gemma-4-26b-a4b-it',
+          'gemma-4-26b-a4b-it',
+          'gemini-3-flash-preview',
+          'gemini-3.5-flash-lite',
+          'gemini-3.6-flash',
+          'gemini-3.7-flash',
+          'gemini-3.1-flash-lite'
+        ];
+        const uniqueModels = [...new Set(geminiModels)];
+        for (const model of uniqueModels) {
           try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
               method: 'POST',
@@ -100,11 +112,13 @@ async function handleLocalBotResponse(io, serverId, chatroomId, content, senderI
               body: JSON.stringify({
                 contents: [{ parts: [{ text: `You are a helpful, friendly AI assistant inside the wired-io chat platform. Respond concisely to: ${promptText}` }] }]
               }),
-              signal: AbortSignal.timeout(4000)
+              signal: AbortSignal.timeout(5000)
             });
             if (response.ok) {
               const json = await response.json();
-              const text = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+              const parts = json.candidates?.[0]?.content?.parts || [];
+              const answerPart = parts.find(p => !p.thought) || parts[parts.length - 1];
+              const text = answerPart?.text?.trim();
               if (text) {
                 botResponse = text;
                 break;

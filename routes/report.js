@@ -6,7 +6,8 @@ const router = express.Router();
 
 // POST /report - user submits a bug/message report (with local AI evaluation)
 router.post('/report', authMiddleware, async (req, res) => {
-  const { description, screenshot_url } = req.body;
+  const description = req.body.description || req.body.reason || req.body.content;
+  const screenshot_url = req.body.screenshot_url || req.body.screenshotUrl;
   if (!description || !description.trim()) {
     return res.status(400).json({ error: 'Description is required' });
   }
@@ -67,6 +68,37 @@ router.patch('/admin/reports/:id', authMiddleware, adminCheck, async (req, res) 
   }
 });
 
+// Robust JSON extractor for LLM outputs
+function parseJsonFromLlm(rawText) {
+  if (!rawText || typeof rawText !== 'string') return null;
+  const trimmed = rawText.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch (e) {
+    const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (codeBlockMatch && codeBlockMatch[1]) {
+      try {
+        return JSON.parse(codeBlockMatch[1].trim());
+      } catch (e2) {}
+    }
+    const firstBrace = trimmed.indexOf('{');
+    const lastBrace = trimmed.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+      } catch (e3) {}
+    }
+    const firstBracket = trimmed.indexOf('[');
+    const lastBracket = trimmed.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+      try {
+        return JSON.parse(trimmed.slice(firstBracket, lastBracket + 1));
+      } catch (e4) {}
+    }
+  }
+  return null;
+}
+
 // AI Report Evaluator helper (Local Ollama llama3.2:3b with Gemini fallback)
 async function evaluateReport(description) {
   const prompt = `You are a professional software QA triage assistant. You are an expert at identifying high-quality bug reports.
@@ -82,22 +114,27 @@ User report: "${description.trim()}"
 Respond ONLY with this JSON structure:
 { "evaluation": "LEGITIMATE" | "VAGUE" | "SPAM" | "ABUSIVE" }`;
 
-  // 1. Try local Ollama with dynamic model lookup and generous 3.5s timeout
+  // 1. Try local Ollama with dynamic model lookup and generous timeout
   try {
-    let localModel = 'llama3.2:1b';
+    let localModel = 'qwen2.5-coder:7b';
     try {
-      const tagsRes = await fetch('http://127.0.0.1:11434/api/tags');
+      const tagsRes = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(2000) });
       if (tagsRes.ok) {
         const tagsData = await tagsRes.json();
         if (tagsData?.models?.length > 0) {
-          const pref = tagsData.models.find(m => m.name.includes('llama') || m.name.includes('gemma') || m.name.includes('qwen'));
+          const pref = tagsData.models.find(m => m.name.includes('llama3.2:1b')) ||
+                       tagsData.models.find(m => m.name.includes('llama3.2')) ||
+                       tagsData.models.find(m => m.name.includes('gemma3')) ||
+                       tagsData.models.find(m => m.name.includes('llama')) ||
+                       tagsData.models.find(m => m.name.includes('qwen2.5-coder:7b')) ||
+                       tagsData.models.find(m => m.name.includes('qwen'));
           localModel = pref ? pref.name : tagsData.models[0].name;
         }
       }
     } catch (e) {}
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     const response = await fetch('http://127.0.0.1:11434/api/generate', {
       method: 'POST',
@@ -107,7 +144,8 @@ Respond ONLY with this JSON structure:
         model: localModel,
         prompt: prompt,
         format: 'json',
-        stream: false
+        stream: false,
+        options: { temperature: 0.0 }
       })
     });
 
@@ -115,7 +153,7 @@ Respond ONLY with this JSON structure:
 
     if (response.ok) {
       const json = await response.json();
-      const parsed = JSON.parse(json.response.trim());
+      const parsed = parseJsonFromLlm(json.response);
       const ev = parsed?.evaluation?.toUpperCase();
       if (['LEGITIMATE', 'VAGUE', 'SPAM', 'ABUSIVE'].includes(ev)) {
         console.log(`[AI EVALUATION - OLLAMA] Local model (${localModel}) evaluated report: ${ev}`);
@@ -129,35 +167,45 @@ Respond ONLY with this JSON structure:
   // 2. Fallback to Gemini
   const apiKey = process.env.GEMINI_API_KEY;
   if (apiKey) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const geminiModels = [
+      process.env.GEMINI_MODERATION_MODEL || 'gemini-3.1-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-3.6-flash',
+      'gemini-3.7-flash',
+      'gemini-3.5-flash-lite'
+    ];
+    for (const model of [...new Set(geminiModels)]) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-      const model = process.env.GEMINI_MODERATION_MODEL || 'gemini-1.5-flash';
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json' }
-        })
-      });
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json' }
+          })
+        });
 
-      clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-      if (response.ok) {
-        const json = await response.json();
-        const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const parsed = JSON.parse(textResponse.trim());
-        const ev = parsed?.evaluation?.toUpperCase();
-        if (['LEGITIMATE', 'VAGUE', 'SPAM', 'ABUSIVE'].includes(ev)) {
-          console.log(`[AI EVALUATION - GEMINI] Gemini fallback evaluated report: ${ev}`);
-          return ev;
+        if (response.ok) {
+          const json = await response.json();
+          const parts = json.candidates?.[0]?.content?.parts || [];
+          const answerPart = parts.find(p => !p.thought) || parts[parts.length - 1];
+          const textResponse = answerPart?.text || '';
+          const parsed = parseJsonFromLlm(textResponse);
+          const ev = parsed?.evaluation?.toUpperCase();
+          if (['LEGITIMATE', 'VAGUE', 'SPAM', 'ABUSIVE'].includes(ev)) {
+            console.log(`[AI EVALUATION - GEMINI] Gemini (${model}) evaluated report: ${ev}`);
+            return ev;
+          }
         }
+      } catch (err) {
+        // Try next model
       }
-    } catch (err) {
-      console.error('[GEMINI] Fallback evaluation failed:', err.message);
     }
   }
 

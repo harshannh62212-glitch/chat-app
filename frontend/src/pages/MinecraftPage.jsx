@@ -225,11 +225,7 @@ function MinecraftPage({ user, onBack }) {
   const fetchBalance = async (usernameToFetch = '') => {
     setSearching(true);
     try {
-      const targetUser = usernameToFetch || user?.minecraft_username || user?.username;
-      if (!targetUser) {
-        setBalanceInfo({ balance: 0, loading: false, found: false, username: '' });
-        return;
-      }
+      const targetUser = usernameToFetch || user?.minecraft_username || user?.username || 'Player';
       setBalanceInfo({
         balance: 15450,
         loading: false,
@@ -265,10 +261,10 @@ function MinecraftPage({ user, onBack }) {
         });
       }
       setShowLinkInput(false);
-      showToast('Minecraft account successfully linked!', 'success');
+      showToast('Minecraft username updated!', 'success');
       fetchBalance(boundUsernameInput.trim());
     } catch (err) {
-      showToast(err.message || 'Failed to link account', 'error');
+      showToast(err.message || 'Failed to update username', 'error');
     } finally {
       setIsLinking(false);
     }
