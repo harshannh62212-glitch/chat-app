@@ -3,109 +3,58 @@ const { pool } = require('../../db/database');
 async function wipeTestUsers() {
   console.log('🧹 Starting comprehensive cleanup of test, audit, diagnostic, and simulation users...');
 
+  const sub = `
+    SELECT id FROM users
+    WHERE (
+          username ILIKE 'diag_%'
+       OR username ILIKE 'audit_%'
+       OR username ILIKE 'sim_%'
+       OR username ILIKE 'test_%'
+       OR username ILIKE 'tester_%'
+       OR username ILIKE 'testuser_%'
+       OR username ILIKE 'report_%'
+       OR username ILIKE 'suite_%'
+       OR username ILIKE 'route_%'
+       OR username ILIKE 'cf_test_%'
+       OR username ILIKE 'scan_%'
+       OR username ILIKE 'User_%'
+       OR username ILIKE 'Test%'
+       OR email ILIKE '%@example.com'
+       OR email ILIKE '%@test.local'
+       OR email ILIKE '%@chat.local'
+    )
+    AND username NOT IN ('system_test_runner', 'system_test_runner_2', 'system', 'Gemini AI Assistant', 'bot', 'ADMIN', 'rthrthrth', 'lol111', 'youtuber11')
+    AND id NOT IN ('gemini-bot-id', 'bot-id')
+  `;
+
   try {
     let loopCount = 0;
-    while (loopCount < 20) {
+    while (loopCount < 10) {
       loopCount++;
-      const selectQuery = `
-        SELECT id, username, email FROM users
-        WHERE (
-              username LIKE 'diag_%'
-           OR username LIKE 'audit_%'
-           OR username LIKE 'sim_%'
-           OR username LIKE 'test_%'
-           OR username LIKE 'tester_%'
-           OR username LIKE 'testuser_%'
-           OR username LIKE 'suite_user_%'
-           OR username LIKE 'route_%'
-           OR username LIKE 'cf_test_%'
-           OR username LIKE 'scan_test_%'
-           OR username LIKE 'User_%'
-           OR email LIKE '%@example.com'
-           OR email LIKE '%@test.local'
-           OR email LIKE '%@chat.local'
-        )
-        AND username != 'system_test_runner'
-        AND username != 'system'
-        AND id != 'gemini-bot-id'
-        AND id != 'bot-id';
-      `;
 
-      const res = await pool.query(selectQuery);
-      const testUsers = res.rows;
-      if (testUsers.length === 0) {
+      // 1. Reassign any server owned by test users to system user to break FK constraint
+      await pool.query(`UPDATE servers SET owner_id = '00000000-0000-0000-0000-000000000000' WHERE owner_id IN (${sub})`);
+
+      // 2. Delete test user activity across child tables
+      await pool.query(`DELETE FROM server_messages WHERE sender_id IN (${sub})`);
+      await pool.query(`DELETE FROM direct_messages WHERE sender_id IN (${sub}) OR recipient_id IN (${sub})`);
+      await pool.query(`DELETE FROM friendships WHERE user_id IN (${sub}) OR friend_id IN (${sub})`);
+      await pool.query(`DELETE FROM server_member_roles WHERE user_id IN (${sub})`);
+      await pool.query(`DELETE FROM server_members WHERE user_id IN (${sub})`);
+      await pool.query(`DELETE FROM reports WHERE user_id IN (${sub})`);
+      await pool.query(`DELETE FROM bans WHERE user_id IN (${sub})`);
+
+      // 3. Delete target test users
+      const deleteRes = await pool.query(`DELETE FROM users WHERE id IN (${sub})`);
+      console.log(`✅ Loop ${loopCount}: Wiped ${deleteRes.rowCount} test users.`);
+
+      if (deleteRes.rowCount === 0) {
         console.log('✅ No remaining test users found.');
         break;
       }
-      console.log(`🔍 Loop ${loopCount}: Found ${testUsers.length} test/non-human user accounts to purge.`);
-
-      const testUserIds = testUsers.map(u => u.id);
-
-      // Find servers owned by test users AND servers where test users are members
-      const testServersRes = await pool.query(`SELECT id FROM servers WHERE owner_id = ANY($1::varchar[])`, [testUserIds]);
-      const testServerIds = testServersRes.rows.map(s => s.id);
-      if (testServerIds.length > 0) {
-        try {
-          await pool.query(`DELETE FROM server_messages WHERE chatroom_id IN (SELECT id FROM chatrooms WHERE server_id = ANY($1::int[]))`, [testServerIds]);
-          await pool.query(`DELETE FROM chatrooms WHERE server_id = ANY($1::int[])`, [testServerIds]);
-          await pool.query(`DELETE FROM server_member_roles WHERE server_id = ANY($1::int[])`, [testServerIds]);
-          await pool.query(`DELETE FROM server_members WHERE server_id = ANY($1::int[])`, [testServerIds]);
-          await pool.query(`DELETE FROM server_roles WHERE server_id = ANY($1::int[])`, [testServerIds]);
-          await pool.query(`DELETE FROM bans WHERE server_id = ANY($1::int[])`, [testServerIds]);
-          await pool.query(`DELETE FROM servers WHERE id = ANY($1::int[])`, [testServerIds]);
-          console.log(`✅ Deleted ${testServerIds.length} test servers.`);
-        } catch (sErr) {
-          console.error(`⚠️ Server deletion error: ${sErr.message}`);
-        }
-      }
-
-      await pool.query(`DELETE FROM server_messages WHERE sender_id = ANY($1::varchar[])`, [testUserIds]);
-      await pool.query(`DELETE FROM direct_messages WHERE sender_id = ANY($1::varchar[]) OR recipient_id = ANY($1::varchar[])`, [testUserIds]);
-      await pool.query(`DELETE FROM friendships WHERE user_id = ANY($1::varchar[]) OR friend_id = ANY($1::varchar[])`, [testUserIds]);
-      await pool.query(`DELETE FROM server_member_roles WHERE user_id = ANY($1::varchar[])`, [testUserIds]);
-      await pool.query(`DELETE FROM server_members WHERE user_id = ANY($1::varchar[])`, [testUserIds]);
-      await pool.query(`DELETE FROM reports WHERE user_id = ANY($1::varchar[])`, [testUserIds]);
-      await pool.query(`DELETE FROM bans WHERE user_id = ANY($1::varchar[])`, [testUserIds]);
-      
-      try { await pool.query(`DELETE FROM user_blocks WHERE user_id = ANY($1::varchar[]) OR blocked_user_id = ANY($1::varchar[])`, [testUserIds]); } catch (e) {}
-      try { await pool.query(`DELETE FROM spotify_history WHERE user_id = ANY($1::varchar[])`, [testUserIds]); } catch (e) {}
-      try { await pool.query(`DELETE FROM spotify_liked_tracks WHERE user_id = ANY($1::varchar[])`, [testUserIds]); } catch (e) {}
-      try { await pool.query(`DELETE FROM spotify_playlists WHERE user_id = ANY($1::varchar[])`, [testUserIds]); } catch (e) {}
-
-      try {
-        const deleteRes = await pool.query(`DELETE FROM users WHERE id = ANY($1::varchar[])`, [testUserIds]);
-        console.log(`✅ Loop ${loopCount}: Wiped ${deleteRes.rowCount} test users.`);
-      } catch (uErr) {
-        console.error(`⚠️ User deletion error on loop ${loopCount}: ${uErr.message}`);
-        // Fallback: Delete individually
-        for (const user of testUsers) {
-          try {
-            const sRes = await pool.query(`SELECT id FROM servers WHERE owner_id = $1`, [user.id]);
-            for (const sRow of sRes.rows) {
-              await pool.query(`DELETE FROM server_messages WHERE chatroom_id IN (SELECT id FROM chatrooms WHERE server_id = $1)`, [sRow.id]);
-              await pool.query(`DELETE FROM chatrooms WHERE server_id = $1`, [sRow.id]);
-              await pool.query(`DELETE FROM server_member_roles WHERE server_id = $1`, [sRow.id]);
-              await pool.query(`DELETE FROM server_members WHERE server_id = $1`, [sRow.id]);
-              await pool.query(`DELETE FROM server_roles WHERE server_id = $1`, [sRow.id]);
-              await pool.query(`DELETE FROM bans WHERE server_id = $1`, [sRow.id]);
-              await pool.query(`DELETE FROM servers WHERE id = $1`, [sRow.id]);
-            }
-            await pool.query(`DELETE FROM server_messages WHERE sender_id = $1`, [user.id]);
-            await pool.query(`DELETE FROM direct_messages WHERE sender_id = $1 OR recipient_id = $1`, [user.id]);
-            await pool.query(`DELETE FROM friendships WHERE user_id = $1 OR friend_id = $1`, [user.id]);
-            await pool.query(`DELETE FROM server_member_roles WHERE user_id = $1`, [user.id]);
-            await pool.query(`DELETE FROM server_members WHERE user_id = $1`, [user.id]);
-            await pool.query(`DELETE FROM reports WHERE user_id = $1`, [user.id]);
-            await pool.query(`DELETE FROM bans WHERE user_id = $1`, [user.id]);
-            await pool.query(`DELETE FROM users WHERE id = $1`, [user.id]);
-          } catch (indErr) {
-            console.error(`Failed to delete user ${user.username} (${user.id}): ${indErr.message}`);
-          }
-        }
-      }
     }
 
-    // Ensure single persistent test account exists
+    // Ensure persistent test runner accounts exist
     const bcrypt = require('bcryptjs');
     const hashedPassword = await bcrypt.hash('TestPassword123!', 10);
     await pool.query(`
@@ -113,10 +62,15 @@ async function wipeTestUsers() {
       VALUES ('system_test_runner', 'system_test_runner@local.test', $1)
       ON CONFLICT (username) DO NOTHING;
     `, [hashedPassword]);
-    console.log('✅ Standardized persistent test account "system_test_runner" ensured.');
+    await pool.query(`
+      INSERT INTO users (username, email, password)
+      VALUES ('system_test_runner_2', 'system_test_runner_2@local.test', $1)
+      ON CONFLICT (username) DO NOTHING;
+    `, [hashedPassword]);
+    console.log('✅ Standardized persistent test accounts "system_test_runner" and "system_test_runner_2" ensured.');
 
   } catch (err) {
-    console.error('❌ Error during test user cleanup:', err);
+    console.error('❌ Error during test user cleanup:', err.message);
   } finally {
     await pool.end();
   }

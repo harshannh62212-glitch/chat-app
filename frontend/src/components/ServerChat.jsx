@@ -755,9 +755,13 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
         });
       }
 
-      const isMatch = String(msgData.serverId) === String(server.id) || 
-                      String(msgData.chatroom_id) === String(selectedChatroom?.id) ||
-                      (isGeneralServer && (String(msgData.chatroom_id) === '1' || String(msgData.serverId) === '1' || selectedChatroom?.is_general));
+      const currentServerMatch = String(msgData.serverId || msgData.server_id) === String(server.id);
+      const targetRoomId = selectedChatroom?.id;
+      const roomMatch = Boolean(targetRoomId && (
+        String(msgData.chatroom_id) === String(targetRoomId) ||
+        (isGeneralServer && selectedChatroom?.is_general && (msgData.is_general || String(msgData.chatroom_id) === '1'))
+      ));
+      const isMatch = currentServerMatch && roomMatch;
 
       if (isMatch) {
         setMessages(prev => {
