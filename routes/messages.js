@@ -387,9 +387,11 @@ router.post('/ai/chat', authMiddleware, async (req, res) => {
 
     let botResponse = '';
 
-    // 1. Query Gemini API
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
+    // 1. Query Gemini API with Multi-Key Rotation and Fallback
+    const rawKeys = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '';
+    const apiKeys = rawKeys.split(',').map(k => k.trim()).filter(Boolean);
+
+    if (apiKeys.length > 0) {
       const geminiModels = [
         process.env.GEMINI_MODERATION_MODEL || 'gemma-4-26b-a4b-it',
         'gemma-4-26b-a4b-it',
@@ -400,27 +402,30 @@ router.post('/ai/chat', authMiddleware, async (req, res) => {
         'gemini-3.1-flash-lite'
       ];
       const uniqueModels = [...new Set(geminiModels)];
-      for (const m of uniqueModels) {
-        try {
-          const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: `You are ChatGPT / Wired AI, a smart, helpful, friendly 1-on-1 AI assistant. Respond in clear markdown format. User query: ${prompt}` }] }]
-            }),
-            signal: AbortSignal.timeout(6000)
-          });
-          if (apiRes.ok) {
-            const json = await apiRes.json();
-            const parts = json.candidates?.[0]?.content?.parts || [];
-            const answerPart = parts.find(p => !p.thought) || parts[parts.length - 1];
-            const text = answerPart?.text?.trim();
-            if (text) {
-              botResponse = text;
-              break;
+
+      keyLoop: for (const key of apiKeys) {
+        for (const m of uniqueModels) {
+          try {
+            const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: `You are ChatGPT / Wired AI, a smart, helpful, friendly 1-on-1 AI assistant. Respond in clear markdown format. User query: ${prompt}` }] }]
+              }),
+              signal: AbortSignal.timeout(6000)
+            });
+            if (apiRes.ok) {
+              const json = await apiRes.json();
+              const parts = json.candidates?.[0]?.content?.parts || [];
+              const answerPart = parts.find(p => !p.thought) || parts[parts.length - 1];
+              const text = answerPart?.text?.trim();
+              if (text) {
+                botResponse = text;
+                break keyLoop;
+              }
             }
-          }
-        } catch (e) {}
+          } catch (e) {}
+        }
       }
     }
 
