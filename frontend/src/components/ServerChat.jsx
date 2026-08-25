@@ -1398,8 +1398,8 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
                         // Parse URLs and text
                         const urlRegex = /(https?:\/\/[^\s]+)/gi;
-                        const parts = content.split(urlRegex);
-                        const ytMatch = content.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([a-zA-Z0-9_-]{11})/i);
+                        const parts = rawContent.split(urlRegex);
+                        const ytMatch = rawContent.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([a-zA-Z0-9_-]{11})/i);
                         const ytId = ytMatch ? ytMatch[1] : null;
 
                         return (
