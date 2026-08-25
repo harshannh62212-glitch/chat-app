@@ -1,23 +1,21 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/resolve-tunnel",
-      "destination": "/api/resolve-tunnel"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "https://springfield-definition-bin-configurations.trycloudflare.com/api/$1"
-    },
-    {
-      "source": "/socket.io/(.*)",
-      "destination": "https://springfield-definition-bin-configurations.trycloudflare.com/socket.io/$1"
+      "source": "/api/:path*",
+      "destination": "https://chat-app-backend-render.onrender.com/api/:path*"
     },
     {
       "source": "/ping",
-      "destination": "https://springfield-definition-bin-configurations.trycloudflare.com/ping"
+      "destination": "https://chat-app-backend-render.onrender.com/ping"
     },
     {
-      "source": "/(.*)",
+      "source": "/socket.io/:path*",
+      "destination": "https://chat-app-backend-render.onrender.com/socket.io/:path*"
+    },
+    {
+      "source": "/((?!assets/|favicon.png).*)",
       "destination": "/index.html"
     }
   ]
