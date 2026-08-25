@@ -1534,27 +1534,36 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
                 onClose={() => setShowGiphy(false)}
               />
             )}
-            <div className="message-input">
+            <div className="chatgpt-prompt-pills" style={{ display: 'flex', gap: '8px', padding: '0 12px 8px 12px', overflowX: 'auto', justifyContent: 'center' }}>
+              <button type="button" className="prompt-pill" onClick={() => setMessageInput('@bot explain ')} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#a4b0be', borderRadius: '16px', padding: '4px 12px', fontSize: '0.8em', cursor: 'pointer' }}>💡 Explain Code</button>
+              <button type="button" className="prompt-pill" onClick={() => setMessageInput('@bot summarize ')} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#a4b0be', borderRadius: '16px', padding: '4px 12px', fontSize: '0.8em', cursor: 'pointer' }}>📝 Summarize</button>
+              <button type="button" className="prompt-pill" onClick={() => setMessageInput('@bot create image of ')} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#a4b0be', borderRadius: '16px', padding: '4px 12px', fontSize: '0.8em', cursor: 'pointer' }}>🎨 Create Image</button>
+              <button type="button" className="prompt-pill" onClick={() => setMessageInput('@bot ')} style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: '16px', padding: '4px 12px', fontSize: '0.8em', cursor: 'pointer', fontWeight: 600 }}>✨ Ask @bot</button>
+            </div>
+            <div className="message-input" style={{ borderRadius: '24px', background: '#212121', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 10px 30px rgba(0,0,0,0.4)', padding: '6px 12px' }}>
               <button 
                 type="button" 
                 className="giphy-toggle-btn"
                 onClick={() => setShowGiphy(!showGiphy)}
                 disabled={!selectedChatroom && !isGeneralServer}
                 title="Send a GIF"
+                style={{ background: 'transparent', border: 'none', color: '#a4b0be', fontWeight: 'bold', cursor: 'pointer' }}
               >
                 GIF
               </button>
               <input
                 id="message-input-textarea"
                 type="text"
-                placeholder={selectedChatroom?.name ? `Message #${selectedChatroom.name}...` : isGeneralServer ? 'Message #general...' : 'Type a message...'}
+                placeholder={selectedChatroom?.name ? `Message #${selectedChatroom.name} or type @bot to ask AI...` : isGeneralServer ? 'Message #general or type @bot to ask AI...' : 'Ask ChatGPT / Gemini or message...'}
                 value={messageInput}
                 onChange={handleInputChange}
                 disabled={!selectedChatroom && !isGeneralServer && chatrooms.length === 0}
                 autoFocus
+                style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '0.95em', padding: '10px 8px', outline: 'none' }}
               />
-              <button type="submit" disabled={!selectedChatroom && !isGeneralServer && chatrooms.length === 0}>Send</button>
+              <button type="submit" disabled={!selectedChatroom && !isGeneralServer && chatrooms.length === 0} style={{ borderRadius: '50%', width: '36px', height: '36px', background: '#6366f1', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⬆</button>
             </div>
+            <div style={{ textAlign: 'center', marginTop: '6px', fontSize: '0.75em', color: '#64748b' }}>Wired AI may produce inaccurate info. Powered by Gemini AI & Supabase PostgreSQL.</div>
           </form>
         </div>
 
