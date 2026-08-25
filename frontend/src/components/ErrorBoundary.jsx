@@ -57,9 +57,27 @@ class ErrorBoundary extends React.Component {
             <h2 style={{ fontSize: '1.6em', margin: '0 0 8px 0', color: '#00ffff' }}>
               {this.props.title || 'Component Recovered'}
             </h2>
-            <p style={{ color: '#a4b0be', fontSize: '0.95em', margin: '0 0 24px 0', lineHeight: 1.5 }}>
+            <p style={{ color: '#a4b0be', fontSize: '0.95em', margin: '0 0 16px 0', lineHeight: 1.5 }}>
               A rendering glitch was safely prevented from crashing your workspace. Your session and messages remain secure.
             </p>
+            {this.state.error && (
+              <div style={{
+                background: 'rgba(255, 71, 87, 0.1)',
+                border: '1px solid rgba(255, 71, 87, 0.3)',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '20px',
+                textAlign: 'left',
+                fontSize: '0.85em',
+                color: '#ff6b81',
+                fontFamily: 'monospace',
+                wordBreak: 'break-word',
+                maxHeight: '120px',
+                overflowY: 'auto'
+              }}>
+                <strong>Error:</strong> {this.state.error.toString()}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button
                 onClick={this.handleReset}

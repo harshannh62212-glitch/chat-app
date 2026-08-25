@@ -367,7 +367,7 @@ function App() {
                   <div style={{ textAlign: 'center' }}>
                     <span style={{ fontSize: '3em' }}>🛡️</span>
                     <h2 style={{ fontSize: '1.8em', margin: '10px 0 5px 0', fontWeight: '800' }}>Admin Gateway</h2>
-                    <p style={{ color: '#a4b0be', fontSize: '0.9em', margin: 0 }}>Authenticated Admin: <strong>@{currentUser.username}</strong></p>
+                    <p style={{ color: '#a4b0be', fontSize: '0.9em', margin: 0 }}>Authenticated Admin: <strong>@{currentUser?.username || 'Admin'}</strong></p>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <input 
