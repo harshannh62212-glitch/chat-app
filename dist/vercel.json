@@ -3,19 +3,19 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "/api/index.js"
+      "source": "/api/(.*)",
+      "destination": "https://chat-app-hqji.onrender.com/api/$1"
     },
     {
       "source": "/ping",
-      "destination": "/api/index.js"
+      "destination": "https://chat-app-hqji.onrender.com/ping"
     },
     {
-      "source": "/socket.io/:path*",
-      "destination": "https://chat-app-hqji.onrender.com/socket.io/:path*"
+      "source": "/socket.io/(.*)",
+      "destination": "https://chat-app-hqji.onrender.com/socket.io/$1"
     },
     {
-      "source": "/((?!assets/|favicon.png).*)",
+      "source": "/((?!api|socket.io|assets|favicon.png).*)",
       "destination": "/index.html"
     }
   ]
