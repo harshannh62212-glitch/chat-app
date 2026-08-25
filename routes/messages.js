@@ -27,18 +27,20 @@ router.get('/chatroom/:chatroomId', authMiddleware, async (req, res) => {
     const offset = parseInt(req.query.offset) || 0;
 
     const result = await query(
-      `SELECT sm.id, sm.content, sm.created_at, sm.reactions, u.id as sender_id, u.username, u.avatar_url,
+      `SELECT sm.id, sm.content, sm.created_at, sm.reactions, sm.sender_id,
+        COALESCE(u.username, CASE WHEN sm.sender_id = 'gemini-bot-id' THEN 'Gemini AI Assistant' ELSE 'Member' END) as username,
+        COALESCE(u.avatar_url, CASE WHEN sm.sender_id = 'gemini-bot-id' THEN 'https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/google-gemini-icon.png' ELSE '' END) as avatar_url,
         (
           SELECT json_build_object('name', sr.name, 'color', sr.color)
           FROM server_member_roles smr
           JOIN server_roles sr ON smr.role_id = sr.id
           JOIN chatrooms c ON c.id = sm.chatroom_id
-          WHERE smr.server_id = c.server_id AND smr.user_id = u.id
+          WHERE smr.server_id = c.server_id AND smr.user_id = sm.sender_id
           ORDER BY sr.position DESC, sr.id ASC
           LIMIT 1
         ) as sender_role
        FROM server_messages sm
-       INNER JOIN users u ON sm.sender_id = u.id
+       LEFT JOIN users u ON sm.sender_id = u.id
        WHERE sm.chatroom_id = $1
        ORDER BY sm.created_at DESC
        LIMIT $2 OFFSET $3`,

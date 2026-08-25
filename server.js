@@ -11,7 +11,7 @@ const path = require('path');
 const fs = require('fs');
 const { initDB, query } = require('./db/database');
 
-const useClustering = process.env.NODE_ENV === 'production' && !process.env.VERCEL && require.main === module;
+const useClustering = process.env.USE_CLUSTERING === 'true' && !process.env.VERCEL && require.main === module;
 
 if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
   console.log(`[CLUSTER] Master ${process.pid} is running. Spawning ${numCPUs} workers...`);
