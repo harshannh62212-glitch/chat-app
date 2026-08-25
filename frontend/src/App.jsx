@@ -39,7 +39,7 @@ function App() {
   const [showThermals, setShowThermals] = useState(window.location.pathname === '/thermals');
   const [showModeration, setShowModeration] = useState(window.location.pathname === '/moderation');
   const [showMinecraft, setShowMinecraft] = useState(window.location.pathname === '/mc');
-  const [loadingApp, setLoadingApp] = useState(true);
+  const [loadingApp, setLoadingApp] = useState(false);
   const [moderationPassword, setModerationPassword] = useState('');
   const [moderationUnlocked, setModerationUnlocked] = useState(false);
   const [passwordError, setPasswordError] = useState('');

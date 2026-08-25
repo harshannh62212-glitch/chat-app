@@ -13,8 +13,7 @@ import '../styles/ServerSettings.css';
 const getActiveSocketUrl = () => {
   const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
   if (isLocal) return import.meta.env.VITE_PROXY_TARGET || 'http://localhost:8000';
-  // In production (Vercel), use current origin — Vercel proxies /socket.io/* to Render
-  return window.location.origin;
+  return import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-hqji.onrender.com';
 };
 
 // Lazy socket — created with autoConnect:false, connected on first component mount
