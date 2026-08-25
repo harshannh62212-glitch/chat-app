@@ -20,7 +20,7 @@ localStorage.removeItem('active_home_target');
 // In production (Vercel), use native same-origin API routes
 axios.defaults.baseURL = import.meta.env.PROD ? '' : (import.meta.env.VITE_PROXY_TARGET || 'http://localhost:8000');
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
-axios.defaults.timeout = 10000;
+axios.defaults.timeout = 45000;
 
 import ThermalsPage from './pages/ThermalsPage';
 import AdminPanel from './components/AdminPanel';
@@ -75,36 +75,26 @@ function App() {
   }, [showModeration]);
 
   const [serverSleeping, setServerSleeping] = useState(false);
-  const [batteryInfo, setBatteryInfo] = useState(null);
-
   useEffect(() => {
     if (!tunnelResolved) return;
-
     const checkSystemStatus = async () => {
       try {
-        const res = await axios.get('/api/system/status');
-        if (res.data) {
-          if (res.data.status === 'sleeping') {
-            setServerSleeping(true);
-            localStorage.setItem('server_sleeping', 'true');
-          } else {
-            setServerSleeping(false);
-            localStorage.setItem('server_sleeping', 'false');
-          }
-          if (res.data.battery) {
-            setBatteryInfo(res.data.battery);
-          }
+        const res = await axios.get('/api/health', { timeout: 5000 });
+        if (res.data?.status === 'ok') {
+          setServerSleeping(false);
         }
       } catch (err) {
-        if (localStorage.getItem('server_sleeping') === 'true') {
+        if (err.code === 'ECONNABORTED' || err.message?.includes('timeout') || err.response?.status === 503) {
           setServerSleeping(true);
         }
       }
     };
     checkSystemStatus();
-    const interval = setInterval(checkSystemStatus, 10000);
+    const interval = setInterval(checkSystemStatus, 15000);
     return () => clearInterval(interval);
   }, [tunnelResolved]);
+
+  const [batteryInfo, setBatteryInfo] = useState(null);
 
   useEffect(() => {
     const resolveBestBackend = async () => {
@@ -128,106 +118,10 @@ function App() {
         return;
       }
 
-      // Fast health check helper with CORS-safe fallback
-      const checkNodeHealth = async (url) => {
-        if (!url || !url.startsWith('http')) return false;
-        try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 3000);
-          try {
-            const res = await fetch(`${url}/ping`, {
-              signal: controller.signal,
-              mode: 'cors',
-              headers: { 'bypass-tunnel-reminder': 'true' }
-            });
-            clearTimeout(timeout);
-            return res.ok;
-          } catch {
-            // CORS may block the response but the server may still be alive
-            // Try no-cors as a last resort (opaque response = server exists)
-            try {
-              const res2 = await fetch(`${url}/ping`, {
-                signal: controller.signal,
-                mode: 'no-cors'
-              });
-              clearTimeout(timeout);
-              return res2.type === 'opaque';
-            } catch {
-              clearTimeout(timeout);
-              return false;
-            }
-          }
-        } catch {
-          return false;
-        }
-      };
-
-      // 1. Check Cloudflare Tunnel from Supabase
-      let homeTunnel = '';
-      let homeTunnelHealthy = false;
-      try {
-        let supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aebntdjjniirnwthtwlx.supabase.co';
-        if (!supabaseUrl || !supabaseUrl.includes('supabase.co')) {
-          supabaseUrl = 'https://aebntdjjniirnwthtwlx.supabase.co';
-        }
-        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlYm50ZGpqbmlpcm53dGh0d2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzIwNTYsImV4cCI6MjA5ODQ0ODA1Nn0.la5aH5b2Tb5cj5yfVEWHhPKU4_ieCWydEPWH8V81eIg';
-        const res = await fetch(`${supabaseUrl}/rest/v1/system_config?key=eq.active_tunnel_url`, {
-          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data[0]?.value) {
-            homeTunnel = data[0].value;
-          }
-        }
-      } catch (e) {
-        console.warn('[LOAD BALANCER] Supabase lookup failed:', e.message);
-      }
-
-      // 2. Check local tunnel.json fallback
-      if (!homeTunnel) {
-        try {
-          const tRes = await fetch('/tunnel.json');
-          if (tRes.ok) {
-            const tData = await tRes.json();
-            if (tData?.url) homeTunnel = tData.url;
-          }
-        } catch (e) {}
-      }
-
-      // 3. Health-check the tunnel
-      if (homeTunnel) {
-        homeTunnelHealthy = await checkNodeHealth(homeTunnel);
-        if (homeTunnelHealthy) {
-          console.log('[LOAD BALANCER] Primary Node Active: Connected to Tunnel Backend:', homeTunnel);
-          axios.defaults.baseURL = homeTunnel;
-          localStorage.setItem('active_backend_target', homeTunnel);
-          setTunnelResolved(true);
-          setLoadingApp(false);
-          return;
-        } else {
-          console.warn('[LOAD BALANCER] Tunnel URL is stale/offline:', homeTunnel);
-        }
-      }
-
-      // 4. Check Render Cloud Backend
+      // Fully Cloud Backend (Render / Cloud production)
       const renderCloudUrl = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
-      const renderHealthy = await checkNodeHealth(renderCloudUrl);
-      if (renderHealthy) {
-        console.log('[LOAD BALANCER] Connected to Render Cloud:', renderCloudUrl);
-        axios.defaults.baseURL = renderCloudUrl;
-        localStorage.setItem('active_backend_target', renderCloudUrl);
-        setTunnelResolved(true);
-        setLoadingApp(false);
-        return;
-      }
-
-      // 5. ALL backends offline — use whichever we have as best-effort, preferring Render over dead tunnel
-      // NEVER use a URL that failed DNS (ERR_NAME_NOT_RESOLVED)
-      const bestEffort = renderCloudUrl; // Render at least has a valid DNS entry even when suspended
-      console.warn('[LOAD BALANCER] All backends offline. Best-effort target:', bestEffort);
-      axios.defaults.baseURL = bestEffort;
-      localStorage.setItem('active_backend_target', bestEffort);
+      axios.defaults.baseURL = renderCloudUrl;
+      localStorage.setItem('active_backend_target', renderCloudUrl);
       setTunnelResolved(true);
       setLoadingApp(false);
     };
