@@ -740,7 +740,9 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
     // Join the server room — must wait for socket to be connected
     const joinRoom = () => {
-      socket.emit('user-joined', currentUser.id, server.id);
+      if (currentUser?.id && server?.id) {
+        socket.emit('user-joined', currentUser.id, server.id);
+      }
     };
 
     if (socket.connected) {
@@ -750,15 +752,16 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     socket.on('connect', joinRoom);
 
     const handleNewMessage = (msgData) => {
-      const isSelf = msgData.senderId === currentUser.id || msgData.sender_id === currentUser.id;
+      if (!msgData) return;
+      const isSelf = Boolean(currentUser?.id && (msgData.senderId === currentUser.id || msgData.sender_id === currentUser.id));
       if (!isSelf && document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') {
-        new Notification(`New message in #${server.name}`, {
+        new Notification(`New message in #${server?.name || 'General'}`, {
           body: `${msgData.username || 'Someone'}: ${msgData.content}`,
           icon: msgData.avatar_url || ''
         });
       }
 
-      const currentServerMatch = String(msgData.serverId || msgData.server_id) === String(server.id);
+      const currentServerMatch = String(msgData.serverId || msgData.server_id) === String(server?.id);
       const targetRoomId = selectedChatroom?.id;
       const roomMatch = Boolean(targetRoomId && (
         String(msgData.chatroom_id) === String(targetRoomId) ||
@@ -768,9 +771,10 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
       if (isMatch) {
         setMessages(prev => {
-          if (prev.some(m => String(m.id) === String(msgData.id))) return prev;
-          if (isSelf && prev.some(m => m.isOptimistic && m.content === msgData.content)) {
-            return prev.map(m => (m.isOptimistic && m.content === msgData.content) ? { ...m, id: msgData.id, isOptimistic: false } : m);
+          if (!Array.isArray(prev)) return [msgData];
+          if (prev.some(m => m && String(m.id) === String(msgData.id))) return prev;
+          if (isSelf && prev.some(m => m && m.isOptimistic && m.content === msgData.content)) {
+            return prev.map(m => (m && m.isOptimistic && m.content === msgData.content) ? { ...m, id: msgData.id, isOptimistic: false } : m);
           }
           return [...prev, msgData];
         });
@@ -778,12 +782,13 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     };
 
     const handleMessageDeleted = (data) => {
-      setMessages(prev => prev.filter(m => m.id.toString() !== data.id.toString()));
+      if (!data?.id) return;
+      setMessages(prev => (Array.isArray(prev) ? prev.filter(m => m && m.id && m.id.toString() !== data.id.toString()) : []));
     };
 
     const handleReactionUpdated = (data) => {
-      if (data.type === 'server') {
-        setMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, reactions: data.reactions } : m));
+      if (data?.type === 'server' && data.messageId) {
+        setMessages(prev => (Array.isArray(prev) ? prev.map(m => (m && m.id === data.messageId) ? { ...m, reactions: data.reactions } : m) : []));
       }
     };
 
@@ -797,11 +802,11 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       socket.off('new-message', handleNewMessage);
       socket.off('message-deleted', handleMessageDeleted);
       socket.off('reaction-updated', handleReactionUpdated);
-      if (currentUser) {
+      if (currentUser?.id && server?.id) {
         socket.emit('user-left', currentUser.id, server.id);
       }
     };
-  }, [selectedChatroom, server.id, currentUser, isGeneralServer]);
+  }, [selectedChatroom, server?.id, currentUser, isGeneralServer]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1280,7 +1285,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
               <p className="no-messages">No messages yet. Be the first to say hello!</p>
             ) : (
               messages.map((msg) => {
-                const isMentioned = msg.content && msg.content.toLowerCase().includes('@' + currentUser.username.toLowerCase());
+                const isMentioned = Boolean(msg.content && currentUser?.username && msg.content.toLowerCase().includes('@' + currentUser.username.toLowerCase()));
                 const senderRole = msg.sender_role;
                 const senderColor = senderRole?.color || '#ffffff';
 

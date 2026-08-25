@@ -464,26 +464,26 @@ function DirectMessage({ dmWith, currentUser, onOpenSettings, onBack }) {
           <div style={{ textAlign: 'center', padding: '20px', color: '#949ba4' }}>Loading messages...</div>
         ) : (
           messages.map(msg => {
-            const isSelf = msg.senderId === currentUser.id || msg.sender_id === currentUser.id;
+            const isSelf = Boolean(currentUser?.id && (msg.senderId === currentUser.id || msg.sender_id === currentUser.id));
             return (
               <div key={msg.id || msg.tempId} className={`discord-msg-row ${msg.isOptimistic ? 'optimistic-message' : ''}`}>
                 <div className="discord-msg-avatar">
                   {isSelf ? (
-                    currentUser.avatar_url ? (
-                      <img src={currentUser.avatar_url} alt={currentUser.username} />
+                    currentUser?.avatar_url ? (
+                      <img src={currentUser.avatar_url} alt={currentUser.username || 'You'} />
                     ) : (
-                      currentUser.username.substring(0, 2).toUpperCase()
+                      (currentUser?.username || 'You').substring(0, 2).toUpperCase()
                     )
-                  ) : dmWith.avatar_url ? (
+                  ) : dmWith?.avatar_url ? (
                     <img src={dmWith.avatar_url} alt={dmUsername} />
                   ) : (
-                    dmUsername.substring(0, 2).toUpperCase()
+                    (dmUsername || '?').substring(0, 2).toUpperCase()
                   )}
                 </div>
                 <div className="discord-msg-body">
                   <div className="discord-msg-meta">
                     <span className={`discord-author-name ${isSelf ? 'self' : ''}`}>
-                      {isSelf ? currentUser.username : dmUsername}
+                      {isSelf ? (currentUser?.username || 'You') : dmUsername}
                     </span>
                     <span className="discord-msg-time">
                       {formatTimestamp(msg.created_at)}
