@@ -881,7 +881,7 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
       return;
     }
 
-    if (!checkRateLimit(currentUser.is_admin)) {
+    if (!checkRateLimit(currentUser?.is_admin)) {
       alert('Slow down! You can only send 1 message per second.');
       return;
     }
@@ -899,12 +899,12 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     const tempId = `opt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const optimisticMsg = {
       id: tempId,
-      senderId: currentUser.id,
-      sender_id: currentUser.id,
-      username: currentUser.username,
-      avatar_url: currentUser.avatar_url,
+      senderId: currentUser?.id,
+      sender_id: currentUser?.id,
+      username: currentUser?.username || 'You',
+      avatar_url: currentUser?.avatar_url || '',
       content: filteredContent,
-      serverId: server.id,
+      serverId: server?.id || 1,
       chatroom_id: targetRoom.id,
       created_at: new Date().toISOString(),
       timestamp: new Date().toISOString(),
@@ -924,14 +924,14 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
 
       const newMsg = res.data;
       // Replace optimistic with confirmed DB message
-      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: newMsg.id, isOptimistic: false } : m));
+      setMessages(prev => (Array.isArray(prev) ? prev.map(m => (m && m.id === tempId) ? { ...m, id: newMsg.id, isOptimistic: false } : m) : []));
     } catch (err) {
       console.error('Failed to persist message to DB:', err);
     }
   };
 
   const handleSelectGif = async (gifUrl) => {
-    if (!checkRateLimit(currentUser.is_admin)) {
+    if (!checkRateLimit(currentUser?.is_admin)) {
       alert('Slow down! You can only send 1 message per second.');
       return;
     }
