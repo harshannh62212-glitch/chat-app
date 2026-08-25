@@ -13,6 +13,9 @@ const getActiveSocketUrl = () => {
   const active = localStorage.getItem('active_backend_target');
   if (active && active.startsWith('http') && !active.includes('vercel.app')) return active;
   if (axios.defaults.baseURL && axios.defaults.baseURL.startsWith('http') && !axios.defaults.baseURL.includes('vercel.app')) return axios.defaults.baseURL;
+  if (typeof window !== 'undefined' && window.location?.origin && window.location.origin.startsWith('http') && !window.location.origin.includes('vercel.app')) {
+    return window.location.origin;
+  }
   return import.meta.env.PROD ? (import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com') : 'http://localhost:8000';
 };
 
