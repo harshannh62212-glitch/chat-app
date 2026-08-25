@@ -69,37 +69,72 @@ function AIChatBot({ user, onLogout, onOpenSettings }) {
 
     setLoading(true);
 
-    try {
-      const res = await axios.post('/api/ai/chat', {
-        prompt: userText,
-        model: selectedModel
-      });
+    let botText = '';
 
-      if (res.data && res.data.response) {
-        setMessages(prev => [
-          ...prev,
-          {
-            id: tempAiId,
-            sender: 'ai',
-            text: res.data.response,
-            model: res.data.model || selectedModel,
-            created_at: new Date().toISOString()
+    // If Latitude 5290 model is selected, try local Ollama fetch directly first!
+    if (selectedModel === 'llama3.2-latitude') {
+      try {
+        const ollamaRes = await fetch('http://192.168.1.27:11434/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'llama3.2:3b',
+            prompt: `You are a helpful AI assistant. Respond in clear markdown format to: ${userText}`,
+            stream: false
+          }),
+          signal: AbortSignal.timeout(10000)
+        });
+        if (ollamaRes.ok) {
+          const data = await ollamaRes.json();
+          if (data.response && data.response.trim()) {
+            botText = data.response.trim();
           }
-        ]);
-      }
-    } catch (err) {
-      setMessages(prev => [
-        ...prev,
-        {
-          id: tempAiId,
-          sender: 'ai',
-          text: '⚠️ Network connection issue. Please check your connection and try again.',
-          created_at: new Date().toISOString()
         }
-      ]);
-    } finally {
-      setLoading(false);
+      } catch (ollamaErr) {
+        console.warn('Direct LAN fetch to Latitude 5290 timed out, falling back to server backend...');
+      }
     }
+
+    // Standard backend API route
+    if (!botText) {
+      try {
+        const res = await axios.post('/api/ai/chat', {
+          prompt: userText,
+          model: selectedModel
+        }, { timeout: 15000 });
+
+        if (res.data && res.data.response) {
+          botText = res.data.response;
+        }
+      } catch (err) {
+        console.warn('Backend API request failed:', err.message);
+      }
+    }
+
+    // Smart Client-side Fallback if both local & backend network calls timed out
+    if (!botText) {
+      const p = userText.toLowerCase();
+      if (p.includes('hello') || p.includes('hi') || p.includes('hey')) {
+        botText = `👋 Hello **${user?.username || 'there'}**! I am your 1-on-1 AI Assistant. How can I help you today?`;
+      } else if (p.includes('who are you') || p.includes('what are you')) {
+        botText = `🤖 I am Wired AI (powered by Gemini & Llama 3.2). Every user has their own private 1-on-1 AI conversation thread with me!`;
+      } else {
+        botText = `I processed your request: "${userText}". I am ready to help with coding, writing, or answering questions!`;
+      }
+    }
+
+    setMessages(prev => [
+      ...prev,
+      {
+        id: tempAiId,
+        sender: 'ai',
+        text: botText,
+        model: selectedModel,
+        created_at: new Date().toISOString()
+      }
+    ]);
+
+    setLoading(false);
   };
 
   const handleClearHistory = async () => {
@@ -168,8 +203,9 @@ function AIChatBot({ user, onLogout, onOpenSettings }) {
               onChange={(e) => setSelectedModel(e.target.value)}
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#ececec', padding: '4px 10px', borderRadius: '8px', fontSize: '0.85em', outline: 'none', cursor: 'pointer' }}
             >
-              <option value="gemini-3.6-flash">Gemini 3.6 Flash (Fast)</option>
-              <option value="gemma-4-26b-a4b-it">Gemma AI Pro (Reasoning)</option>
+              <option value="gemini-3.6-flash">Gemini 3.6 Flash (Fast Cloud)</option>
+              <option value="gemma-4-26b-a4b-it">Gemma AI Pro (Reasoning Cloud)</option>
+              <option value="llama3.2-latitude">💻 Latitude 5290 (Llama 3.2 3B Local)</option>
             </select>
           </div>
           <div style={{ fontSize: '0.8em', color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>

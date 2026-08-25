@@ -385,46 +385,70 @@ router.post('/ai/chat', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Prompt cannot be empty' });
     }
 
-    let botResponse = '';
+    // 0. If user selects local Latitude 5290 model
+    if (model === 'llama3.2-latitude' || model === 'local-latitude') {
+      try {
+        const localRes = await fetch('http://192.168.1.27:11434/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'llama3.2:3b',
+            prompt: `You are a helpful, smart AI assistant. Respond in clear markdown to: ${prompt}`,
+            stream: false
+          }),
+          signal: AbortSignal.timeout(12000)
+        });
+        if (localRes.ok) {
+          const json = await localRes.json();
+          if (json.response && json.response.trim()) {
+            botResponse = json.response.trim();
+          }
+        }
+      } catch (latErr) {
+        console.warn('[LATITUDE 5290 OLLAMA] Local fetch error:', latErr.message);
+      }
+    }
 
     // 1. Query Gemini API with Multi-Key Rotation and Fallback
-    const rawKeys = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '';
-    const apiKeys = rawKeys.split(',').map(k => k.trim()).filter(Boolean);
+    if (!botResponse) {
+      const rawKeys = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '';
+      const apiKeys = rawKeys.split(',').map(k => k.trim()).filter(Boolean);
 
-    if (apiKeys.length > 0) {
-      const geminiModels = [
-        process.env.GEMINI_MODERATION_MODEL || 'gemma-4-26b-a4b-it',
-        'gemma-4-26b-a4b-it',
-        'gemini-3-flash-preview',
-        'gemini-3.5-flash-lite',
-        'gemini-3.6-flash',
-        'gemini-3.7-flash',
-        'gemini-3.1-flash-lite'
-      ];
-      const uniqueModels = [...new Set(geminiModels)];
+      if (apiKeys.length > 0) {
+        const geminiModels = [
+          process.env.GEMINI_MODERATION_MODEL || 'gemma-4-26b-a4b-it',
+          'gemma-4-26b-a4b-it',
+          'gemini-3-flash-preview',
+          'gemini-3.5-flash-lite',
+          'gemini-3.6-flash',
+          'gemini-3.7-flash',
+          'gemini-3.1-flash-lite'
+        ];
+        const uniqueModels = [...new Set(geminiModels)];
 
-      keyLoop: for (const key of apiKeys) {
-        for (const m of uniqueModels) {
-          try {
-            const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: `You are ChatGPT / Wired AI, a smart, helpful, friendly 1-on-1 AI assistant. Respond in clear markdown format. User query: ${prompt}` }] }]
-              }),
-              signal: AbortSignal.timeout(6000)
-            });
-            if (apiRes.ok) {
-              const json = await apiRes.json();
-              const parts = json.candidates?.[0]?.content?.parts || [];
-              const answerPart = parts.find(p => !p.thought) || parts[parts.length - 1];
-              const text = answerPart?.text?.trim();
-              if (text) {
-                botResponse = text;
-                break keyLoop;
+        keyLoop: for (const key of apiKeys) {
+          for (const m of uniqueModels) {
+            try {
+              const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: `You are ChatGPT / Wired AI, a smart, helpful, friendly 1-on-1 AI assistant. Respond in clear markdown format. User query: ${prompt}` }] }]
+                }),
+                signal: AbortSignal.timeout(6000)
+              });
+              if (apiRes.ok) {
+                const json = await apiRes.json();
+                const parts = json.candidates?.[0]?.content?.parts || [];
+                const answerPart = parts.find(p => !p.thought) || parts[parts.length - 1];
+                const text = answerPart?.text?.trim();
+                if (text) {
+                  botResponse = text;
+                  break keyLoop;
+                }
               }
-            }
-          } catch (e) {}
+            } catch (e) {}
+          }
         }
       }
     }
