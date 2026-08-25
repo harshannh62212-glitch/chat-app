@@ -33,10 +33,11 @@ router.post('/register', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const userEmail = `${trimmedUsername.toLowerCase()}_${Date.now()}@chat.local`;
     
     const result = await query(
       'INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username',
-      [username, `${username}@chat.local`, hashedPassword]
+      [trimmedUsername, userEmail, hashedPassword]
     );
 
     const user = result.rows[0];
@@ -79,8 +80,8 @@ router.post('/register', async (req, res) => {
     if (err.code === '23505') {
       return res.status(400).json({ error: 'Username already exists' });
     }
-    console.error(err);
-    res.status(500).json({ error: 'Registration failed' });
+    console.error('Registration server error:', err);
+    res.status(500).json({ error: err.message || 'Registration failed' });
   }
 });
 

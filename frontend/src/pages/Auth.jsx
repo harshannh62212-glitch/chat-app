@@ -135,7 +135,7 @@ function Auth({ onLogin, onBack }) {
             },
             body: JSON.stringify({
               username: usernameTrimmed,
-              email: `${usernameTrimmed}@chat.local`,
+              email: `${usernameTrimmed.toLowerCase()}_${Date.now()}@chat.local`,
               password: hashedPassword
             })
           });
