@@ -11,15 +11,10 @@ import '../styles/ServerSettings.css';
 
 
 const getActiveSocketUrl = () => {
-  const custom = localStorage.getItem('custom_proxy_target');
-  if (custom) return custom;
-  const active = localStorage.getItem('active_backend_target');
-  if (active && active.startsWith('http') && !active.includes('vercel.app')) return active;
-  if (axios.defaults.baseURL && axios.defaults.baseURL.startsWith('http') && !axios.defaults.baseURL.includes('vercel.app')) return axios.defaults.baseURL;
-  if (typeof window !== 'undefined' && window.location?.origin && window.location.origin.startsWith('http') && !window.location.origin.includes('vercel.app')) {
-    return window.location.origin;
-  }
-  return import.meta.env.PROD ? (import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-hqji.onrender.com') : 'http://localhost:8000';
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  if (isLocal) return import.meta.env.VITE_PROXY_TARGET || 'http://localhost:8000';
+  // In production (Vercel), use current origin — Vercel proxies /socket.io/* to Render
+  return window.location.origin;
 };
 
 // Lazy socket — created with autoConnect:false, connected on first component mount

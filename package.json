@@ -4,9 +4,9 @@
   "description": "A real-time chat application with servers, DMs, and content filtering",
   "main": "server.js",
   "scripts": {
-    "start": "node --max-old-space-size=16384 server.js",
-    "dev": "node --max-old-space-size=16384 server.js",
-    "cluster": "NODE_ENV=production node --max-old-space-size=16384 server.js",
+    "start": "node --max-old-space-size=512 server.js",
+    "dev": "node --max-old-space-size=512 server.js",
+    "cluster": "NODE_ENV=production node --max-old-space-size=512 server.js",
     "client": "cd frontend && npm run dev",
     "build": "cd frontend && npm install --include=dev && npm run build && cd .. && mkdir -p public dist && cp -r frontend/dist/* public/ && cp -r frontend/dist/* dist/ && cp frontend/dist/index.html index.html",
     "install-all": "npm install && cd frontend && npm install",

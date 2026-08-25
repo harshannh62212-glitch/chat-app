@@ -2,7 +2,7 @@
 const { query } = require('../db/database');
 
 class MessageBatchWriter {
-  constructor(flushIntervalMs = 50, maxBatchSize = 100) {
+  constructor(flushIntervalMs = 200, maxBatchSize = 100) {
     this.queue = [];
     this.flushIntervalMs = flushIntervalMs;
     this.maxBatchSize = maxBatchSize;

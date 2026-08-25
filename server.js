@@ -1,4 +1,4 @@
-process.env.UV_THREADPOOL_SIZE = 128;
+process.env.UV_THREADPOOL_SIZE = '4';
 
 const dns = require('dns');
 if (dns.setDefaultResultOrder) {
@@ -18,7 +18,7 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
   (async () => {
     try {
       await initDB();
-      startTunnelUrlWatcher();
+      if (!process.env.RENDER && !process.env.VERCEL) { startTunnelUrlWatcher(); }
       for (let i = 0; i < numCPUs; i++) {
         cluster.fork();
       }
@@ -39,7 +39,7 @@ if (!useClustering) {
   (async () => {
     try {
       await initDB();
-      startTunnelUrlWatcher();
+      if (!process.env.RENDER && !process.env.VERCEL) { startTunnelUrlWatcher(); }
     } catch (err) {
       console.error('Failed to initialize database:', err);
       if (!process.env.VERCEL) {
@@ -468,7 +468,12 @@ function getPowerSupplyInfo() {
   try {
     if (process.platform === 'darwin') {
       try {
-        const output = execSync('pmset -g batt', { encoding: 'utf8', timeout: 500 });
+        let output;
+        try {
+          output = execSync('pmset -g batt', { encoding: 'utf8', timeout: 500 });
+        } catch (e) {
+          return null;
+        }
       acOnline = output.includes("drawing from 'AC Power'");
       
       const percentMatch = output.match(/(\d+)%/);
@@ -901,7 +906,7 @@ function applyFanHardwareState() {
 }
 
 // Smart Thermal Daemon: Throttled to 5000ms to conserve CPU and I/O cycles
-if (!process.env.VERCEL) {
+if (!process.env.RENDER && !process.env.VERCEL) {
   setInterval(() => {
     applyFanHardwareState();
   }, 5000);
@@ -920,7 +925,12 @@ function getBatteryInfo() {
   
   if (process.platform === 'darwin') {
     try {
-      const output = execSync('pmset -g batt', { encoding: 'utf8', timeout: 500 });
+      let output;
+      try {
+        output = execSync('pmset -g batt', { encoding: 'utf8', timeout: 500 });
+      } catch (e) {
+        return null;
+      }
       const acOnline = output.includes("drawing from 'AC Power'");
       
       const percentMatch = output.match(/(\d+)%/);
@@ -1038,64 +1048,7 @@ app.post('/api/system/fan/set', (req, res) => {
   }
 });
 
-// Stress Test endpoint — burns all CPU cores + attempts iGPU stress for N seconds
-const { spawn } = require('child_process');
-let stressProcs = [];
-
-function killStressProcs() {
-  stressProcs.forEach(p => { try { p.kill('SIGKILL'); } catch(e) {} });
-  stressProcs = [];
-  try { execSync('pkill -f "stress-ng" 2>/dev/null; pkill -f "dd if=/dev/zero" 2>/dev/null; pkill -f "bc" 2>/dev/null; pkill -f "4\\*a" 2>/dev/null; true'); } catch(e) {}
-}
-
-app.post('/api/system/stress', (req, res) => {
-  try {
-    const duration = Math.min(60, Math.max(5, parseInt(req.body?.duration) || 15));
-
-    // Kill any existing stress processes first
-    killStressProcs();
-
-    const numCores = os.cpus().length;
-
-    // Check if stress-ng is available (has GPU + CPU support)
-    let useStressNg = false;
-    try { execSync('which stress-ng', { timeout: 1000 }); useStressNg = true; } catch(e) {}
-
-    if (useStressNg) {
-      // stress-ng: all CPUs + matrix stressor (hits iGPU via SIMD/AVX) + io
-      const p = spawn('stress-ng', [
-        '--cpu', String(numCores),
-        '--matrix', '1',       // matrix math — hits vectorized SIMD which loads iGPU compute
-        '--timeout', `${duration}s`,
-        '--quiet'
-      ], { detached: false, stdio: 'ignore' });
-      stressProcs.push(p);
-      p.on('exit', () => { stressProcs = stressProcs.filter(x => x !== p); });
-    } else {
-      // Fallback: spawn N shell workers doing infinite arithmetic
-      for (let i = 0; i < numCores; i++) {
-        const p = spawn('sh', ['-c', 'while true; do echo "scale=10000; 4*a(1)" | bc -l > /dev/null 2>&1; done'], {
-          detached: false, stdio: 'ignore'
-        });
-        stressProcs.push(p);
-      }
-      // Auto-kill after duration
-      setTimeout(() => killStressProcs(), duration * 1000);
-    }
-
-    // Also schedule auto-cleanup after duration + 2s buffer
-    setTimeout(() => killStressProcs(), (duration + 2) * 1000);
-
-    res.json({ message: `Stress test running for ${duration}s on ${numCores} cores`, duration, cores: numCores });
-  } catch (err) {
-    res.status(500).json({ error: 'Stress test failed: ' + err.message });
-  }
-});
-
-app.post('/api/system/stress/stop', (req, res) => {
-  killStressProcs();
-  res.json({ message: 'Stress test stopped' });
-});
+app.all('/api/system/stress', (req, res) => res.status(403).json({ error: 'Disabled in production' }));
 
 // Serve index.html for React routing fallback
 app.get(/.*/, (req, res, next) => {

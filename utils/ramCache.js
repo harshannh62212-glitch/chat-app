@@ -1,6 +1,6 @@
 // High-Performance In-Memory RAM Cache calibrated for 16GB Heap on 24GB System
 class UltraRAMCache {
-  constructor(maxItems = 1000000, defaultTtlMs = 3600000) { // 1-hour default TTL
+  constructor(maxItems = 10000, defaultTtlMs = 3600000) { // 1-hour default TTL
     this.cache = new Map();
     this.maxItems = maxItems;
     this.defaultTtlMs = defaultTtlMs;
@@ -11,7 +11,7 @@ class UltraRAMCache {
   set(key, value, ttlMs = this.defaultTtlMs) {
     if (this.cache.size >= this.maxItems) {
       // Evict oldest 5000 items (FIFO)
-      const keysToDelete = Array.from(this.cache.keys()).slice(0, 5000);
+      const keysToDelete = Array.from(this.cache.keys()).slice(0, 100);
       for (const k of keysToDelete) this.cache.delete(k);
     }
     this.cache.set(key, {
@@ -57,13 +57,13 @@ class UltraRAMCache {
       this.set('all_chatrooms', chatrooms.rows, 3600000);
 
       // 2. Pre-warm user profiles
-      const users = await queryFn('SELECT id, username, avatar_url, is_admin FROM users LIMIT 50000');
+      const users = await queryFn('SELECT id, username, avatar_url, is_admin FROM users LIMIT 500');
       for (const u of users.rows) {
         this.set(`user_prof_${u.id}`, u, 3600000);
       }
 
       // 3. Pre-warm recent messages per chatroom
-      for (const room of chatrooms.rows) {
+      for (const room of chatrooms.rows.slice(0, 5)) {
         const msgs = await queryFn(
           `SELECT sm.id, sm.content, sm.created_at, sm.reactions, u.id as sender_id, u.username, u.avatar_url
            FROM server_messages sm

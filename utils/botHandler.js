@@ -215,9 +215,6 @@ async function handleLocalBotResponse(io, serverId, chatroomId, content, senderI
       };
 
       io.to(botSocketRoom).emit('new-message', payload);
-      if (botSocketRoom !== 'server-1') {
-        io.to('server-1').emit('new-message', payload);
-      }
     }
   } catch (err) {
     console.error('[LOCAL BOT] Error generating response:', err);

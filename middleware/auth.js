@@ -14,13 +14,7 @@ async function authMiddleware(req, res, next) {
       decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_key');
       req.userId = decoded.userId || decoded.id || decoded.sub;
     } catch (err) {
-      // Fallback: If verification fails (e.g. secret mismatch or Supabase JWT), decode the token safely
-      decoded = jwt.decode(token);
-      if (decoded && (decoded.userId || decoded.id || decoded.sub)) {
-        req.userId = decoded.userId || decoded.id || decoded.sub;
-      } else {
-        throw err;
-      }
+      throw err;
     }
 
     if (!req.userId) {

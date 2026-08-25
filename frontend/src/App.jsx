@@ -6,26 +6,25 @@ import SpotifyDashboard from './pages/SpotifyDashboard';
 import GamesDashboard from './pages/GamesDashboard';
 import YouTubeDashboard from './pages/YouTubeDashboard';
 import LandingPage from './pages/LandingPage';
-import axios from 'axios';
-import './styles/App.css';
-
-const fallbackURL = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
-
-// Clear failover target on load so we always try the primary server first upon new session
-// Clear stale proxy / backend targets
-localStorage.removeItem('custom_proxy_target');
-localStorage.removeItem('active_backend_target');
-localStorage.removeItem('active_home_target');
-
-// In production (Vercel), use native same-origin API routes
-axios.defaults.baseURL = import.meta.env.PROD ? '' : (import.meta.env.VITE_PROXY_TARGET || 'http://localhost:8000');
-axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
-axios.defaults.timeout = 45000;
-
 import ThermalsPage from './pages/ThermalsPage';
 import AdminPanel from './components/AdminPanel';
 import MinecraftPage from './pages/MinecraftPage';
 import ErrorBoundary from './components/ErrorBoundary';
+import axios from 'axios';
+import './styles/App.css';
+
+// In production (Vercel), use relative URLs — Vercel rewrites proxy /api/* to Render backend.
+// In dev (localhost), point directly at the local Node server.
+const isLocalDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+axios.defaults.baseURL = isLocalDev ? (import.meta.env.VITE_PROXY_TARGET || 'http://localhost:8000') : '';
+axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
+axios.defaults.timeout = 45000;
+
+// Clean up legacy localStorage keys from previous versions
+localStorage.removeItem('custom_proxy_target');
+localStorage.removeItem('active_backend_target');
+localStorage.removeItem('active_home_target');
+localStorage.removeItem('server_sleeping');
 
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {
@@ -45,7 +44,6 @@ function App() {
   const [moderationUnlocked, setModerationUnlocked] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [currentPortal, setCurrentPortal] = useState('chat');
-  const [tunnelResolved, setTunnelResolved] = useState(false);
 
   const isUserAdmin = Boolean(
     currentUser && (
@@ -74,57 +72,15 @@ function App() {
     }
   }, [showModeration]);
 
-  const [serverSleeping, setServerSleeping] = useState(false);
+  // Single mount effect: load theme, banned words, verify JWT
   useEffect(() => {
-    localStorage.removeItem('server_sleeping');
-    setServerSleeping(false);
-  }, []);
-
-  const [batteryInfo, setBatteryInfo] = useState(null);
-
-  useEffect(() => {
-    const resolveBestBackend = async () => {
-      // Don't render anything until we know where the backend is
-      // If running directly on localhost, use current origin
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        const localOrigin = window.location.origin;
-        axios.defaults.baseURL = localOrigin;
-        localStorage.setItem('active_backend_target', localOrigin);
-        setTunnelResolved(true);
-        setLoadingApp(false);
-        return;
-      }
-
-      const saved = localStorage.getItem('custom_proxy_target');
-      if (saved) {
-        axios.defaults.baseURL = saved;
-        localStorage.setItem('active_backend_target', saved);
-        setTunnelResolved(true);
-        setLoadingApp(false);
-        return;
-      }
-
-      // Fully Cloud Backend (Render / Cloud production)
-      const renderCloudUrl = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-hqji.onrender.com';
-      axios.defaults.baseURL = renderCloudUrl;
-      localStorage.setItem('active_backend_target', renderCloudUrl);
-      setTunnelResolved(true);
-      setLoadingApp(false);
-    };
-
-    resolveBestBackend();
     loadCustomBannedWords();
     
-    // Request notification permission
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
-  }, []);
 
-  useEffect(() => {
-    if (!tunnelResolved) return;
-
-    // Load custom theme, typography, and letter spacing variables on mount
+    // Load custom theme, typography, and letter spacing variables
     const savedTheme = localStorage.getItem('theme') || 'cosmic-dark';
     const savedFont = localStorage.getItem('font') || 'Outfit';
     const savedSize = localStorage.getItem('font-size') || '15px';
@@ -153,7 +109,7 @@ function App() {
             delete axios.defaults.headers.common['Authorization'];
             setCurrentUser(null);
           } else {
-            // On temporary connection glitch (network offline), preserve cached user so session is not lost
+            // On temporary connection glitch, preserve cached user so session is not lost
             const cachedUser = localStorage.getItem('chat_user');
             if (cachedUser) {
               try {
@@ -163,9 +119,14 @@ function App() {
               }
             }
           }
+        })
+        .finally(() => {
+          setLoadingApp(false);
         });
+    } else {
+      setLoadingApp(false);
     }
-  }, [tunnelResolved]);
+  }, []);
 
   const handleLogin = (token, user) => {
     localStorage.setItem('chat_token', token);
@@ -182,11 +143,10 @@ function App() {
     setShowAuth(false);
   };
 
-  if (loadingApp || !tunnelResolved) {
+  if (loadingApp) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw', background: '#0f1015', color: '#00ffff', fontFamily: "'Outfit', sans-serif" }}>
         <div style={{ fontSize: '1.2em', fontWeight: 'bold', letterSpacing: '1px' }}>CONNECTING TO SERVER...</div>
-        <div style={{ marginTop: '12px', fontSize: '0.85em', color: '#a4b0be', letterSpacing: '0.5px' }}>Resolving best backend node...</div>
       </div>
     );
   }
@@ -194,18 +154,6 @@ function App() {
   return (
     <ErrorBoundary>
       <div className={`app ${showMinecraft ? 'minecraft-view' : showThermals ? 'thermals-view' : showModeration ? 'moderation-view' : currentUser ? 'dashboard-view' : 'public-view'}`}>
-        {serverSleeping && (
-          <div style={{ background: '#ff9f43', color: '#000', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '0.95em', fontFamily: "'Outfit', sans-serif", display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', zIndex: 9999, position: 'relative' }}>
-            <span>💤</span>
-            <span><strong>Notice:</strong> The host server has entered low-battery hibernation mode. Features are restricted until the server is powered back on.</span>
-          </div>
-        )}
-        {!serverSleeping && batteryInfo && !batteryInfo.isCharging && (
-          <div style={{ background: '#ee5253', color: '#fff', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '0.95em', fontFamily: "'Outfit', sans-serif", display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', zIndex: 9999, position: 'relative' }}>
-            <span>🔌</span>
-            <span><strong>Notice:</strong> The host server is running on battery backup (Discharging: {batteryInfo.percent}%). It will automatically hibernate if battery drops under 20%.</span>
-          </div>
-        )}
         {currentUser && currentUser.is_banned ? (
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw', background: '#0f1015', color: '#ff4757', textAlign: 'center', padding: '20px', fontFamily: "'Outfit', sans-serif" }}>
             <div className="welcome-island" style={{ maxWidth: '500px', padding: '40px', background: 'rgba(255, 71, 87, 0.04)', borderRadius: '24px', border: '1px solid rgba(255, 71, 87, 0.15)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
@@ -331,7 +279,7 @@ function App() {
             user={currentUser} 
             setUser={setCurrentUser} 
             onLogout={handleLogout} 
-            batteryInfo={batteryInfo}
+            batteryInfo={null}
             onToggleToSpotify={() => setCurrentPortal('spotify')}
             onToggleToYouTube={() => setCurrentPortal('youtube')}
             onToggleToGames={() => setCurrentPortal('games')}
