@@ -16,7 +16,7 @@ const getActiveSocketUrl = () => {
   if (typeof window !== 'undefined' && window.location?.origin && window.location.origin.startsWith('http') && !window.location.origin.includes('vercel.app')) {
     return window.location.origin;
   }
-  return import.meta.env.PROD ? (import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com') : 'http://localhost:8000';
+  return import.meta.env.PROD ? (import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-hqji.onrender.com') : 'http://localhost:8000';
 };
 
 // Lazy socket — connected on first component mount after backend resolution

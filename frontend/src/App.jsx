@@ -119,7 +119,7 @@ function App() {
       }
 
       // Fully Cloud Backend (Render / Cloud production)
-      const renderCloudUrl = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-backend-render.onrender.com';
+      const renderCloudUrl = import.meta.env.VITE_RENDER_BACKEND_URL || 'https://chat-app-hqji.onrender.com';
       axios.defaults.baseURL = renderCloudUrl;
       localStorage.setItem('active_backend_target', renderCloudUrl);
       setTunnelResolved(true);

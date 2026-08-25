@@ -4,15 +4,15 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://chat-app-backend-render.onrender.com/api/:path*"
+      "destination": "https://chat-app-hqji.onrender.com/api/:path*"
     },
     {
       "source": "/ping",
-      "destination": "https://chat-app-backend-render.onrender.com/ping"
+      "destination": "https://chat-app-hqji.onrender.com/ping"
     },
     {
       "source": "/socket.io/:path*",
-      "destination": "https://chat-app-backend-render.onrender.com/socket.io/:path*"
+      "destination": "https://chat-app-hqji.onrender.com/socket.io/:path*"
     },
     {
       "source": "/((?!assets/|favicon.png).*)",
