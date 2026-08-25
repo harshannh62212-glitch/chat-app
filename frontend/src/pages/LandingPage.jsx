@@ -65,18 +65,18 @@ function LandingPage({ onEnterPortal }) {
       <header className="landing-hero">
         <div className="hero-tag">
           <span className="dot"></span>
-          NEW: cosmic customization active
+          NEW: Gemini 3.6 Flash & Gemma AI 1-on-1 Text Assistant
         </div>
         <h2>
-          Where teams connect.
-          <span className="gradient-text">And music streams.</span>
+          Your Personal 1-on-1
+          <span className="gradient-text"> AI Assistant.</span>
         </h2>
         <p className="hero-subtitle">
-          The ultimate real-time workspace for modern teams and developers, now featuring integrated Spotify-style playback. Express yourself with GIFs, stream music, and customize your experience.
+          Dedicated 1-on-1 AI Text Bot for every user. Ask questions, analyze code, write content, and get instant answers with your isolated AI thread.
         </p>
 
         <div className="hero-ctas">
-          <button className="btn-primary" onClick={onEnterPortal}>Launch Portal</button>
+          <button className="btn-primary" onClick={onEnterPortal}>Open AI Assistant 🤖</button>
           <a href="#features" className="btn-secondary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
             Explore Features
           </a>

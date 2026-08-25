@@ -52,6 +52,15 @@ async function createTables() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
       ALTER TABLE users ALTER COLUMN id SET DEFAULT gen_random_uuid()::varchar;
+
+      CREATE TABLE IF NOT EXISTS user_ai_conversations (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        prompt TEXT NOT NULL,
+        response TEXT NOT NULL,
+        model VARCHAR(255) DEFAULT 'gemini-3.6-flash',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     // Servers table

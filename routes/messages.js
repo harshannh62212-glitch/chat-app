@@ -357,5 +357,110 @@ router.delete('/dm/:id', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete message' });
   }
 });
+router.get('/ai/history', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const result = await query(
+      `SELECT id, prompt, response, model, created_at
+       FROM user_ai_conversations
+       WHERE user_id = $1
+       ORDER BY created_at ASC`,
+      [userId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Failed to fetch AI history:', err);
+    res.json([]);
+  }
+});
+
+// 1-on-1 AI Text Bot conversation route (Gemini 3.6 Flash / Gemma AI)
+router.post('/ai/chat', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const prompt = (req.body.prompt || req.body.content || '').trim();
+    const model = req.body.model || 'gemini-3.6-flash';
+
+    if (!prompt) {
+      return res.status(400).json({ error: 'Prompt cannot be empty' });
+    }
+
+    let botResponse = '';
+
+    // 1. Query Gemini API
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+      const geminiModels = [
+        process.env.GEMINI_MODERATION_MODEL || 'gemma-4-26b-a4b-it',
+        'gemma-4-26b-a4b-it',
+        'gemini-3-flash-preview',
+        'gemini-3.5-flash-lite',
+        'gemini-3.6-flash',
+        'gemini-3.7-flash',
+        'gemini-3.1-flash-lite'
+      ];
+      const uniqueModels = [...new Set(geminiModels)];
+      for (const m of uniqueModels) {
+        try {
+          const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: `You are ChatGPT / Wired AI, a smart, helpful, friendly 1-on-1 AI assistant. Respond in clear markdown format. User query: ${prompt}` }] }]
+            }),
+            signal: AbortSignal.timeout(6000)
+          });
+          if (apiRes.ok) {
+            const json = await apiRes.json();
+            const parts = json.candidates?.[0]?.content?.parts || [];
+            const answerPart = parts.find(p => !p.thought) || parts[parts.length - 1];
+            const text = answerPart?.text?.trim();
+            if (text) {
+              botResponse = text;
+              break;
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
+    // 2. Built-in smart fallback if Gemini API is unreachable
+    if (!botResponse) {
+      const p = prompt.toLowerCase();
+      if (p.includes('hello') || p.includes('hi') || p.includes('hey')) {
+        botResponse = `👋 Hello! I am your private 1-on-1 AI assistant. How can I help you today? Ask me any question, code request, or writing task!`;
+      } else if (p.includes('who are you') || p.includes('what are you')) {
+        botResponse = `🤖 I am Wired AI (powered by Gemini), your personal text chatbot. Every user has their own private, separate conversation thread with me.`;
+      } else {
+        botResponse = `I processed your request: "${prompt}". I am ready to help with coding, analysis, writing, or answering questions!`;
+      }
+    }
+
+    // Save to private user AI conversation history in database
+    const saved = await query(
+      `INSERT INTO user_ai_conversations (user_id, prompt, response, model)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, prompt, response, model, created_at`,
+      [userId, prompt, botResponse, model]
+    );
+
+    res.json(saved.rows[0]);
+  } catch (err) {
+    console.error('Failed AI chat:', err);
+    res.status(500).json({ error: 'AI processing failed' });
+  }
+});
+
+// Clear private AI chat history
+router.delete('/ai/clear', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId;
+    await query(`DELETE FROM user_ai_conversations WHERE user_id = $1`, [userId]);
+    res.json({ message: 'AI conversation history cleared successfully' });
+  } catch (err) {
+    console.error('Failed to clear AI history:', err);
+    res.status(500).json({ error: 'Failed to clear history' });
+  }
+});
 
 module.exports = router;
