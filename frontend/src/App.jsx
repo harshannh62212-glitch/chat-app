@@ -288,7 +288,10 @@ function App() {
       ) : showAuth ? (
         <Auth onLogin={handleLogin} onBack={() => setShowAuth(false)} />
       ) : (
-        <LandingPage onEnterPortal={() => setShowAuth(true)} />
+        <LandingPage onEnterPortal={() => {
+          const guestUser = { id: `guest_${Date.now()}`, username: 'Guest', is_guest: true };
+          handleLogin(`guest_token_${Date.now()}`, guestUser);
+        }} />
       )}
       </div>
     </ErrorBoundary>

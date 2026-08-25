@@ -187,7 +187,9 @@ function AIChatBot({ user, onLogout, onOpenSettings }) {
               </div>
               <div style={{ fontSize: '0.85em', fontWeight: 600, color: '#fff' }}>@{user?.username || 'User'}</div>
             </div>
-            <button onClick={onLogout} style={{ background: 'transparent', border: 'none', color: '#ff4757', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8em' }}>Exit</button>
+            <button onClick={onLogout} style={{ background: 'transparent', border: 'none', color: user?.is_guest ? '#10b981' : '#ff4757', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8em' }}>
+              {user?.is_guest ? '🔑 Sign In' : 'Exit'}
+            </button>
           </div>
         </div>
       </div>
