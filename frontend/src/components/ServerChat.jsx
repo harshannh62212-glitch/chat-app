@@ -908,19 +908,36 @@ function ServerChat({ server, currentUser, onOpenSettings, onStartDM, batteryInf
     // 1. INSTANT local state update (optimistic)
     setMessages(prev => [...prev, optimisticMsg]);
 
-    // 2. Persist to DB — the server POST handler broadcasts to the room via io.to()
-    // This single-path approach prevents double-delivery to other users
+    // 2. Immediate WebSocket emission for zero-latency delivery
+    if (socket) {
+      socket.emit('send-message', {
+        id: tempId,
+        senderId: currentUser?.id,
+        sender_id: currentUser?.id,
+        username: currentUser?.username || 'You',
+        avatar_url: currentUser?.avatar_url || '',
+        content: filteredContent,
+        serverId: server?.id || 1,
+        chatroom_id: targetRoom.id,
+        created_at: new Date().toISOString()
+      });
+    }
+
+    // 3. Persist via HTTP POST background request
     try {
       const res = await axios.post('/api/messages/server', {
         chatroomId: targetRoom.id,
         content: filteredContent
       });
 
-      const newMsg = res.data;
-      // Replace optimistic with confirmed DB message
-      setMessages(prev => (Array.isArray(prev) ? prev.map(m => (m && m.id === tempId) ? { ...m, id: newMsg.id, isOptimistic: false } : m) : []));
+      if (res.data && res.data.id) {
+        const newMsg = res.data;
+        setMessages(prev => (Array.isArray(prev) ? prev.map(m => (m && m.id === tempId) ? { ...m, id: newMsg.id, isOptimistic: false } : m) : []));
+      }
     } catch (err) {
-      console.error('Failed to persist message to DB:', err);
+      console.warn('HTTP persist fallback used socket delivery:', err.message);
+      // Mark optimistic message as sent/active instead of dropping it
+      setMessages(prev => (Array.isArray(prev) ? prev.map(m => (m && m.id === tempId) ? { ...m, isOptimistic: false } : m) : []));
     }
   };
 

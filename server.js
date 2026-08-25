@@ -1,9 +1,6 @@
 process.env.UV_THREADPOOL_SIZE = '4';
 
 const dns = require('dns');
-if (dns.setDefaultResultOrder) {
-  dns.setDefaultResultOrder('ipv4first');
-}
 
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
@@ -1332,8 +1329,9 @@ io.on('connection', (socket) => {
     let filteredContent = content;
 
     if (serverId) {
+      const msgId = data.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
       io.to(`server-${serverId}`).emit('new-message', {
-        id: data.id || Math.random().toString(),
+        id: msgId,
         senderId,
         sender_id: senderId,
         username: username || 'Unknown',
@@ -1345,8 +1343,17 @@ io.on('connection', (socket) => {
         timestamp: data.created_at || new Date().toISOString(),
         isDM: false
       });
+
+      // Save to database asynchronously
+      if (chatroom_id && senderId) {
+        query(
+          `INSERT INTO server_messages (sender_id, chatroom_id, content) VALUES ($1, $2, $3)`,
+          [senderId, chatroom_id, filteredContent]
+        ).catch(err => console.error('[SOCKET DB PERSIST ERROR]', err.message));
+      }
+
       // ── Layer 3: AI async eval (catches context/bypass attempts the keyword list missed) ──
-      evaluateMessageAsync(data.id, filteredContent, 'server');
+      evaluateMessageAsync(msgId, filteredContent, 'server');
       if (filteredContent.toLowerCase().includes('@bot') || filteredContent.toLowerCase().includes('@gemini') || filteredContent.toLowerCase().includes('@ai')) {
         handleLocalBotResponse(io, serverId, chatroom_id, filteredContent, senderId);
       }
