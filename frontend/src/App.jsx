@@ -76,23 +76,9 @@ function App() {
 
   const [serverSleeping, setServerSleeping] = useState(false);
   useEffect(() => {
-    if (!tunnelResolved) return;
-    const checkSystemStatus = async () => {
-      try {
-        const res = await axios.get('/api/health', { timeout: 5000 });
-        if (res.data?.status === 'ok') {
-          setServerSleeping(false);
-        }
-      } catch (err) {
-        if (err.code === 'ECONNABORTED' || err.message?.includes('timeout') || err.response?.status === 503) {
-          setServerSleeping(true);
-        }
-      }
-    };
-    checkSystemStatus();
-    const interval = setInterval(checkSystemStatus, 15000);
-    return () => clearInterval(interval);
-  }, [tunnelResolved]);
+    localStorage.removeItem('server_sleeping');
+    setServerSleeping(false);
+  }, []);
 
   const [batteryInfo, setBatteryInfo] = useState(null);
 
