@@ -13,11 +13,7 @@ Open:
 - **Autopilot sim:** http://127.0.0.1:8002/viewer.html (AI nav unchanged)
 - **Cargo preset:** http://127.0.0.1:8002/viewer.html?mission=cargo
 
-Optional CAD twin:
-
-```bash
-cd ../nasa-hunch-rover/cad_model && python3 -m http.server 8003 --bind 127.0.0.1
-```
+**3D rover model only:** http://127.0.0.1:8002/rover_solo.html (same `serve.py` as the surface sim)
 
 ## B. React mission dashboard
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Start NASA LLASO CAD sim on the correct port and open the launch pad in the browser.
+# Start NASA LLASO CAD sim on the correct port and open the 3D rover model in the browser.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 PORT="${HUNCH_SIM_PORT:-8002}"
-URL="http://127.0.0.1:${PORT}/launcher.html"
+URL="http://127.0.0.1:${PORT}/rover_solo.html"
 
 if curl -sf -o /dev/null --max-time 1 "$URL"; then
   echo "Sim already running at $URL"

@@ -94,12 +94,12 @@ class ReliableHandler(SimpleHTTPRequestHandler):
             port = self.server.server_address[1]
             body = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"/>
-<meta http-equiv="refresh" content="0;url=http://127.0.0.1:{port}/launcher.html"/>
+<meta http-equiv="refresh" content="0;url=http://127.0.0.1:{port}/rover_solo.html"/>
 <title>NASA HUNCH sim — wrong URL</title></head>
 <body style="font-family:system-ui,sans-serif;background:#07080d;color:#e2e8f0;padding:2rem">
 <h1>Sim URL needs port <code>{port}</code></h1>
 <p><code>http://127.0.0.1</code> alone uses port 80 and is not the sim.</p>
-<p>Open the launch pad: <a href="http://127.0.0.1:{port}/launcher.html">http://127.0.0.1:{port}/launcher.html</a></p>
+<p>Open the 3D model: <a href="http://127.0.0.1:{port}/rover_solo.html">http://127.0.0.1:{port}/rover_solo.html</a></p>
 <p>Start server: <code>cd Hunch/nasa-llaso-cad && ./start_sim.sh</code></p>
 </body></html>"""
             encoded = body.encode("utf-8")
@@ -117,7 +117,7 @@ def _start_redirect_server(redirect_port: int, main_port: int) -> None:
         def do_GET(self):
             path = self.path.split("?", 1)[0] or "/"
             if path in ("/", ""):
-                loc = f"http://127.0.0.1:{main_port}/launcher.html"
+                loc = f"http://127.0.0.1:{main_port}/rover_solo.html"
             else:
                 loc = f"http://127.0.0.1:{main_port}{self.path}"
             self.send_response(302)
@@ -138,7 +138,7 @@ def _start_redirect_server(redirect_port: int, main_port: int) -> None:
 
     threading.Thread(target=run, daemon=True).start()
     sys.stderr.write(
-        f"Redirect http://127.0.0.1:{redirect_port}/ → http://127.0.0.1:{main_port}/launcher.html\n"
+        f"Redirect http://127.0.0.1:{redirect_port}/ → http://127.0.0.1:{main_port}/rover_solo.html\n"
     )
 
 
@@ -154,9 +154,9 @@ if __name__ == '__main__':
         except ValueError:
             pass
     server = ThreadingHTTPServer((bind, port), ReliableHandler)
-    print(f"NASA CAD Simulation Server online at http://127.0.0.1:{port}/launcher.html")
+    print(f"NASA CAD Simulation Server online at http://127.0.0.1:{port}/rover_solo.html")
     print(f"  Do not use bare http://127.0.0.1 — always include :{port}")
-    print(f"  (also /viewer.html, /rover_solo.html — no /Hunch/nasa-llaso-cad/ prefix needed)")
+    print(f"  (also /viewer.html, /launcher.html — no /Hunch/nasa-llaso-cad/ prefix needed)")
     print(f"  Autopilot sim: http://127.0.0.1:{port}/viewer.html")
     print(f"  Bind: {bind}")
     print(f"Serving files from: {root}")

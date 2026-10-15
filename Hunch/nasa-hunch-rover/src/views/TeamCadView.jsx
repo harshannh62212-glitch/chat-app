@@ -39,15 +39,16 @@ export default function TeamCadView() {
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-space-800">
           <div>
             <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider">
-              Canonical CAD Twin (OBJ)
+              AEGIS-V1 Fusion Assembly (3D)
             </h3>
             <p className="text-xs text-slate-400 mt-1 font-sans">
-              Same assembly as fabrication BOM — serve{' '}
-              <code className="text-nasa-cyan">cad_model/</code> on port 8003, then load below.
+              Canonical digital twin — serve{' '}
+              <code className="text-nasa-cyan">nasa-llaso-cad</code> on port 8002 (
+              <code className="text-nasa-cyan">python3 serve.py 8002</code>).
             </p>
           </div>
           <a
-            href="http://127.0.0.1:8003/rover_viewer.html"
+            href="http://127.0.0.1:8002/rover_solo.html"
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs font-mono px-3 py-1.5 rounded-lg border border-nasa-orange/40 text-nasa-orange hover:bg-nasa-orange/10"
@@ -56,8 +57,8 @@ export default function TeamCadView() {
           </a>
         </div>
         <iframe
-          title="Tracked lunar rover CAD viewer"
-          src="http://127.0.0.1:8003/rover_viewer.html"
+          title="AEGIS-V1 fusion rover 3D model"
+          src="http://127.0.0.1:8002/rover_solo.html"
           className="w-full h-[420px] bg-black border-0"
           loading="lazy"
         />

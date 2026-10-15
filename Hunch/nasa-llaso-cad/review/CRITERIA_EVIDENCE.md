@@ -41,7 +41,7 @@
 |-----------|---------|-------|
 | Functional demo | Live sim + optional physical rover | `viewer.html`, bench scripts |
 | Innovation | 6WD tracked + dual isolated power + LLASO logistics link | Tri-fold + research brief |
-| Finished appearance | PETG spec + CAD twin viewer | Hardware spec + `rover_viewer.html` |
+| Finished appearance | PETG spec + fusion 3D model | Hardware spec + `rover_solo.html` |
 | 60% / 90% fidelity story | Phase labels aligned to HUNCH PDR/CDR | `engineering-deck.html` milestones |
 
 ## Testing & data
