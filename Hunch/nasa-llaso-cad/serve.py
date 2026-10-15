@@ -5,6 +5,21 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 class ReliableHandler(SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
+    # Cloud previews and README links often include the repo path prefix; the server
+    # document root is already this directory, so strip the prefix to avoid 404s.
+    _PATH_PREFIXES = (
+        '/Hunch/nasa-llaso-cad',
+        '/hunch/nasa-llaso-cad',
+    )
+
+    def translate_path(self, path):
+        bare = path.split('?', 1)[0].split('#', 1)[0]
+        for prefix in self._PATH_PREFIXES:
+            if bare == prefix or bare.startswith(prefix + '/'):
+                path = path.replace(bare, bare[len(prefix):] or '/', 1)
+                break
+        return super().translate_path(path)
+
     def end_headers(self):
         self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
         self.send_header('Pragma', 'no-cache')
@@ -77,8 +92,11 @@ if __name__ == '__main__':
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8002
     root = os.path.dirname(os.path.abspath(__file__))
     os.chdir(root)
-    server = ThreadingHTTPServer(('127.0.0.1', port), ReliableHandler)
+    bind = os.environ.get('HUNCH_SIM_BIND', '0.0.0.0')
+    server = ThreadingHTTPServer((bind, port), ReliableHandler)
     print(f"NASA CAD Simulation Server online at http://127.0.0.1:{port}/launcher.html")
+    print(f"  (also /viewer.html, /rover_solo.html — no /Hunch/nasa-llaso-cad/ prefix needed)")
     print(f"  Autopilot sim: http://127.0.0.1:{port}/viewer.html")
+    print(f"  Bind: {bind}")
     print(f"Serving files from: {root}")
     server.serve_forever()
