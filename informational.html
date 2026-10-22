@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Informational content — AEGIS-V1 · The Hunch</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['Plus Jakarta Sans', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="bg-[#090a0f] text-slate-200 antialiased font-sans min-h-screen selection:bg-blue-600 selection:text-white">
+
+  <header class="border-b border-white/10 bg-[#090a0f]/80 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+          <i data-lucide="shield" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="font-display font-bold text-white tracking-tight text-base">The Hunch</span>
+            <span class="text-[11px] px-2 py-0.5 rounded bg-white/5 text-slate-400 border border-white/10 font-mono">AEGIS-V1 · NASA HUNCH</span>
+          </div>
+          <p class="text-[11px] text-slate-400">External Cargo Transport System // LLASO Project 2</p>
+        </div>
+      </a>
+      <div class="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-medium">
+        <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+        <span class="font-mono text-[11px]">Mission Status: <strong>PROTOTYPE</strong></span>
+      </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 border-t border-white/5 overflow-x-auto">
+      <nav class="flex items-center gap-x-5 text-xs font-medium text-slate-400 whitespace-nowrap">
+        <a href="/#overview" class="hover:text-white transition-colors">Overview</a>
+        <a href="/#cad-viewer" class="hover:text-white transition-colors">3D CAD Model</a>
+        <a href="/#route-simulation" class="hover:text-white transition-colors">Route Analysis</a>
+        <a href="/#payload-calculator" class="hover:text-white transition-colors">Payload Dynamics</a>
+        <a href="/#about-us" class="hover:text-white transition-colors">About Us</a>
+        <a href="/informational" class="text-white" aria-current="page">Informational content</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+
+    <section class="max-w-3xl space-y-4">
+      <p class="text-[11px] font-mono text-cyan-300">Last reviewed 22 October 2026</p>
+      <h1 class="text-3xl sm:text-4xl font-display font-extrabold tracking-tight text-white">Informational content</h1>
+      <p class="text-slate-300 leading-relaxed">
+        Current public description of The Hunch NASA HUNCH work: what is built, what is still a scenario, and who does what.
+        This page is the place that gets a new dated note whenever the project facts change.
+      </p>
+    </section>
+
+    <section class="surface-card p-6 space-y-4">
+      <h2 class="text-lg font-display font-bold text-white">Update log</h2>
+      <ul class="space-y-3 text-sm text-slate-300">
+        <li class="border-l-2 border-cyan-500/60 pl-3">
+          <div class="font-mono text-[11px] text-cyan-300">22 October 2026</div>
+          <p class="mt-1 leading-relaxed">
+            Page added. Public status moved from Planning to Prototype. Homepage no longer calls the stack Level 4 SLAM or lists a 500 kg vehicle mass.
+            Demonstrator curb mass is the catalog sum in the simulator bill of materials, 6.39 kg. The 500 kg figure stays only as the full-scale calculator scenario.
+            Simulator links point at this site instead of a laptop-only address. Cargo-bay button label matches the model on the homepage (hopper and arm). The solar garage dock is in the autopilot simulator.
+          </p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <article class="surface-card p-6 space-y-3">
+        <h2 class="text-lg font-display font-bold text-white">Two workstreams</h2>
+        <p class="text-sm text-slate-300 leading-relaxed">
+          <strong class="text-white">Project 2 — AEGIS-V1.</strong>
+          External cargo transport from a landing area to a lunar base. This website is that mission dashboard: CAD inspection, an 850 m route animation, and a 1/6 g payload calculator.
+        </p>
+        <p class="text-sm text-slate-300 leading-relaxed">
+          <strong class="text-white">Project 1 — cargo module.</strong>
+          A 40 ft by 3 m cylindrical logistics module, a 14-day LIFO packing list, and a gantry-unloading simulation. The current manifest has 22 items and 748.5 kg. Center of mass is about −0.912 m along the length, −0.022 m lateral, and +0.002 m vertical.
+        </p>
+      </article>
+
+      <article class="surface-card p-6 space-y-3">
+        <h2 class="text-lg font-display font-bold text-white">What “prototype” means</h2>
+        <ul class="text-sm text-slate-300 leading-relaxed space-y-2 list-disc pl-5">
+          <li>The WebGL autopilot simulator plans with a LiDAR occupancy map, A*, and pure pursuit, plus a proximity supervisor that can reverse.</li>
+          <li>An optional local language model can bias the planner with a dodge of none, left, or right. It must not dodge into a pit or a steep slope to avoid a rock.</li>
+          <li>An imitation network can run in the browser from <span class="font-mono text-xs">rover_pilot.onnx</span>. No flight recording has been trained into that file yet.</li>
+          <li>The React rover dashboard shows simulated telemetry until a Pi link exists.</li>
+          <li>Classroom hardware trials and the NASA HUNCH evaluation are still ahead (targets Q1 2027 and spring 2027).</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="surface-card p-6 space-y-4">
+      <div>
+        <h2 class="text-lg font-display font-bold text-white">Demonstrator bill of materials</h2>
+        <p class="text-xs text-slate-400 mt-1">On-vehicle catalog masses from the simulator parts list. Printed structure is estimated, not a weighed assembly. The HQST panel is the dock roof, not rover mass.</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs font-mono">
+          <thead class="text-slate-400 border-b border-white/10">
+            <tr>
+              <th class="py-2 pr-4 font-medium">Part</th>
+              <th class="py-2 pr-4 font-medium">Qty on vehicle</th>
+              <th class="py-2 font-medium">Role</th>
+            </tr>
+          </thead>
+          <tbody class="text-slate-300">
+            <tr class="border-b border-white/5"><td class="py-2 pr-4">Polymaker black PETG chassis</td><td class="pr-4">1</td><td>Armored shell, rocker-bogie structure</td></tr>
+            <tr class="border-b border-white/5"><td class="py-2 pr-4">Greartisan 12 V 100 RPM gear motor</td><td class="pr-4">6</td><td>Independent rocker-bogie drive</td></tr>
+            <tr class="border-b border-white/5"><td class="py-2 pr-4">Wheel and 1/10 RC shock</td><td class="pr-4">6 + 6</td><td>Terrain contact</td></tr>
+            <tr class="border-b border-white/5"><td class="py-2 pr-4">GOLDENMATE 12 V 10 Ah LiFePO4</td><td class="pr-4">1</td><td>128 Wh pack, low in the chassis</td></tr>
+            <tr class="border-b border-white/5"><td class="py-2 pr-4">Raspberry Pi 5 4 GB + active cooler</td><td class="pr-4">1</td><td>High-level autonomy</td></tr>
+            <tr class="border-b border-white/5"><td class="py-2 pr-4">Arduino Uno REV3</td><td class="pr-4">1</td><td>Motor PWM and low-level I/O</td></tr>
+            <tr class="border-b border-white/5"><td class="py-2 pr-4">YRDZXG 12 V to 5 V 5 A buck</td><td class="pr-4">1</td><td>Logic rail</td></tr>
+            <tr class="border-b border-white/5"><td class="py-2 pr-4">Cytron MDD10A</td><td class="pr-4">1</td><td>Dual motor driver</td></tr>
+            <tr class="border-b border-white/5"><td class="py-2 pr-4">30 mm 3007 fan</td><td class="pr-4">4 (+2 spare)</td><td>Bay airflow in Earth air. These fans do not convect on the Moon.</td></tr>
+            <tr class="border-b border-white/5"><td class="py-2 pr-4">Arducam OV5647</td><td class="pr-4">2</td><td>Forward mastcam and rear dock camera</td></tr>
+            <tr class="border-b border-white/5"><td class="py-2 pr-4">YDLIDAR X2L on mast</td><td class="pr-4">1</td><td>360° scan, about 8 m</td></tr>
+            <tr><td class="py-2 pr-4">Cargo arm</td><td class="pr-4">1</td><td>Parcel handling in the simulator</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-slate-300 leading-relaxed">
+        Curb mass from that list is <strong class="text-white">6.39 kg</strong>.
+        The homepage CAD viewer still draws six cooling fans and a cargo hopper. The mass list counts four installed fans.
+        The HQST 100 W 9BB panel (about 6.5 kg) sits on the simulator hangar dock and charges the pack there. It is not part of the 6.39 kg.
+      </p>
+    </section>
+
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <article class="surface-card p-6 space-y-3">
+        <h2 class="text-lg font-display font-bold text-white">Numbers that are easy to mix up</h2>
+        <dl class="text-sm space-y-3">
+          <div>
+            <dt class="font-mono text-[11px] text-slate-400 uppercase">6.39 kg</dt>
+            <dd class="text-slate-300">Classroom demonstrator curb mass. Use this for the rover you can inspect in CAD and the sim.</dd>
+          </div>
+          <div>
+            <dt class="font-mono text-[11px] text-slate-400 uppercase">500 kg</dt>
+            <dd class="text-slate-300">Full-scale cargo scenario in the homepage calculator. Lunar weight at 1.622 m/s² would be about 811 N. That is not the built rover.</dd>
+          </div>
+          <div>
+            <dt class="font-mono text-[11px] text-slate-400 uppercase">748.5 kg</dt>
+            <dd class="text-slate-300">Project 1 module manifest, 22 items, packed LIFO so day-1 cargo is near the hatch.</dd>
+          </div>
+          <div>
+            <dt class="font-mono text-[11px] text-slate-400 uppercase">850 m</dt>
+            <dd class="text-slate-300">Scripted homepage route from the touchdown pad to the base gateway. It is an animation, not a closed-loop drive.</dd>
+          </div>
+        </dl>
+      </article>
+
+      <article class="surface-card p-6 space-y-3">
+        <h2 class="text-lg font-display font-bold text-white">Team</h2>
+        <ul class="text-sm text-slate-300 space-y-3">
+          <li><strong class="text-white">Sacheth</strong> — 3D design lead and lead animator. CAD, kinematic animation, and co-work on assembly, code, and AI training.</li>
+          <li><strong class="text-white">Ahrav</strong> — AI training lead and assembly lead. Training data, chassis and suspension assembly, and co-design.</li>
+          <li><strong class="text-white">Harshan</strong> — AI lead and lead coder. Navigation software, this site, the simulator, and co-design. Python and CompTIA A+ certificates are linked on the About Us section.</li>
+        </ul>
+        <p class="text-xs text-slate-400">Photos and certificates stay on <a href="/#about-us" class="text-cyan-300 hover:underline">About Us</a>.</p>
+      </article>
+    </section>
+
+    <section class="surface-card p-6 space-y-3">
+      <h2 class="text-lg font-display font-bold text-white">Open from this site</h2>
+      <div class="flex flex-wrap gap-2 text-[11px] font-mono">
+        <a href="/" class="px-3 py-1.5 rounded-lg border border-white/15 text-slate-300 hover:bg-white/5">Mission dashboard</a>
+        <a href="/Hunch/nasa-llaso-cad/launcher.html" class="px-3 py-1.5 rounded-lg border border-purple-500/40 text-purple-300 hover:bg-purple-500/10">Launch pad</a>
+        <a href="/Hunch/nasa-llaso-cad/viewer.html" class="px-3 py-1.5 rounded-lg border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10">Autopilot sim</a>
+        <a href="/rover_solo.html" class="px-3 py-1.5 rounded-lg border border-sky-500/40 text-sky-300 hover:bg-sky-500/10">3D rover model</a>
+      </div>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        Local logging and the training script still run from the simulator folder with <span class="font-mono">python3 serve.py 8002</span>.
+        The earlier homepage buttons pointed at <span class="font-mono">127.0.0.1</span>, which only works on the machine running that server.
+      </p>
+    </section>
+
+    <footer class="border-t border-white/10 pt-8 pb-12 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 font-mono gap-4">
+      <div><strong class="text-slate-300 font-display">AEGIS-V1</strong> • NASA HUNCH LLASO (2026–2027)</div>
+      <div>Engineered by Sacheth, Ahrav, and Harshan • <a href="/" class="text-blue-400 hover:underline">aegisv1.vercel.app</a></div>
+    </footer>
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => { if (window.lucide) lucide.createIcons(); });
+  </script>
+</body>
+</html>

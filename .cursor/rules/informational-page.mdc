@@ -1,0 +1,14 @@
+---
+description: Keep the public Informational content page in sync with project updates
+alwaysApply: true
+---
+
+# Informational content page
+
+Public page: `informational.html`. Tab label: **Informational content**. URL with clean URLs: `/informational` on https://aegisv1.vercel.app.
+
+When a change alters a fact a visitor could read — mission status, team roles, hardware bill of materials, masses, autonomy behavior, logistics numbers, routes, or milestone state — update `informational.html` in the same change and add a dated line under **Update log**.
+
+Facts on that page must match the code they cite (`Hunch/nasa-llaso-cad/js/rover_bom.js`, `lunar_logistics_manifest.json`, root `app.js`, `viewer.html`). Do not copy review-deck scores or unused dashboard specs from `nasa-hunch-rover/src/data/` onto this page unless those files are what the site actually runs.
+
+Keep the root dashboard (`index.html`) status, phase, and subsystem labels consistent with this page. The 500 kg figure is the full-scale calculator scenario. The demonstrator curb mass comes from `NASA_RoverBOM.curbKg()`.

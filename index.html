@@ -61,22 +61,24 @@
         </div>
       </div>
 
-      <!-- Navigation Links -->
-      <nav class="hidden md:flex items-center space-x-6 text-xs font-medium text-slate-400">
-        <a href="#overview" class="hover:text-white transition-colors">Overview</a>
-        <a href="#cad-viewer" class="hover:text-white transition-colors">3D CAD Model</a>
-        <a href="#route-simulation" class="hover:text-white transition-colors">Route Analysis</a>
-        <a href="#payload-calculator" class="hover:text-white transition-colors">Payload Dynamics</a>
-        <a href="#about-us" class="hover:text-white transition-colors">About Us</a>
-      </nav>
-
       <!-- Mission Status Badge -->
       <div class="flex items-center space-x-3">
-        <div class="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-medium">
-          <span class="w-2 h-2 rounded-full bg-amber-400"></span>
-          <span class="font-mono text-[11px]">Mission Status: <strong>PLANNING</strong></span>
+        <div class="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+          <span class="font-mono text-[11px]">Mission Status: <strong>PROTOTYPE</strong></span>
         </div>
       </div>
+
+    </div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 border-t border-white/5 overflow-x-auto">
+      <nav class="flex items-center gap-x-5 text-xs font-medium text-slate-400 whitespace-nowrap">
+        <a href="/#overview" class="hover:text-white transition-colors">Overview</a>
+        <a href="/#cad-viewer" class="hover:text-white transition-colors">3D CAD Model</a>
+        <a href="/#route-simulation" class="hover:text-white transition-colors">Route Analysis</a>
+        <a href="/#payload-calculator" class="hover:text-white transition-colors">Payload Dynamics</a>
+        <a href="/#about-us" class="hover:text-white transition-colors">About Us</a>
+        <a href="/informational" class="text-cyan-300 hover:text-white transition-colors">Informational content</a>
+      </nav>
 
     </div>
   </header>
@@ -95,9 +97,10 @@
         </div>
 
         <div class="flex flex-wrap gap-2 text-[11px] font-mono">
-          <a href="http://127.0.0.1:8002/launcher.html" class="px-3 py-1.5 rounded-lg border border-purple-500/40 text-purple-300 hover:bg-purple-500/10">Launch Pad (sim)</a>
-          <a href="http://127.0.0.1:8002/viewer.html" class="px-3 py-1.5 rounded-lg border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10">Autopilot sim</a>
-          <a href="http://127.0.0.1:8002/rover_solo.html" class="px-3 py-1.5 rounded-lg border border-sky-500/40 text-sky-300 hover:bg-sky-500/10">3D rover model</a>
+          <a href="/Hunch/nasa-llaso-cad/launcher.html" class="px-3 py-1.5 rounded-lg border border-purple-500/40 text-purple-300 hover:bg-purple-500/10">Launch Pad (sim)</a>
+          <a href="/Hunch/nasa-llaso-cad/viewer.html" class="px-3 py-1.5 rounded-lg border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10">Autopilot sim</a>
+          <a href="/rover_solo.html" class="px-3 py-1.5 rounded-lg border border-sky-500/40 text-sky-300 hover:bg-sky-500/10">3D rover model</a>
+          <a href="/informational" class="px-3 py-1.5 rounded-lg border border-white/15 text-slate-300 hover:bg-white/5">Informational content</a>
         </div>
 
         <h1 class="text-3xl sm:text-5xl font-display font-extrabold tracking-tight text-white leading-tight">
@@ -111,27 +114,27 @@
         <!-- Technical Parameters Grid -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3">
           <div class="p-3.5 rounded-lg bg-white/[0.03] border border-white/10">
-            <div class="text-[11px] font-mono text-slate-400 uppercase">Max Payload</div>
-            <div class="text-lg font-display font-bold text-white mt-0.5">500 kg</div>
-            <div class="text-[11px] text-slate-500 font-mono">Lunar: 811 N</div>
+            <div class="text-[11px] font-mono text-slate-400 uppercase">Demonstrator mass</div>
+            <div class="text-lg font-display font-bold text-white mt-0.5">6.39 kg</div>
+            <div class="text-[11px] text-slate-500 font-mono">Catalog curb, est.</div>
           </div>
 
           <div class="p-3.5 rounded-lg bg-white/[0.03] border border-white/10">
             <div class="text-[11px] font-mono text-slate-400 uppercase">Locomotion</div>
             <div class="text-lg font-display font-bold text-white mt-0.5">6-Wheel Rocker</div>
-            <div class="text-[11px] text-slate-500 font-mono">Compliant titanium</div>
+            <div class="text-[11px] text-slate-500 font-mono">Greartisan 100 RPM</div>
           </div>
 
           <div class="p-3.5 rounded-lg bg-white/[0.03] border border-white/10">
             <div class="text-[11px] font-mono text-slate-400 uppercase">Autonomy</div>
-            <div class="text-lg font-display font-bold text-white mt-0.5">Level 4 SLAM</div>
-            <div class="text-[11px] text-slate-500 font-mono">Flash LIDAR + Stereo</div>
+            <div class="text-lg font-display font-bold text-white mt-0.5">LiDAR + A*</div>
+            <div class="text-[11px] text-slate-500 font-mono">Pure pursuit sim</div>
           </div>
 
           <div class="p-3.5 rounded-lg bg-white/[0.03] border border-white/10">
             <div class="text-[11px] font-mono text-slate-400 uppercase">Current Phase</div>
-            <div class="text-lg font-display font-bold text-amber-400 mt-0.5">Planning</div>
-            <div class="text-[11px] text-slate-500 font-mono">Architecture & CAD</div>
+            <div class="text-lg font-display font-bold text-cyan-300 mt-0.5">Prototype</div>
+            <div class="text-[11px] text-slate-500 font-mono">Digital twin &amp; CAD</div>
           </div>
         </div>
 
@@ -200,7 +203,7 @@
                   2. 6x Greartisan 100RPM Rocker-Bogie Drive
                 </button>
                 <button class="subsystem-select-btn px-3 py-2 text-left rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 border border-transparent transition-colors" data-subsystem="cargobay">
-                  3. HQST 100W 9BB Solar Garage Docking Bay
+                  3. Cargo Hopper &amp; Robotic Arm
                 </button>
                 <button class="subsystem-select-btn px-3 py-2 text-left rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 border border-transparent transition-colors" data-subsystem="avionics">
                   4. YDLIDAR X2L &amp; Dual Arducam OV5647 Suite
@@ -366,10 +369,10 @@
         <div class="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
           <div>
             <h2 class="text-xl font-display font-bold text-white">Payload Mass & Energy Budget</h2>
-            <p class="text-xs text-slate-400 mt-1">Configure mission containers to evaluate mass balance, 1/6g gravity weight, and transit energy consumption</p>
+            <p class="text-xs text-slate-400 mt-1">Full-scale mission scenario (500 kg class). The classroom demonstrator curb mass is 6.39 kg. Lunar weight uses 1.622 m/s².</p>
           </div>
           <div class="text-right font-mono text-xs text-slate-400">
-            RATED PAYLOAD LIMIT: <span class="text-sm font-bold text-white ml-1">500.0 KG</span>
+            SCENARIO PAYLOAD LIMIT: <span class="text-sm font-bold text-white ml-1">500.0 KG</span>
           </div>
         </div>
 
@@ -513,26 +516,26 @@
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
           
-          <!-- Phase 1 (Active) -->
-          <div class="p-4 rounded-xl bg-white/[0.04] border border-amber-500/30 space-y-2 relative">
-            <div class="inline-block px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 text-[10px] font-mono uppercase font-semibold">
-              Active Phase
+          <div class="p-4 rounded-xl bg-white/[0.02] border border-white/10 space-y-2">
+            <div class="inline-block px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 text-[10px] font-mono uppercase font-semibold">
+              Complete
             </div>
             <div class="font-display font-bold text-white text-sm">Phase 1: Planning & Architecture</div>
             <p class="text-xs text-slate-300 leading-relaxed">
-              Define operational parameters, payload latch geometry, power budgets, and autonomous SLAM architecture.
+              Mission split, dodge-policy contract, logistics manifest, and the demonstrator bill of materials are defined.
             </p>
-            <div class="text-[11px] font-mono text-amber-400 pt-1">Status: In Progress</div>
+            <div class="text-[11px] font-mono text-emerald-400 pt-1">Status: Done</div>
           </div>
 
-          <!-- Phase 2 -->
-          <div class="p-4 rounded-xl bg-white/[0.02] border border-white/10 space-y-2 opacity-75 hover:opacity-100 transition-opacity">
-            <div class="text-[10px] font-mono text-slate-500 uppercase">Phase 2</div>
-            <div class="font-display font-bold text-white text-sm">CAD & Kinematic Prototyping</div>
-            <p class="text-xs text-slate-400 leading-relaxed">
-              Subscale physical rocker-bogie fabrication, roller bed locking mechanism testing, and sensor harness assembly.
+          <div class="p-4 rounded-xl bg-white/[0.04] border border-cyan-500/30 space-y-2 relative">
+            <div class="inline-block px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 text-[10px] font-mono uppercase font-semibold">
+              Active Phase
+            </div>
+            <div class="font-display font-bold text-white text-sm">Phase 2: CAD & Digital Twin</div>
+            <p class="text-xs text-slate-300 leading-relaxed">
+              Interactive CAD inspection, WebGL autopilot simulator, and purchased-part mass budget. Classroom hardware trials are still ahead.
             </p>
-            <div class="text-[11px] font-mono text-slate-500 pt-1">Target: Q4 2026</div>
+            <div class="text-[11px] font-mono text-cyan-300 pt-1">Status: In Progress</div>
           </div>
 
           <!-- Phase 3 -->
@@ -691,7 +694,7 @@
         <strong class="text-slate-300 font-display">AEGIS-V1</strong> • NASA HUNCH LLASO Project 2 (2026–2027)
       </div>
       <div>
-        Engineered by Sacheth, Ahrav, and Harshan • <a href="https://aegisv1.vercel.app" class="text-blue-400 hover:underline">aegisv1.vercel.app</a>
+        Engineered by Sacheth, Ahrav, and Harshan • <a href="/informational" class="text-blue-400 hover:underline">Informational content</a>
       </div>
     </footer>
 

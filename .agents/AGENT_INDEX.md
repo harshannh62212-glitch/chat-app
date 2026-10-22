@@ -44,6 +44,7 @@ Hunch/                          ← git root
 | Record training data | `viewer.html` flight recorder → `dataset_latest.json` |
 | Logistics / parcels / lander | `js/lunar_logistics.js`, `build_rover_parcels.py`, `rover_parcel_manifest.json`, `viewer.html` cargo bay + seeded rocks |
 | Public mission site | `/index.html`, `app.js`, `vercel.json` |
+| Public facts / status page | `/informational.html` (tab **Informational content**). Update it and its Update log in the same change as any visitor-facing fact. See `.cursor/rules/informational-page.mdc`. |
 | React rover UI | `Hunch/nasa-hunch-rover/src/App.jsx` |
 | Hardware BOM | `nasa-hunch-rover/cad_model/hardware_specification_sheet.md` |
 
