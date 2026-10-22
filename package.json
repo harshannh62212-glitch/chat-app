@@ -1,0 +1,8 @@
+{
+  "name": "aegisv1",
+  "private": true,
+  "description": "Static NASA HUNCH site published to the Vercel project that owns aegisv1.vercel.app.",
+  "scripts": {
+    "build": "node scripts/vercel-build.js"
+  }
+}
