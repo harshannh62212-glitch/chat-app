@@ -5,7 +5,8 @@ NASA HUNCH LLASO monorepo — external cargo transport robot (AEGIS-V1), lunar s
 Autonomous lunar surface logistics and payload transport engineered for **NASA HUNCH LLASO Project 2** (Rocket to Base Supply Building).
 
 ## Mission Overview
-- **Mission Status**: `PLANNING`
+- **Mission Status**: `PROTOTYPE`
+- **Public site**: [aegisv1.vercel.app](https://aegisv1.vercel.app) — engineering brief, digital twin links, team (root `index.html`)
 - **Subsystem Engineers**:
   - **Sacheth** — Avionics & Systems Lead
   - **Ahrav** — Mechanical Design & Locomotion Lead
@@ -28,7 +29,7 @@ Agents & humans: see [`AGENTS.md`](AGENTS.md), [`.agents/AGENT_INDEX.md`](.agent
 ```bash
 npx vercel
 ```
-Production: [aegisv1.vercel.app](https://aegisv1.vercel.app) (project name in `vercel.json`).
+Production: [aegisv1.vercel.app](https://aegisv1.vercel.app) (`vercel.json` project name `aegisv1`).
 
 ## GitHub
 GitHub repo: **`harshannh62212-glitch/HUNCH`** — see [`.github/REPOSITORY.md`](.github/REPOSITORY.md).
