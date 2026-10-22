@@ -25,7 +25,7 @@
 
   <header class="border-b border-white/10 bg-[#090a0f]/80 backdrop-blur-md sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center space-x-3">
+      <a href="/landing" class="flex items-center space-x-3">
         <div class="w-9 h-9 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
           <i data-lucide="shield" class="w-5 h-5"></i>
         </div>
@@ -44,11 +44,11 @@
     </div>
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 border-t border-white/5 overflow-x-auto">
       <nav class="flex items-center gap-x-5 text-xs font-medium text-slate-400 whitespace-nowrap">
-        <a href="/#overview" class="hover:text-white transition-colors">Overview</a>
-        <a href="/#cad-viewer" class="hover:text-white transition-colors">3D CAD Model</a>
-        <a href="/#route-simulation" class="hover:text-white transition-colors">Route Analysis</a>
-        <a href="/#payload-calculator" class="hover:text-white transition-colors">Payload Dynamics</a>
-        <a href="/#about-us" class="hover:text-white transition-colors">About Us</a>
+        <a href="/dashboard#overview" class="hover:text-white transition-colors">Overview</a>
+        <a href="/dashboard#cad-viewer" class="hover:text-white transition-colors">3D CAD Model</a>
+        <a href="/dashboard#route-simulation" class="hover:text-white transition-colors">Route Analysis</a>
+        <a href="/dashboard#payload-calculator" class="hover:text-white transition-colors">Payload Dynamics</a>
+        <a href="/dashboard#about-us" class="hover:text-white transition-colors">About Us</a>
         <a href="/landing" class="hover:text-white transition-colors">Landing</a>
         <a href="/informational" class="text-white" aria-current="page">Informational content</a>
       </nav>
@@ -69,6 +69,15 @@
     <section class="surface-card p-6 space-y-4">
       <h2 class="text-lg font-display font-bold text-white">Update log</h2>
       <ul class="space-y-3 text-sm text-slate-300">
+        <li class="border-l-2 border-cyan-500/30 pl-3">
+          <div class="font-mono text-[11px] text-cyan-300">22 October 2026 (root blank)</div>
+          <p class="mt-1 leading-relaxed">
+            Site root <span class="font-mono text-xs">/</span> is intentionally blank. NASA HUNCH brief lives at
+            <a href="/landing" class="text-cyan-300 hover:underline">/landing</a>. Full AEGIS Three.js dashboard moved to
+            <a href="/dashboard" class="text-cyan-300 hover:underline">/dashboard</a>.
+            If you still see wired-io, the Vercel domain is pointed at the wrong project — relink <span class="font-mono">aegisv1.vercel.app</span> to this repo and redeploy.
+          </p>
+        </li>
         <li class="border-l-2 border-cyan-500/40 pl-3">
           <div class="font-mono text-[11px] text-cyan-300">22 October 2026 (landing)</div>
           <p class="mt-1 leading-relaxed">
@@ -185,7 +194,7 @@
     <section class="surface-card p-6 space-y-3">
       <h2 class="text-lg font-display font-bold text-white">Open from this site</h2>
       <div class="flex flex-wrap gap-2 text-[11px] font-mono">
-        <a href="/" class="px-3 py-1.5 rounded-lg border border-white/15 text-slate-300 hover:bg-white/5">Mission dashboard</a>
+        <a href="/dashboard" class="px-3 py-1.5 rounded-lg border border-white/15 text-slate-300 hover:bg-white/5">Mission dashboard</a>
         <a href="/Hunch/nasa-llaso-cad/launcher.html" class="px-3 py-1.5 rounded-lg border border-purple-500/40 text-purple-300 hover:bg-purple-500/10">Launch pad</a>
         <a href="/Hunch/nasa-llaso-cad/viewer.html" class="px-3 py-1.5 rounded-lg border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10">Autopilot sim</a>
         <a href="/rover_solo.html" class="px-3 py-1.5 rounded-lg border border-sky-500/40 text-sky-300 hover:bg-sky-500/10">3D rover model</a>
@@ -198,7 +207,7 @@
 
     <footer class="border-t border-white/10 pt-8 pb-12 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 font-mono gap-4">
       <div><strong class="text-slate-300 font-display">AEGIS-V1</strong> • NASA HUNCH LLASO (2026–2027)</div>
-      <div>Engineered by Sacheth, Ahrav, and Harshan • <a href="/" class="text-blue-400 hover:underline">aegisv1.vercel.app</a></div>
+      <div>Engineered by Sacheth, Ahrav, and Harshan • <a href="/landing" class="text-blue-400 hover:underline">aegisv1.vercel.app/landing</a></div>
     </footer>
   </main>
 
