@@ -5,7 +5,7 @@ NASA HUNCH LLASO monorepo — external cargo transport robot (AEGIS-V1), lunar s
 Autonomous lunar surface logistics and payload transport engineered for **NASA HUNCH LLASO Project 2** (Rocket to Base Supply Building).
 
 ## Mission Overview
-- **Mission Status**: `PLANNING`
+- **Mission Status**: `PROTOTYPE` (see [Informational content](https://aegisv1.vercel.app/informational))
 - **Subsystem Engineers**:
   - **Sacheth** — Avionics & Systems Lead
   - **Ahrav** — Mechanical Design & Locomotion Lead
