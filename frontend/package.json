@@ -1,0 +1,7 @@
+{
+  "name": "aegisv1-frontend",
+  "private": true,
+  "scripts": {
+    "build": "node build.js"
+  }
+}
