@@ -45,6 +45,7 @@ Hunch/                          ← git root
 | Logistics / parcels / lander | `js/lunar_logistics.js`, `build_rover_parcels.py`, `rover_parcel_manifest.json`, `viewer.html` cargo bay + seeded rocks |
 | Public mission site | `/index.html`, `app.js`, `vercel.json` |
 | Public facts / status page | `/informational.html` (tab **Informational content**). Update it and its Update log in the same change as any visitor-facing fact. See `.cursor/rules/informational-page.mdc`. |
+| NASA HUNCH engineering landing | `/landing.html` (tab **Landing**) — LLASO-P1-AMR-2026 three-panel brief. |
 | React rover UI | `Hunch/nasa-hunch-rover/src/App.jsx` |
 | Hardware BOM | `nasa-hunch-rover/cad_model/hardware_specification_sheet.md` |
 

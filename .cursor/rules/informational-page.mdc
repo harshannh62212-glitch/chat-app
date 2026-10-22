@@ -5,7 +5,9 @@ alwaysApply: true
 
 # Informational content page
 
-Public page: `informational.html`. Tab label: **Informational content**. URL with clean URLs: `/informational` on https://aegisv1.vercel.app.
+Public pages: `informational.html` (**Informational content**, `/informational`) and `landing.html` (**Landing**, `/landing` — LLASO-P1-AMR-2026 engineering brief). Base: https://aegisv1.vercel.app.
+
+When landing brief facts change (trade scores, NCRs, BOM upgrades, test claims), update `landing.html` in the same change. Log substantive site-wide fact changes on `informational.html` under **Update log**.
 
 When a change alters a fact a visitor could read — mission status, team roles, hardware bill of materials, masses, autonomy behavior, logistics numbers, routes, or milestone state — update `informational.html` in the same change and add a dated line under **Update log**.
 
