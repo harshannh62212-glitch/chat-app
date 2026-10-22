@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AEGIS-V1 · NASA HUNCH LLASO</title>
-  <meta name="description" content="NASA HUNCH LLASO autonomous lunar logistics — simulation, engineering brief, and team." />
+  <title>AEGIS-V1 · NASA HUNCH LLASO · LLASO-P1-AMR-2026</title>
+  <meta name="description" content="NASA HUNCH LLASO autonomous tracked lunar rover — engineering brief, digital twin, and team." />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -42,9 +42,9 @@
     </div>
     <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-2 border-t border-white/5 overflow-x-auto">
       <nav class="flex items-center gap-x-5 text-xs font-medium text-slate-400 whitespace-nowrap">
-        <a href="#brief" class="hover:text-white transition-colors">Engineering brief</a>
-        <a href="#simulation" class="hover:text-white transition-colors">Digital twin</a>
-        <a href="#team" class="hover:text-white transition-colors">Team</a>
+        <a href="#landing" class="hover:text-white transition-colors">Landing</a>
+        <a href="#simulation" class="hover:text-white transition-colors">Simulation</a>
+        <a href="#team" class="hover:text-white transition-colors">About the team</a>
         <a href="/Hunch/nasa-llaso-cad/viewer.html" class="text-cyan-300 hover:text-white transition-colors">Open live sim ↗</a>
       </nav>
     </div>
@@ -52,107 +52,264 @@
 
   <main id="top" class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-16">
 
-    <section class="max-w-3xl space-y-4">
-      <p class="text-[11px] font-mono text-cyan-300">aegisv1.vercel.app</p>
-      <h1 class="text-3xl sm:text-5xl font-display font-extrabold tracking-tight text-white leading-tight">
-        Autonomous Tracked Lunar Rover
-      </h1>
-      <p class="text-slate-300 text-base leading-relaxed">
-        External cargo transport from the 40-ft logistics module
-        (<span class="font-mono text-slate-200">12.192 m × 3.0 m</span>) to EVA work zones — backed by our WebGL digital twin, LiDAR planner, and classroom hardware path.
-      </p>
-      <div class="flex flex-wrap gap-x-6 gap-y-2 text-xs font-mono text-slate-400">
-        <span><span class="text-slate-500">School:</span> [School]</span>
-        <span><span class="text-slate-500">Teacher:</span> [Teacher]</span>
+    <section id="landing" class="scroll-mt-24 space-y-8">
+      <div class="max-w-4xl space-y-4 border-b border-white/10 pb-8">
+        <p class="text-[11px] font-mono text-cyan-300">NASA HUNCH LLASO · LLASO-P1-AMR-2026</p>
+        <h1 class="text-3xl sm:text-5xl font-display font-extrabold tracking-tight text-white leading-tight">
+          Autonomous Tracked Lunar Rover
+        </h1>
+        <p class="text-slate-300 text-base sm:text-lg leading-relaxed">
+          External Cargo Transport (40-ft Logistics Module, <span class="font-mono text-slate-200">12.192 m × 3.0 m</span>, to EVA Work Zones)
+        </p>
+        <div class="flex flex-wrap gap-x-6 gap-y-2 text-xs font-mono text-slate-400">
+          <span><span class="text-slate-500">School:</span> <span class="text-slate-200">[School]</span></span>
+          <span><span class="text-slate-500">Teacher:</span> <span class="text-slate-200">[Teacher]</span></span>
+        </div>
+        <p class="text-sm text-slate-300 leading-relaxed">
+          <span class="font-mono text-[11px] text-slate-500 uppercase tracking-wider">Team leads</span><br />
+          <strong class="text-white">Sacheth</strong> (CAD &amp; Assembly) ·
+          <strong class="text-white">Ahrav</strong> (Mechanical) ·
+          <strong class="text-white">Harshan</strong> (Autonomy &amp; Software)
+        </p>
       </div>
-      <p class="text-sm text-slate-300">
-        <strong class="text-white">Sacheth</strong> · <strong class="text-white">Ahrav</strong> · <strong class="text-white">Harshan</strong>
-        <span class="text-slate-500">— see team section for roles</span>
-      </p>
-    </section>
 
-    <section id="brief" class="scroll-mt-24 space-y-6">
-      <h2 class="text-xl font-display font-bold text-white border-b border-white/10 pb-3">Engineering brief</h2>
       <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
 
-        <aside class="surface-card p-5 space-y-4">
-          <h3 class="text-sm font-mono uppercase tracking-wider text-cyan-300">Problem &amp; sizing</h3>
+        <aside class="surface-card p-5 space-y-5">
+          <h2 class="text-sm font-mono uppercase tracking-wider text-cyan-300">Left panel — Problem, requirements &amp; sizing</h2>
+
           <div>
-            <h4 class="font-display font-bold text-white text-sm">Mission problem</h4>
+            <h3 class="font-display font-bold text-white text-sm">1. Mission problem</h3>
             <p class="text-xs text-slate-300 leading-relaxed mt-2">
-              Lunar surface operations require autonomous, hazard-tolerant transport of cargo and science payloads
-              between the 40-ft logistics module and EVA work sites—eliminating astronaut manual haul overhead.
+              Lunar surface operations require autonomous, hazard-tolerant transport of cargo and science payloads between the 40-ft logistics module and EVA work sites—eliminating astronaut manual haul overhead.
             </p>
           </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-[11px] font-mono">
-              <thead class="text-slate-500 border-b border-white/10">
-                <tr><th class="py-2 pr-2">Parameter</th><th class="py-2 pr-2">Value</th><th class="py-2">Impact</th></tr>
-              </thead>
-              <tbody class="text-slate-300">
-                <tr class="border-b border-white/5 align-top"><td class="py-2 pr-2">Gravity</td><td class="py-2 pr-2">1.622 vs 9.81 m/s²</td><td class="py-2">Earth-sized motors → ~6× margin on Moon</td></tr>
-                <tr class="border-b border-white/5 align-top"><td class="py-2 pr-2">Gross mass</td><td class="py-2 pr-2">8.0 kg (2.85 + 5.0 kg payload)</td><td class="py-2">Truss &amp; actuator baseline</td></tr>
-                <tr class="border-b border-white/5 align-top"><td class="py-2 pr-2">Slope / μ</td><td class="py-2 pr-2">25° · 0.65</td><td class="py-2">Track patch &amp; stall torque</td></tr>
-                <tr class="border-b border-white/5 align-top"><td class="py-2 pr-2">Thermal / dust</td><td class="py-2 pr-2">Vented PETG + 304 mesh + Al spreader</td><td class="py-2">Fines blocked; driver stays cool</td></tr>
-                <tr class="align-top"><td class="py-2 pr-2">LIFO CoM</td><td class="py-2 pr-2">[−0.912, −0.022, +0.002] m</td><td class="py-2">Stable pallet loading (sim manifest)</td></tr>
-              </tbody>
-            </table>
+
+          <div>
+            <h3 class="font-display font-bold text-white text-sm">2. Design constraints &amp; environmental drivers</h3>
+            <div class="mt-3 overflow-x-auto">
+              <table class="w-full text-left text-[11px]">
+                <thead class="text-slate-500 border-b border-white/10 font-mono">
+                  <tr>
+                    <th class="py-2 pr-2 font-medium">Parameter</th>
+                    <th class="py-2 pr-2 font-medium">Design value</th>
+                    <th class="py-2 font-medium">Engineering impact</th>
+                  </tr>
+                </thead>
+                <tbody class="text-slate-300">
+                  <tr class="border-b border-white/5 align-top">
+                    <td class="py-2 pr-2 text-slate-200">Gravity (Moon vs. Earth)</td>
+                    <td class="py-2 pr-2 font-mono text-[10px]">1.622 m/s² (⅙ g) vs. 9.81 m/s²</td>
+                    <td class="py-2">Sized for Earth (78.5 N) to guarantee 6× margin on Moon (13 N)</td>
+                  </tr>
+                  <tr class="border-b border-white/5 align-top">
+                    <td class="py-2 pr-2 text-slate-200">Gross vehicle mass</td>
+                    <td class="py-2 pr-2 font-mono text-[10px]">8.0 kg (2.85 kg dry + 5.0 kg payload)</td>
+                    <td class="py-2">Structural truss &amp; actuator load baseline</td>
+                  </tr>
+                  <tr class="border-b border-white/5 align-top">
+                    <td class="py-2 pr-2 text-slate-200">Max slope &amp; traction</td>
+                    <td class="py-2 pr-2 font-mono text-[10px]">25° grade · μ ≈ 0.65 (regolith simulant)</td>
+                    <td class="py-2">Dictates track contact patch and stall torque</td>
+                  </tr>
+                  <tr class="border-b border-white/5 align-top">
+                    <td class="py-2 pr-2 text-slate-200">Thermal &amp; dust mitigation</td>
+                    <td class="py-2 pr-2">Vented PETG + 304 SS mesh + Al heat spreader</td>
+                    <td class="py-2">Blocks abrasive fines while preventing driver thermal trip</td>
+                  </tr>
+                  <tr class="align-top">
+                    <td class="py-2 pr-2 text-slate-200">14-day LIFO cargo CoM</td>
+                    <td class="py-2 pr-2 font-mono text-[10px]">[−0.912, −0.022, +0.002] m</td>
+                    <td class="py-2">Maintains longitudinal stability during pallet loading</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-          <a href="/Hunch/nasa-llaso-cad/review/engineering-deck.html" class="text-xs text-cyan-300 hover:underline font-mono">Engineering deck ↗</a>
+
+          <div class="p-3 rounded-lg bg-black/40 border border-white/10 space-y-2">
+            <div class="text-[10px] font-mono text-slate-500 uppercase">Engineering deck</div>
+            <a href="/Hunch/nasa-llaso-cad/review/engineering-deck.html" class="text-xs text-cyan-300 hover:underline break-all">Open engineering deck</a>
+            <p class="text-[10px] text-slate-500 leading-relaxed font-mono">
+              Local: python3 serve.py 8002 → http://127.0.0.1:8002/review/engineering-deck.html
+            </p>
+          </div>
         </aside>
 
-        <section class="surface-card p-5 space-y-4">
-          <h3 class="text-sm font-mono uppercase tracking-wider text-cyan-300">Architecture &amp; subsystems</h3>
-          <p class="text-xs text-slate-300 leading-relaxed">
-            <strong class="text-white">6WD tracked skid-steer (94/100 — selected)</strong> over 4WD wheeled (65) and rocker-bogie (65):
-            flotation on loose regolith, stable sensor horizon, compact cargo envelope. PETG space-frame truss, 35–40% gyroid, brass inserts at 230°C.
-          </p>
-          <p class="text-xs text-slate-300 leading-relaxed">
-            <strong class="text-white">Torque (Earth @ 25°, 45 mm sprocket):</strong> ≈80 N pull; JGB37-550 12 V planetary (30:1 / 50:1), 35 kg·cm stall, 160–200 RPM.
-            Upgrades: Cytron MDD10A, dual isolated XL4015 5 V rails, metal planetary + PETG tracks, Arduino UNO R4 WiFi + Raspberry Pi split.
-          </p>
-          <p class="text-xs text-slate-300 leading-relaxed">
-            <strong class="text-white">Power &amp; nav:</strong> 12.8 V LiFePO₄ 3–6 Ah; 5 V at 3.5 A nominal / 4.75 A peak.
-            YDLIDAR grid + A* + Pure Pursuit; optional ONNX pilot; JSON dodge (<span class="font-mono">none|left|right</span>); proximity auto-reverse.
-          </p>
+        <section class="surface-card p-5 space-y-5">
+          <h2 class="text-sm font-mono uppercase tracking-wider text-cyan-300">Center panel — Architecture, trade study &amp; subsystems</h2>
+
+          <div>
+            <h3 class="font-display font-bold text-white text-sm">1. Selected architecture: 6WD tracked skid-steer</h3>
+            <p class="text-xs text-slate-300 leading-relaxed mt-2">
+              <strong class="text-slate-200">Chassis:</strong> Modular PETG space-frame truss (4 perimeters, 35–40% gyroid infill) with brass heat-set inserts (M3/M4 installed at 230°C).
+            </p>
+            <p class="text-[11px] font-mono text-slate-500 mt-3">Trade study weights: Slope 25%, Sensors 20%, Torque 15%, Dust/Power 15%, Fab 15%, Fit 10%</p>
+            <ul class="mt-2 text-xs space-y-2">
+              <li class="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-100 leading-relaxed">
+                <strong>6WD tracked skid-steer (score: 94/100 — selected):</strong> Best flotation on loose regolith, stable sensor horizon, compact cargo envelope.
+              </li>
+              <li class="p-2 rounded-lg bg-white/[0.03] border border-white/10 text-slate-400 leading-relaxed">
+                <strong class="text-slate-300">4WD wheeled skid-steer (score: 65/100):</strong> Low complexity, but high sinkage/slip on loose simulant.
+              </li>
+              <li class="p-2 rounded-lg bg-white/[0.03] border border-white/10 text-slate-400 leading-relaxed">
+                <strong class="text-slate-300">Rocker-bogie (score: 65/100):</strong> Superior obstacle climb, but exceeds mass budget and classroom fabrication schedule.
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 class="font-display font-bold text-white text-sm">2. Drivetrain &amp; torque sizing</h3>
+            <p class="text-[11px] text-slate-500 font-mono mt-1">Earth demo @ 25°, sprocket radius 45 mm</p>
+            <ul class="mt-2 text-xs text-slate-300 space-y-2 list-disc pl-4 leading-relaxed">
+              <li><strong class="text-slate-200">Required pull force:</strong> ≈ 80 N total (18.4 kg·cm stall torque per motor; ≥ 29.4 kg·cm at 1.6× safety factor).</li>
+              <li><strong class="text-slate-200">Selected actuator:</strong> Dual <strong>JGB37-550 12V planetary motors</strong> (30:1 / 50:1), <strong>35 kg·cm stall</strong>, 160–200 RPM (0.7–0.9 m/s), 6 mm D-shaft with quadrature encoders.</li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 class="font-display font-bold text-white text-sm">3. Hardware evolution (dropped vs. kept)</h3>
+            <div class="mt-2 overflow-x-auto">
+              <table class="w-full text-left text-[10px] sm:text-[11px]">
+                <thead class="text-slate-500 border-b border-white/10 font-mono">
+                  <tr>
+                    <th class="py-2 pr-2 font-medium">Subsystem</th>
+                    <th class="py-2 pr-2 font-medium">Dropped baseline</th>
+                    <th class="py-2 font-medium">Upgraded selection</th>
+                  </tr>
+                </thead>
+                <tbody class="text-slate-300">
+                  <tr class="border-b border-white/5 align-top">
+                    <td class="py-2 pr-2 text-slate-200">Motor driver</td>
+                    <td class="py-2 pr-2">L298N (current saturation / thermal drop)</td>
+                    <td class="py-2"><strong class="text-white">Cytron MDD10A</strong> (10 A cont. / 30 A peak)</td>
+                  </tr>
+                  <tr class="border-b border-white/5 align-top">
+                    <td class="py-2 pr-2 text-slate-200">5V power rail</td>
+                    <td class="py-2 pr-2">LM2596 3A buck (Pi brownout on LiDAR spin-up)</td>
+                    <td class="py-2"><strong class="text-white">Dual isolated XL4015</strong> (5A cont. / 8A peak @ 5.1V) / Pololu D24V50F5</td>
+                  </tr>
+                  <tr class="border-b border-white/5 align-top">
+                    <td class="py-2 pr-2 text-slate-200">Gearbox &amp; structure</td>
+                    <td class="py-2 pr-2">1:10 nylon spur (stripped teeth) &amp; brittle PLA</td>
+                    <td class="py-2"><strong class="text-white">JGB37-550 metal planetary</strong> + <strong class="text-white">PETG</strong> printed tracks/sprockets</td>
+                  </tr>
+                  <tr class="align-top">
+                    <td class="py-2 pr-2 text-slate-200">Compute split</td>
+                    <td class="py-2 pr-2">Single-board bottleneck</td>
+                    <td class="py-2"><strong class="text-white">Arduino UNO R4 WiFi</strong> (hard real-time PWM) + <strong class="text-white">Raspberry Pi</strong> (vision/nav)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <h3 class="font-display font-bold text-white text-sm">4. Power &amp; autonomy stack</h3>
+            <ul class="mt-2 text-xs text-slate-300 space-y-2 list-disc pl-4 leading-relaxed">
+              <li><strong class="text-slate-200">Power bus:</strong> 12.8V 4S LiFePO₄ (3–6 Ah, 1.5–2.5 hr runtime). 5V budget draws <strong>3.5 A nominal / 4.75 A peak</strong> (Pi 3.5 A + YDLIDAR 1.0 A + cam 0.25 A), protected by motor-bus TVS diodes and opto-isolated PWM.</li>
+              <li><strong class="text-slate-200">Navigation:</strong> YDLIDAR occupancy grid + A* global planner + Pure Pursuit controller, backed by an optional ONNX neural pilot, JSON dodge assist (<span class="font-mono">none | left | right</span>), and proximity auto-reverse supervisor.</li>
+              <li><strong class="text-slate-200">Mission control:</strong> this site, <span class="font-mono">aegisv1.vercel.app</span>.</li>
+            </ul>
+          </div>
         </section>
 
-        <aside class="surface-card p-5 space-y-4">
-          <h3 class="text-sm font-mono uppercase tracking-wider text-cyan-300">Verification &amp; NCRs</h3>
-          <ol class="text-xs text-slate-300 space-y-1 list-decimal pl-4 leading-relaxed">
-            <li>Cardboard mockup → CAD/fab → digital twin → bench FMEA → CDR→FDR cargo run.</li>
-            <li>Sim: pit avoidance, CARGO RUN docking, CSV telemetry export.</li>
-            <li>Bench: PWM sweep; 25° load &lt;12 A; 150 stall cycles, no brownout.</li>
-          </ol>
-          <div class="overflow-x-auto max-h-48 overflow-y-auto text-[10px] font-mono">
-            <table class="w-full text-left">
-              <tbody class="text-slate-300">
-                <tr class="border-b border-white/5"><td class="py-1 text-cyan-300">NCR-001</td><td class="py-1">EMF → dual 5 V, TVS, opto PWM · PASS</td></tr>
-                <tr class="border-b border-white/5"><td class="py-1 text-cyan-300">NCR-002</td><td class="py-1">Spur gear → planetary + foldback · PASS</td></tr>
-                <tr class="border-b border-white/5"><td class="py-1 text-cyan-300">NCR-003</td><td class="py-1">Thermal → vents, mesh, spreader · PASS</td></tr>
-                <tr><td class="py-1 text-cyan-300">NCR-004</td><td class="py-1">LiDAR glare → cowls + camera check · PASS</td></tr>
-              </tbody>
-            </table>
+        <aside class="surface-card p-5 space-y-5">
+          <h2 class="text-sm font-mono uppercase tracking-wider text-cyan-300">Right panel — Verification, test campaign &amp; closed NCRs</h2>
+
+          <div>
+            <h3 class="font-display font-bold text-white text-sm">1. Iterative engineering progression</h3>
+            <ol class="mt-2 text-xs text-slate-300 space-y-1.5 list-decimal pl-4 leading-relaxed">
+              <li><strong class="text-slate-200">Phase 1 (Mockup):</strong> Cardboard prototype to lock wheelbase, CG, and track vs. wheel geometry.</li>
+              <li><strong class="text-slate-200">Phase 2 (CAD &amp; fab):</strong> Fusion 360 truss, sprockets, and sensor mast printed in PETG.</li>
+              <li><strong class="text-slate-200">Phase 3 (Digital twin):</strong> Physics sim verifying 25° slope climb, track slip, and crater/pit guard.</li>
+              <li><strong class="text-slate-200">Phase 4 (Bench &amp; FMEA):</strong> High-load PWM stress testing and non-conformance report (NCR) closure.</li>
+              <li><strong class="text-slate-200">Phase 5 (CDR → FDR):</strong> Full hardware-in-the-loop surface cargo run.</li>
+            </ol>
+          </div>
+
+          <div>
+            <h3 class="font-display font-bold text-white text-sm">2. Simulation &amp; hardware bench verification</h3>
+            <ul class="mt-2 text-xs text-slate-300 space-y-2 list-disc pl-4 leading-relaxed">
+              <li><strong class="text-slate-200">Digital twin (<span class="font-mono">run_nav_scenarios.py</span>):</strong> Zero-collision pit avoidance (exit 0), <span class="font-mono">CARGO RUN</span> autonomous pallet docking, and automated CSV telemetry extraction (<span class="font-mono">extract_sim_metrics.py</span>).</li>
+              <li><strong class="text-slate-200">Physical bench:</strong> Unloaded PWM sweep with zero driver faults and clean sensor streams.</li>
+              <li><strong class="text-slate-200">25° loaded incline crawl</strong> drawing &lt; 12 A aggregate current.</li>
+              <li><strong class="text-slate-200">150 consecutive hard-stall cycles</strong> with zero MCU brownouts.</li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 class="font-display font-bold text-white text-sm">3. Closed non-conformance reports (FMEA / NCRs)</h3>
+            <div class="mt-2 overflow-x-auto">
+              <table class="w-full text-left text-[10px] font-mono">
+                <thead class="text-slate-500 border-b border-white/10">
+                  <tr>
+                    <th class="py-2 pr-1 font-medium">NCR</th>
+                    <th class="py-2 pr-1 font-medium">Root cause</th>
+                    <th class="py-2 pr-1 font-medium">Corrective action</th>
+                    <th class="py-2 font-medium">Result</th>
+                  </tr>
+                </thead>
+                <tbody class="text-slate-300">
+                  <tr class="border-b border-white/5 align-top">
+                    <td class="py-2 pr-1 text-cyan-300">NCR-001</td>
+                    <td class="py-2 pr-1">MCU reset on hard stall (back-EMF)</td>
+                    <td class="py-2 pr-1">Dual isolated 5V rails, TVS diode clamping, optical PWM isolation</td>
+                    <td class="py-2 text-emerald-400">PASS: 150 stalls, logic ripple &lt; 22 mV</td>
+                  </tr>
+                  <tr class="border-b border-white/5 align-top">
+                    <td class="py-2 pr-1 text-cyan-300">NCR-002</td>
+                    <td class="py-2 pr-1">Stripped spur gear on 22° loose fill</td>
+                    <td class="py-2 pr-1">Upgraded to 1:31.6 all-metal planetary + software current foldback</td>
+                    <td class="py-2 text-emerald-400">PASS: 28° crawl for 4 hrs; zero tooth wear</td>
+                  </tr>
+                  <tr class="border-b border-white/5 align-top">
+                    <td class="py-2 pr-1 text-cyan-300">NCR-003</td>
+                    <td class="py-2 pr-1">Driver thermal trip at 42 min enclosed</td>
+                    <td class="py-2 pr-1">Chimney vents, 304 mesh dust screen, Al heat spreader</td>
+                    <td class="py-2 text-emerald-400">PASS: 3 hrs @ 45°C ambient; MOSFET ≤ 64°C</td>
+                  </tr>
+                  <tr class="align-top">
+                    <td class="py-2 pr-1 text-cyan-300">NCR-004</td>
+                    <td class="py-2 pr-1">LiDAR false stops in direct solar glare</td>
+                    <td class="py-2 pr-1">3D-printed glare cowls, amplitude filtering, camera cross-check</td>
+                    <td class="py-2 text-emerald-400">PASS: 100/100 runs under halogen sun simulator</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-lg bg-black/40 border border-white/10 space-y-2">
+            <div class="text-[10px] font-mono text-slate-500 uppercase">Live sim</div>
+            <a href="/Hunch/nasa-llaso-cad/viewer.html" class="text-xs text-cyan-300 hover:underline">Open viewer</a>
+            <p class="text-[10px] text-slate-500 leading-relaxed">
+              Plays <span class="font-mono">team-presentation.mp4</span> from <span class="font-mono">Hunch/nasa-llaso-cad/review/media/</span> when that file is present; otherwise the interactive sim.
+              Local: <span class="font-mono">http://127.0.0.1:8002/viewer.html</span>
+            </p>
           </div>
         </aside>
       </div>
     </section>
 
     <section id="simulation" class="scroll-mt-24 space-y-6">
-      <h2 class="text-xl font-display font-bold text-white border-b border-white/10 pb-3">Digital twin &amp; simulation</h2>
+      <div class="border-b border-white/10 pb-3">
+        <h2 class="text-xl font-display font-bold text-white">From the simulation</h2>
+        <p class="text-xs text-slate-400 mt-1">What the digital twin in this repo actually runs, alongside the hardware brief above.</p>
+      </div>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <article class="surface-card p-5 space-y-3">
-          <h3 class="font-display font-bold text-white text-sm">What the sim runs</h3>
+          <h3 class="font-display font-bold text-white text-sm">Autonomy &amp; logistics</h3>
           <ul class="text-xs text-slate-300 space-y-2 list-disc pl-4 leading-relaxed">
-            <li><strong class="text-slate-200">Classical stack:</strong> YDLIDAR X2L → log-odds occupancy → A* replan → pure pursuit; rock inflation and pit guards in <span class="font-mono">viewer.html</span>.</li>
-            <li><strong class="text-slate-200">Safety:</strong> Proximity supervisor with auto-reverse before impact.</li>
-            <li><strong class="text-slate-200">Optional layers:</strong> Ollama <span class="font-mono">hunch-rover-nav</span> dodge bias; ONNX <span class="font-mono">rover_pilot.onnx</span> imitation pilot from recorded demos.</li>
-            <li><strong class="text-slate-200">Logistics (Project 1):</strong> 40-ft cylindrical module, 14-day LIFO manifest — 22 items, 748.5 kg total, CoM as in brief table.</li>
-            <li><strong class="text-slate-200">Rocker-bogie demonstrator in sim:</strong> catalog curb <strong class="text-white">6.39 kg</strong> (Greartisan 6×100 RPM, GOLDENMATE 128 Wh, Pi 5, MDD10A, YDLIDAR mast, cargo arm); HQST 100 W panel on hangar dock, not on rover mass.</li>
+            <li><strong class="text-slate-200">Classical driver:</strong> YDLIDAR occupancy grid, A* with rock inflation and pit guards, pure pursuit, in <span class="font-mono">viewer.html</span>.</li>
+            <li><strong class="text-slate-200">Supervisor:</strong> proximity auto-reverse before contact.</li>
+            <li><strong class="text-slate-200">Optional assist:</strong> local Ollama model <span class="font-mono">hunch-rover-nav</span> returns only <span class="font-mono">{"dodge":"none"|"left"|"right"}</span> and must not dodge into a pit or steep slope. ONNX imitation pilot <span class="font-mono">rover_pilot.onnx</span> loads in the browser when a trained file is present.</li>
+            <li><strong class="text-slate-200">Project 1 cargo module:</strong> 40 ft × 3 m cylinder, 14-day LIFO manifest — 22 items, 748.5 kg. Center of mass [−0.912, −0.022, +0.002] m. Earth weight 7340.3 N, lunar weight 1214.1 N at 1.622 m/s².</li>
+            <li><strong class="text-slate-200">WebGL vehicle catalog:</strong> rocker-bogie demonstrator curb mass <strong class="text-white">6.39 kg</strong> (6× Greartisan 12 V 100 RPM, GOLDENMATE 12 V 10 Ah / 128 Wh, Raspberry Pi 5, Arduino Uno REV3, YRDZXG 5 A buck, Cytron MDD10A, YDLIDAR X2L, dual Arducam OV5647, cargo arm). HQST 100 W panel stays on the hangar dock and is not in that curb mass. The 8.0 kg figure above is the tracked hardware sizing baseline.</li>
           </ul>
         </article>
         <article class="surface-card p-5 space-y-3">
-          <h3 class="font-display font-bold text-white text-sm">Open the build</h3>
+          <h3 class="font-display font-bold text-white text-sm">Open it</h3>
           <div class="flex flex-wrap gap-2 text-[11px] font-mono">
             <a href="/Hunch/nasa-llaso-cad/launcher.html" class="px-3 py-2 rounded-lg border border-purple-500/40 text-purple-300 hover:bg-purple-500/10">Launch pad</a>
             <a href="/Hunch/nasa-llaso-cad/viewer.html" class="px-3 py-2 rounded-lg border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10">Autopilot sim</a>
@@ -160,9 +317,9 @@
             <a href="/Hunch/nasa-llaso-cad/review/" class="px-3 py-2 rounded-lg border border-white/15 text-slate-300 hover:bg-white/5">Review hub</a>
           </div>
           <p class="text-[11px] text-slate-500 font-mono leading-relaxed">
-            Local dev: <span class="text-slate-400">cd Hunch/nasa-llaso-cad && python3 serve.py 8002</span><br />
-            Telemetry logs POST to <span class="text-slate-400">/api/log</span> → <span class="text-slate-400">rover_actions.log</span>.
-            Regression: <span class="text-slate-400">python3 run_nav_scenarios.py</span>.
+            cd Hunch/nasa-llaso-cad &amp;&amp; python3 serve.py 8002<br />
+            Telemetry POST /api/log → rover_actions.log<br />
+            Train: python3 train_rover_imitation.py · Manifest: python3 optimize_manifest.py · Nav regression: python3 run_nav_scenarios.py
           </p>
         </article>
       </div>
@@ -182,7 +339,7 @@
           <div class="p-5 rounded-xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between group space-y-4">
             <div>
               <div class="w-full aspect-[4/5] rounded-lg overflow-hidden bg-slate-900 border border-white/10 mb-4">
-                <img src="assets/team/sacheth.jpg" alt="Sacheth" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300" width="400" height="500" />
+                <img src="assets/team/sacheth.jpg" alt="Sacheth — 3D Design Lead and Lead Animator" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300" width="400" height="500" />
               </div>
               <h3 class="text-lg font-display font-bold text-white">Sacheth</h3>
               <div class="text-xs font-mono text-blue-400 mt-0.5">3D Design Lead &amp; Lead Animator</div>
@@ -197,15 +354,16 @@
                 Leads primary 3D structural modeling, photorealistic CAD visualizations, kinematic motion animations, and collaborates on robotic hardware assembly, software codebase development, and AI training.
               </p>
             </div>
-            <div class="pt-3 border-t border-white/10 font-mono text-[11px] text-slate-400">
-              Core: 3D CAD Modeling &amp; Kinematic Animation
+            <div class="pt-3 border-t border-white/10 font-mono text-[11px] text-slate-400 space-y-1">
+              <div>Core: 3D CAD Modeling &amp; Kinematic Animation</div>
+              <div>Collaboration: Hardware Assembly, Embedded Code &amp; AI Training</div>
             </div>
           </div>
 
           <div class="p-5 rounded-xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between group space-y-4">
             <div>
               <div class="w-full aspect-[4/5] rounded-lg overflow-hidden bg-slate-900 border border-white/10 mb-4">
-                <img src="assets/team/ahrav.jpg" alt="Ahrav" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300" width="400" height="500" />
+                <img src="assets/team/ahrav.jpg" alt="Ahrav — AI Training Lead and Assembly Lead" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300" width="400" height="500" />
               </div>
               <h3 class="text-lg font-display font-bold text-white">Ahrav</h3>
               <div class="text-xs font-mono text-blue-400 mt-0.5">AI Training Lead &amp; Assembly Lead</div>
@@ -219,15 +377,16 @@
                 Directs the machine learning training datasets and neural optimization pipelines, leads physical mechanical assembly of the chassis and suspension, and co-designs CAD geometry.
               </p>
             </div>
-            <div class="pt-3 border-t border-white/10 font-mono text-[11px] text-slate-400">
-              Core: AI Training Pipelines &amp; Vehicle Assembly
+            <div class="pt-3 border-t border-white/10 font-mono text-[11px] text-slate-400 space-y-1">
+              <div>Core: AI Training Pipelines &amp; Vehicle Assembly</div>
+              <div>Collaboration: System Architecture &amp; CAD Modeling</div>
             </div>
           </div>
 
           <div class="p-5 rounded-xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between group space-y-4">
             <div>
               <div class="w-full aspect-[4/5] rounded-lg overflow-hidden bg-slate-900 border border-white/10 mb-4">
-                <img src="assets/team/harshan.png" alt="Harshan" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300" width="400" height="500" />
+                <img src="assets/team/harshan.png" alt="Harshan — AI Lead and Lead Coder" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300" width="400" height="500" />
               </div>
               <h3 class="text-lg font-display font-bold text-white">Harshan</h3>
               <div class="text-xs font-mono text-blue-400 mt-0.5">AI Lead &amp; Lead Coder</div>
@@ -241,13 +400,17 @@
               <p class="text-xs text-slate-300 leading-relaxed">
                 Architects the autonomous AI navigation system, authors the primary software codebase, co-designs vehicle subsystems and CAD models, and assists in hardware assembly.
               </p>
-              <div class="pt-3 border-t border-white/10 flex flex-wrap gap-1.5">
-                <a href="assets/certifications/python-certification.pdf" target="_blank" rel="noopener noreferrer" class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20">Python Certified ↗</a>
-                <a href="assets/certifications/comptia-a-plus-certification.pdf" target="_blank" rel="noopener noreferrer" class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20">CompTIA A+ ↗</a>
+              <div class="pt-3 border-t border-white/10 space-y-1.5">
+                <div class="text-[10px] font-mono uppercase text-slate-400 font-semibold tracking-wider">Certifications</div>
+                <div class="flex flex-wrap gap-1.5">
+                  <a href="assets/certifications/python-certification.pdf" target="_blank" rel="noopener noreferrer" class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">Python Certified ↗</a>
+                  <a href="assets/certifications/comptia-a-plus-certification.pdf" target="_blank" rel="noopener noreferrer" class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">CompTIA A+ Certified ↗</a>
+                </div>
               </div>
             </div>
-            <div class="pt-3 border-t border-white/10 font-mono text-[11px] text-slate-400">
-              Core: Autonomous AI Architecture &amp; Primary Software
+            <div class="pt-3 border-t border-white/10 font-mono text-[11px] text-slate-400 space-y-1">
+              <div>Core: Autonomous AI Architecture &amp; Primary Software</div>
+              <div>Collaboration: Co-Design, Co-CAD &amp; Hardware Assembly</div>
             </div>
           </div>
         </div>
@@ -256,7 +419,7 @@
 
     <footer class="border-t border-white/10 pt-8 pb-12 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 font-mono gap-4">
       <div><strong class="text-slate-300 font-display">AEGIS-V1</strong> · NASA HUNCH LLASO (2026–2027)</div>
-      <div>Sacheth · Ahrav · Harshan</div>
+      <div>Sacheth · Ahrav · Harshan · <a href="/landing" class="text-blue-400 hover:underline">/landing</a></div>
     </footer>
   </main>
 

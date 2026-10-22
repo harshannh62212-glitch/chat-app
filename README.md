@@ -6,16 +6,11 @@ Autonomous lunar surface logistics and payload transport engineered for **NASA H
 
 ## Mission Overview
 - **Mission Status**: `PROTOTYPE`
-- **Public site**: [aegisv1.vercel.app](https://aegisv1.vercel.app) — engineering brief, digital twin links, team (root `index.html`)
-- **Subsystem Engineers**:
-  - **Sacheth** — Avionics & Systems Lead
-  - **Ahrav** — Mechanical Design & Locomotion Lead
-  - **Harshan** — Autonomous Software & AI Lead
-- **Key Features**:
-  - Interactive Three.js 3D CAD Visualizer (Wireframe, Exploded View, Subsystems)
-  - Tactical Lunar Surface Route & Hazard Simulator
-  - Standardized HUNCH Payload & Weight Calculator (1/6th gravity physics)
-  - Real-time Subsystems Telemetry HUD & Cybernetic Audio FX
+- **Public site**: [aegisv1.vercel.app](https://aegisv1.vercel.app) and [/landing](https://aegisv1.vercel.app/landing) — LLASO engineering brief, simulation links, about the team
+- **Team**:
+  - **Sacheth** — 3D Design Lead & Lead Animator
+  - **Ahrav** — AI Training Lead & Assembly Lead
+  - **Harshan** — AI Lead & Lead Coder
 
 ## Quick start
 ```bash
