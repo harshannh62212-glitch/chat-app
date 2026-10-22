@@ -14,7 +14,7 @@
 ## 🚀 Projects Breakdown
 
 ### 1. Root: AEGIS-V1 Mission Control & Web Dashboard (`/Users/harshan/Hunch`)
-- **Key Files:** `index.html`, `app.js`, `styles.css`, `payload.json`, `vercel.json`
+- **Key Files:** `index.html`, `styles.css`, `payload.json`, `vercel.json`
 - **Features:**
   - Three.js 3D CAD Visualizer (Wireframe, exploded view, subsystem isolation, lighting).
   - 1/6g Lunar Gravity physics calculator ($1.622\,\text{m/s}^2$) vs Earth 1g ($9.806\,\text{m/s}^2$), CoG margin validation, battery power estimation.

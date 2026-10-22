@@ -22,7 +22,7 @@ Do **not** use GitHub as source of truth unless the user asks to push/pull.
 
 ```
 Hunch/                          ← git root
-├── index.html, app.js          ← AEGIS-V1 (Vercel)
+├── index.html, styles.css      ← AEGIS-V1 public site (Vercel)
 ├── payload.json                ← hunch-rover-nav prompt template (qwen2.5-coder:7b)
 ├── AGENTS.md, HANDOFF.md
 ├── .agents/                    ← YOU ARE HERE
@@ -43,7 +43,7 @@ Hunch/                          ← git root
 | Neural pilot ONNX | `train_rover_imitation.py`, `rover_pilot.onnx`, `viewer.html` neural block |
 | Record training data | `viewer.html` flight recorder → `dataset_latest.json` |
 | Logistics / parcels / lander | `js/lunar_logistics.js`, `build_rover_parcels.py`, `rover_parcel_manifest.json`, `viewer.html` cargo bay + seeded rocks |
-| Public mission site | `/index.html`, `app.js`, `vercel.json` |
+| Public mission site | `/index.html`, `styles.css`, `vercel.json` |
 | React rover UI | `Hunch/nasa-hunch-rover/src/App.jsx` |
 | Hardware BOM | `nasa-hunch-rover/cad_model/hardware_specification_sheet.md` |
 
