@@ -12,7 +12,7 @@ fs.mkdirSync('dist', { recursive: true });
 
 execSync(
   [
-    'cp index.html landing.html styles.css rover_solo.html dist/',
+    'cp index.html landing.html styles.css rover_solo.html app.js dist/',
     'cp -a assets dist/assets',
     'mkdir -p dist/Hunch',
     'cp -a Hunch/nasa-llaso-cad dist/Hunch/nasa-llaso-cad'

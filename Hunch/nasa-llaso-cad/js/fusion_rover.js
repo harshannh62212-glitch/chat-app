@@ -1,7 +1,7 @@
 /**
- * NASA HUNCH LLASO — AEGIS-V1 Autonomous Lunar AMR Rover 3D Assembly
+ * NASA HUNCH LLASO — Ageis-V1 Autonomous Lunar AMR Rover 3D Assembly
  * Engineering CAD Digital Twin matching template orthographic views:
- * - Monocoque Polymaker Black PETG chassis with embossed "AEGIS" side flanks
+ * - Monocoque Polymaker Black PETG chassis with embossed "Ageis" side flanks
  * - 6-wheel chevron locomotion with deep-dish rims & brass M3 lug nuts
  * - 3 transverse axle tubes underneath with central chassis mounting clamps
  * - 6 vertical wheel drop yokes, 6 Traxxas-style shocks, 6 Greartisan 12V 100RPM 37mm motors
@@ -346,7 +346,7 @@
     }
 
     // =========================================================================
-    // 2. EMBOSSED "AEGIS" NAMEPLATES ON BOTH SIDE FLANKS (Matching Template Image 1)
+    // 2. EMBOSSED "Ageis" NAMEPLATES ON BOTH SIDE FLANKS (Matching Template Image 1)
     // Placed at y = 0.21, perfectly above wheel tops and clearly visible!
     // =========================================================================
     function create3DLetter(char, mat) {
@@ -419,8 +419,8 @@
       frameBot.position.set(0, -0.040, 0.002);
       badgeGroup.add(frameTop, frameBot);
 
-      // 5 Raised 3D Letters: A - E - G - I - S
-      var letters = ['A', 'E', 'G', 'I', 'S'];
+      // 5 Raised 3D Letters: A - G - E - I - S
+      var letters = ['A', 'G', 'E', 'I', 'S'];
       var spacing = 0.068;
       for (var li = 0; li < letters.length; li++) {
         var letterMesh = create3DLetter(letters[li], matAegisLetter);
