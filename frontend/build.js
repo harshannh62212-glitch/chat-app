@@ -24,7 +24,7 @@ function copy(rel) {
   execSync(`cp -a ${JSON.stringify(from)} ${JSON.stringify(path.join(dist, rel))}`, { stdio: 'inherit' });
 }
 
-for (const file of ['index.html', 'landing.html', 'styles.css', 'rover_solo.html']) {
+for (const file of ['index.html', 'landing.html', 'styles.css', 'rover_solo.html', 'app.js']) {
   execSync(
     `cp ${JSON.stringify(path.join(root, file))} ${JSON.stringify(path.join(dist, file))}`,
     { stdio: 'inherit' }
